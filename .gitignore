@@ -1,0 +1,31 @@
+# ── 이전 프로젝트 클론 (시크릿 평문 포함) — 분석 보고서만 추적 ──
+참고자료/MLsoft/
+
+# ── 시크릿 / 로컬 설정 ──
+.env
+.env.*
+*-secret.yml
+*-secret.properties
+application-local.yml
+application-local.properties
+
+# ── Java / Gradle ──
+backend/build/
+backend/.gradle/
+backend/out/
+*.class
+
+# ── Node / Vite (frontend 생성 대비) ──
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ── IDE ──
+.idea/
+*.iml
+.vscode/
+.claude/settings.local.json
+
+# ── OS ──
+Thumbs.db
+.DS_Store

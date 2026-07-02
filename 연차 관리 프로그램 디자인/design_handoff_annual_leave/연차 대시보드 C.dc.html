@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #0a0f17; font-family: "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif; }
+</style>
+</helmet>
+
+<div style="height:100vh;background:#0f1722;display:flex;flex-direction:column;gap:14px;padding:24px 28px;overflow:hidden;">
+
+  <!-- header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+    <div>
+      <div style="font:700 22px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">김서연님의 연차</div>
+      <div style="font:500 12px Pretendard;color:#6b7a90;margin-top:3px;">개발팀 · 입사 2년차</div>
+    </div>
+    <div style="width:36px;height:36px;border-radius:50%;background:#22304a;display:flex;align-items:center;justify-content:center;font:700 13px Pretendard;color:#9db8e8;">김</div>
+  </div>
+
+  <!-- top stat strip (boxless) -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-shrink:0;padding:6px 4px;margin-bottom:20px;">
+    <div style="display:flex;align-items:flex-end;gap:34px;">
+      <div>
+        <div style="font:600 12px Pretendard;color:#9db8e8;letter-spacing:.02em;">잔여 연차</div>
+        <div style="display:flex;align-items:baseline;gap:6px;margin-top:8px;"><span style="font:800 46px Pretendard;color:#7eb0ff;letter-spacing:-.03em;line-height:1;">8.0</span><span style="font:600 16px Pretendard;color:#6b87b0;">일</span></div>
+        <div style="font:500 11px Pretendard;color:#6b87b0;margin-top:7px;">총 15일 · 사용 7일</div>
+      </div>
+      <div style="width:1px;height:60px;background:rgba(255,255,255,.08);margin-bottom:4px;"></div>
+      <div style="margin-bottom:4px;">
+        <div style="font:500 12px Pretendard;color:#8493a8;">소멸 예정</div>
+        <div style="margin-top:10px;font:700 28px Pretendard;color:#fbbf24;letter-spacing:-.02em;">2.0<span style="font-size:15px;font-weight:600;color:#8a7340;margin-left:2px;">일</span></div>
+      </div>
+      <div style="width:1px;height:60px;background:rgba(255,255,255,.08);margin-bottom:4px;"></div>
+      <div style="margin-bottom:4px;">
+        <div style="font:500 12px Pretendard;color:#8493a8;">결재 대기</div>
+        <div style="margin-top:10px;font:700 28px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">1<span style="font-size:15px;font-weight:600;color:#6b7a90;margin-left:2px;">건</span></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <span style="font:500 12px Pretendard;color:#6b7a90;margin-right:2px;">빠른 신청</span>
+      <div style="background:#3b82f6;color:#fff;font:600 13px Pretendard;padding:11px 20px;border-radius:11px;box-shadow:0 6px 16px rgba(59,130,246,.3);">＋ 연차</div>
+      <div style="background:#172234;border:1px solid rgba(255,255,255,.08);color:#9db8e8;font:600 13px Pretendard;padding:11px 18px;border-radius:11px;">반차</div>
+      <div style="background:#172234;border:1px solid rgba(255,255,255,.08);color:#9db8e8;font:600 13px Pretendard;padding:11px 18px;border-radius:11px;">경조사</div>
+    </div>
+  </div>
+
+  <!-- calendar -->
+  <div style="flex:1;background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:18px 22px;display:flex;flex-direction:column;min-height:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <span style="font:600 15px Pretendard;color:#e9f0fa;">팀 연차 캘린더 · 2026년 7월</span>
+      <span style="font:500 13px Pretendard;color:#6b87b0;">＜&nbsp;&nbsp;7월&nbsp;&nbsp;＞</span>
+    </div>
+
+    <!-- weekday header (separate, thin) -->
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;flex-shrink:0;margin-top:14px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06);">
+      <div style="font:600 11px Pretendard;color:#f87171;text-align:center;">일</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">월</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">화</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">수</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">목</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">금</div>
+      <div style="font:600 11px Pretendard;color:#6b7a90;text-align:center;">토</div>
+    </div>
+
+    <!-- date grid: 5 equal rows fill remaining height -->
+    <div style="flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(5,1fr);gap:6px;margin-top:6px;min-height:0;">
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#7a3a3a;">28</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#5b6677;">29</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#5b6677;">30</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">1</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">2</div>
+      <div style="border-radius:9px;background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.4);padding:8px 9px;"><div style="font:700 13px Pretendard;color:#7eb0ff;">3</div><div style="font:600 10px Pretendard;color:#7eb0ff;margin-top:3px;">내 연차</div></div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">4</div>
+
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#f87171;">5</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">6</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">7</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">8</div>
+      <div style="border-radius:9px;background:rgba(52,211,153,.12);padding:8px 9px;"><div style="font:700 13px Pretendard;color:#cdd7e4;">9</div><div style="font:600 10px Pretendard;color:#34d399;margin-top:3px;">이준 연차</div></div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">10</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">11</div>
+
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#f87171;">12</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">13</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">14</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">15</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">16</div>
+      <div style="border-radius:9px;background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);padding:8px 9px;"><div style="font:700 13px Pretendard;color:#f87171;">17</div><div style="font:600 10px Pretendard;color:#f87171;margin-top:3px;">제헌절</div></div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">18</div>
+
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#f87171;">19</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">20</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">21</div>
+      <div style="border-radius:9px;background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.4);padding:8px 9px;"><div style="font:700 13px Pretendard;color:#7eb0ff;">22</div><div style="font:600 10px Pretendard;color:#7eb0ff;margin-top:3px;">박지훈 연차</div></div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">23</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">24</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">25</div>
+
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#f87171;">26</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">27</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">28</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">29</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">30</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#cdd7e4;">31</div>
+      <div style="border-radius:9px;background:#0f1722;padding:8px 9px;font:600 13px Pretendard;color:#7a3a3a;">1</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

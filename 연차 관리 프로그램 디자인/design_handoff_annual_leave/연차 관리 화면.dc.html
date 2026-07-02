@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #dfe3e9; }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#dfe3e9;display:flex;flex-direction:column;align-items:center;gap:24px;padding:48px 40px 80px;width:max-content;min-width:100%;font-family:'Pretendard Variable',Pretendard,system-ui,sans-serif;">
+
+  <div style="width:1480px;">
+    <div style="font:700 24px Pretendard;color:#16202e;letter-spacing:-.02em;">연차ON · 사이드바형 화면 설계</div>
+    <div style="font:500 13px Pretendard;color:#5b6677;margin-top:5px;">동일한 다크 사이드바 셸 안에서 화면별 본문을 설계했습니다. 아래로 스크롤하며 확인하세요.</div>
+  </div>
+
+  <!-- ============ 1. 대시보드 ============ -->
+  <div style="width:1480px;">
+    <div style="font:600 14px Pretendard;color:#283443;margin-bottom:10px;">① 대시보드 — 내 연차 현황</div>
+    <div style="display:flex;height:864px;background:#0b121c;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(40,52,67,.22);border:1px solid rgba(0,0,0,.06);">
+      <dc-import name="연차사이드바" active="대시보드" hint-size="236px,100%" style="display:block;width:236px;height:100%;flex-shrink:0;"></dc-import>
+      <div style="flex:1;min-width:0;height:100%;">
+        <dc-import name="연차본문" hint-size="100%,100%" style="display:block;width:100%;height:100%;"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 2. 연차 신청 ============ -->
+  <div style="width:1480px;">
+    <div style="font:600 14px Pretendard;color:#283443;margin-bottom:10px;">② 연차 신청 — 휴가 신청 폼</div>
+    <div style="display:flex;height:864px;background:#0b121c;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(40,52,67,.22);border:1px solid rgba(0,0,0,.06);">
+      <dc-import name="연차사이드바" active="연차 신청" hint-size="236px,100%" style="display:block;width:236px;height:100%;flex-shrink:0;"></dc-import>
+      <div style="flex:1;min-width:0;height:100%;background:#0f1722;display:flex;flex-direction:column;padding:26px 30px;overflow:hidden;">
+        <div style="flex-shrink:0;margin-bottom:22px;">
+          <div style="font:700 22px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">연차 신청</div>
+          <div style="font:500 12px Pretendard;color:#6b7a90;margin-top:4px;">사용할 휴가를 선택하고 결재를 요청하세요.</div>
+        </div>
+
+        <div style="flex:1;display:flex;gap:20px;min-height:0;">
+          <!-- form -->
+          <div style="flex:1.7;background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:26px 28px;display:flex;flex-direction:column;gap:24px;overflow-y:auto;">
+            <div>
+              <div style="font:600 13px Pretendard;color:#9db8e8;margin-bottom:11px;">휴가 종류</div>
+              <div style="display:flex;gap:9px;flex-wrap:wrap;">
+                <div style="background:rgba(59,130,246,.16);border:1px solid rgba(59,130,246,.45);color:#7eb0ff;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">연차</div>
+                <div style="background:#0f1722;border:1px solid rgba(255,255,255,.09);color:#8493a8;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">오전 반차</div>
+                <div style="background:#0f1722;border:1px solid rgba(255,255,255,.09);color:#8493a8;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">오후 반차</div>
+                <div style="background:#0f1722;border:1px solid rgba(255,255,255,.09);color:#8493a8;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">경조사</div>
+                <div style="background:#0f1722;border:1px solid rgba(255,255,255,.09);color:#8493a8;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">병가</div>
+              </div>
+            </div>
+            <div>
+              <div style="font:600 13px Pretendard;color:#9db8e8;margin-bottom:11px;">사용 기간</div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="flex:1;background:#0f1722;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;"><span style="font:600 14px Pretendard;color:#cdd7e4;">2026.07.03 (금)</span><span style="font:500 12px Pretendard;color:#5b6677;">시작</span></div>
+                <span style="font:600 14px Pretendard;color:#6b7a90;">~</span>
+                <div style="flex:1;background:#0f1722;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;"><span style="font:600 14px Pretendard;color:#cdd7e4;">2026.07.03 (금)</span><span style="font:500 12px Pretendard;color:#5b6677;">종료</span></div>
+                <div style="background:rgba(59,130,246,.14);border:1px solid rgba(59,130,246,.3);border-radius:10px;padding:13px 18px;font:700 14px Pretendard;color:#7eb0ff;white-space:nowrap;">1.0일</div>
+              </div>
+            </div>
+            <div>
+              <div style="font:600 13px Pretendard;color:#9db8e8;margin-bottom:11px;">사유</div>
+              <div style="background:#0f1722;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 15px;min-height:96px;font:500 14px Pretendard;color:#cdd7e4;line-height:1.6;">가족 여행으로 연차를 사용하고자 합니다.</div>
+            </div>
+            <div>
+              <div style="font:600 13px Pretendard;color:#9db8e8;margin-bottom:11px;">결재 라인</div>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="display:flex;align-items:center;gap:9px;background:#0f1722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:9px 14px;"><div style="width:28px;height:28px;border-radius:50%;background:#22304a;display:flex;align-items:center;justify-content:center;font:700 11px Pretendard;color:#9db8e8;">박</div><div style="line-height:1.3;"><div style="font:600 12px Pretendard;color:#e9f0fa;">박민수</div><div style="font:500 10px Pretendard;color:#6b7a90;">팀장</div></div></div>
+                <span style="font:600 14px Pretendard;color:#4a5870;">→</span>
+                <div style="display:flex;align-items:center;gap:9px;background:#0f1722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:9px 14px;"><div style="width:28px;height:28px;border-radius:50%;background:#22304a;display:flex;align-items:center;justify-content:center;font:700 11px Pretendard;color:#9db8e8;">이</div><div style="line-height:1.3;"><div style="font:600 12px Pretendard;color:#e9f0fa;">이수정</div><div style="font:500 10px Pretendard;color:#6b7a90;">본부장</div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- summary -->
+          <div style="flex:1;background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:24px 26px;display:flex;flex-direction:column;">
+            <div style="font:600 15px Pretendard;color:#e9f0fa;margin-bottom:20px;">신청 요약</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06);"><span style="font:500 13px Pretendard;color:#8493a8;">현재 잔여</span><span style="font:600 15px Pretendard;color:#cdd7e4;">8.0일</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid rgba(255,255,255,.06);"><span style="font:500 13px Pretendard;color:#8493a8;">신청 일수</span><span style="font:600 15px Pretendard;color:#cdd7e4;">- 1.0일</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 0;"><span style="font:600 13px Pretendard;color:#9db8e8;">신청 후 잔여</span><span style="font:800 22px Pretendard;color:#7eb0ff;">7.0일</span></div>
+            <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px;">
+              <div style="text-align:center;background:#3b82f6;color:#fff;font:700 14px Pretendard;padding:14px;border-radius:12px;box-shadow:0 6px 16px rgba(59,130,246,.32);">신청하기</div>
+              <div style="text-align:center;background:#172234;border:1px solid rgba(255,255,255,.08);color:#9db8e8;font:600 14px Pretendard;padding:14px;border-radius:12px;">임시저장</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 3. 사용 내역 ============ -->
+  <div style="width:1480px;">
+    <div style="font:600 14px Pretendard;color:#283443;margin-bottom:10px;">③ 사용 내역 — 신청·승인 이력</div>
+    <div style="display:flex;height:864px;background:#0b121c;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(40,52,67,.22);border:1px solid rgba(0,0,0,.06);">
+      <dc-import name="연차사이드바" active="사용 내역" hint-size="236px,100%" style="display:block;width:236px;height:100%;flex-shrink:0;"></dc-import>
+      <div style="flex:1;min-width:0;height:100%;background:#0f1722;display:flex;flex-direction:column;padding:26px 30px;overflow:hidden;">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-shrink:0;margin-bottom:20px;">
+          <div>
+            <div style="font:700 22px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">사용 내역</div>
+            <div style="font:500 12px Pretendard;color:#6b7a90;margin-top:4px;">2026 회계연도 연차 신청 및 사용 이력</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <div style="font:600 12px Pretendard;color:#9db8e8;background:#141d2b;border:1px solid rgba(255,255,255,.07);padding:9px 14px;border-radius:9px;">2026년 ▾</div>
+            <div style="font:600 12px Pretendard;color:#8493a8;background:#141d2b;border:1px solid rgba(255,255,255,.07);padding:9px 14px;border-radius:9px;">전체 종류 ▾</div>
+            <div style="font:600 12px Pretendard;color:#8493a8;background:#141d2b;border:1px solid rgba(255,255,255,.07);padding:9px 14px;border-radius:9px;">전체 상태 ▾</div>
+          </div>
+        </div>
+
+        <!-- summary strip -->
+        <div style="display:flex;align-items:center;gap:30px;flex-shrink:0;padding:0 4px 18px;">
+          <div style="display:flex;align-items:baseline;gap:7px;"><span style="font:500 12px Pretendard;color:#8493a8;">총 부여</span><span style="font:700 18px Pretendard;color:#cdd7e4;">15일</span></div>
+          <div style="width:1px;height:20px;background:rgba(255,255,255,.08);"></div>
+          <div style="display:flex;align-items:baseline;gap:7px;"><span style="font:500 12px Pretendard;color:#8493a8;">사용</span><span style="font:700 18px Pretendard;color:#cdd7e4;">7일</span></div>
+          <div style="width:1px;height:20px;background:rgba(255,255,255,.08);"></div>
+          <div style="display:flex;align-items:baseline;gap:7px;"><span style="font:500 12px Pretendard;color:#8493a8;">잔여</span><span style="font:700 18px Pretendard;color:#7eb0ff;">8일</span></div>
+          <div style="width:1px;height:20px;background:rgba(255,255,255,.08);"></div>
+          <div style="display:flex;align-items:baseline;gap:7px;"><span style="font:500 12px Pretendard;color:#8493a8;">소멸 예정</span><span style="font:700 18px Pretendard;color:#fbbf24;">2일</span></div>
+        </div>
+
+        <!-- table -->
+        <div style="flex:1;background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:0;">
+          <div style="display:grid;grid-template-columns:120px 100px 190px 80px 1fr 100px;gap:12px;padding:15px 24px;border-bottom:1px solid rgba(255,255,255,.07);flex-shrink:0;background:#101926;">
+            <div style="font:600 12px Pretendard;color:#6b7a90;">신청일</div>
+            <div style="font:600 12px Pretendard;color:#6b7a90;">종류</div>
+            <div style="font:600 12px Pretendard;color:#6b7a90;">사용 기간</div>
+            <div style="font:600 12px Pretendard;color:#6b7a90;">일수</div>
+            <div style="font:600 12px Pretendard;color:#6b7a90;">사유</div>
+            <div style="font:600 12px Pretendard;color:#6b7a90;text-align:right;">상태</div>
+          </div>
+          <div style="flex:1;overflow-y:auto;">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:120px 100px 190px 80px 1fr 100px;gap:12px;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,.04);align-items:center;">
+                <div style="font:500 13px Pretendard;color:#8493a8;">{{ r.date }}</div>
+                <div style="font:600 13px Pretendard;color:#cdd7e4;">{{ r.type }}</div>
+                <div style="font:500 13px Pretendard;color:#cdd7e4;">{{ r.period }}</div>
+                <div style="font:600 13px Pretendard;color:#cdd7e4;">{{ r.days }}</div>
+                <div style="font:500 13px Pretendard;color:#8493a8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ r.reason }}</div>
+                <div style="text-align:right;"><span style="{{ r.badgeStyle }}">{{ r.status }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4. 복리후생 ============ -->
+  <div style="width:1480px;">
+    <div style="font:600 14px Pretendard;color:#283443;margin-bottom:10px;">④ 복리후생 — 사내 지원 제도</div>
+    <div style="display:flex;height:864px;background:#0b121c;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(40,52,67,.22);border:1px solid rgba(0,0,0,.06);">
+      <dc-import name="연차사이드바" active="복리후생" hint-size="236px,100%" style="display:block;width:236px;height:100%;flex-shrink:0;"></dc-import>
+      <div style="flex:1;min-width:0;height:100%;background:#0f1722;display:flex;flex-direction:column;padding:26px 30px;overflow:hidden;">
+        <div style="flex-shrink:0;margin-bottom:22px;">
+          <div style="font:700 22px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">복리후생</div>
+          <div style="font:500 12px Pretendard;color:#6b7a90;margin-top:4px;">신청 가능한 사내 지원 제도와 내 사용 현황입니다.</div>
+        </div>
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;grid-auto-rows:1fr;gap:16px;min-height:0;">
+          <sc-for list="{{ benefits }}" as="b" hint-placeholder-count="6">
+            <div style="background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:22px 24px;display:flex;flex-direction:column;">
+              <div style="width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:{{ b.iconBg }};color:{{ b.iconColor }};font:700 19px Pretendard;">{{ b.glyph }}</div>
+              <div style="font:700 16px Pretendard;color:#e9f0fa;margin-top:16px;">{{ b.title }}</div>
+              <div style="font:500 12px Pretendard;color:#8493a8;line-height:1.55;margin-top:7px;">{{ b.desc }}</div>
+              <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding-top:16px;">
+                <span style="font:600 13px Pretendard;color:#cdd7e4;">{{ b.amount }}</span>
+                <span style="{{ b.tagStyle }}">{{ b.tag }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 5. 관리자 · 결재 관리 ============ -->
+  <div style="width:1480px;">
+    <div style="font:600 14px Pretendard;color:#283443;margin-bottom:10px;">⑤ 관리자 · 결재 관리 — 팀원 휴가 승인</div>
+    <div style="display:flex;height:864px;background:#0b121c;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(40,52,67,.22);border:1px solid rgba(0,0,0,.06);">
+      <dc-import name="연차사이드바" active="결재 관리" hint-size="236px,100%" style="display:block;width:236px;height:100%;flex-shrink:0;"></dc-import>
+      <div style="flex:1;min-width:0;height:100%;background:#0f1722;display:flex;flex-direction:column;padding:26px 30px;overflow:hidden;">
+        <div style="flex-shrink:0;margin-bottom:18px;">
+          <div style="font:700 22px Pretendard;color:#e9f0fa;letter-spacing:-.02em;">결재 관리</div>
+          <div style="font:500 12px Pretendard;color:#6b7a90;margin-top:4px;">팀원이 신청한 휴가를 검토하고 승인하세요.</div>
+        </div>
+        <!-- tabs -->
+        <div style="display:flex;gap:6px;flex-shrink:0;margin-bottom:18px;border-bottom:1px solid rgba(255,255,255,.06);">
+          <div style="display:flex;align-items:center;gap:7px;padding:11px 16px;border-bottom:2px solid #3b82f6;font:600 14px Pretendard;color:#7eb0ff;">대기<span style="font:700 11px Pretendard;color:#fff;background:#3b82f6;padding:2px 7px;border-radius:20px;">2</span></div>
+          <div style="padding:11px 16px;border-bottom:2px solid transparent;font:500 14px Pretendard;color:#8493a8;">승인 12</div>
+          <div style="padding:11px 16px;border-bottom:2px solid transparent;font:500 14px Pretendard;color:#8493a8;">반려 1</div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;gap:14px;overflow-y:auto;min-height:0;">
+          <sc-for list="{{ approvals }}" as="a" hint-placeholder-count="3">
+            <div style="background:#141d2b;border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px 24px;display:flex;align-items:center;gap:22px;">
+              <div style="display:flex;align-items:center;gap:13px;width:180px;flex-shrink:0;">
+                <div style="width:42px;height:42px;border-radius:50%;background:#22304a;display:flex;align-items:center;justify-content:center;font:700 15px Pretendard;color:#9db8e8;">{{ a.initial }}</div>
+                <div style="line-height:1.4;"><div style="font:600 14px Pretendard;color:#e9f0fa;">{{ a.name }}</div><div style="font:500 11px Pretendard;color:#6b7a90;">{{ a.team }}</div></div>
+              </div>
+              <div style="width:130px;flex-shrink:0;"><div style="font:500 11px Pretendard;color:#6b7a90;">종류 · 일수</div><div style="font:600 14px Pretendard;color:#cdd7e4;margin-top:4px;">{{ a.type }} · {{ a.days }}</div></div>
+              <div style="width:170px;flex-shrink:0;"><div style="font:500 11px Pretendard;color:#6b7a90;">기간</div><div style="font:600 14px Pretendard;color:#cdd7e4;margin-top:4px;">{{ a.period }}</div></div>
+              <div style="flex:1;min-width:0;"><div style="font:500 11px Pretendard;color:#6b7a90;">사유</div><div style="font:500 14px Pretendard;color:#8493a8;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.reason }}</div></div>
+              <div style="display:flex;gap:9px;flex-shrink:0;">
+                <div style="background:#172234;border:1px solid rgba(248,113,113,.3);color:#f87171;font:600 13px Pretendard;padding:10px 18px;border-radius:10px;">반려</div>
+                <div style="background:#3b82f6;color:#fff;font:600 13px Pretendard;padding:10px 20px;border-radius:10px;box-shadow:0 4px 12px rgba(59,130,246,.3);">승인</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1480,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  renderVals() {
+    const badge = (status) => {
+      const map = {
+        '대기': 'color:#fbbf24;background:rgba(251,191,36,.13);',
+        '승인': 'color:#34d399;background:rgba(52,211,153,.12);',
+        '반려': 'color:#f87171;background:rgba(248,113,113,.13);',
+      };
+      return `font:700 11px Pretendard;padding:5px 12px;border-radius:20px;white-space:nowrap;${map[status] || ''}`;
+    };
+    const rows = [
+      { date: '2026.06.18', type: '연차', period: '07.03 (금)', days: '1.0일', reason: '가족 여행', status: '대기' },
+      { date: '2026.06.15', type: '오후 반차', period: '06.20 (토)', days: '0.5일', reason: '병원 진료', status: '승인' },
+      { date: '2026.06.02', type: '연차', period: '06.05 (금)', days: '1.0일', reason: '개인 사유', status: '승인' },
+      { date: '2026.05.20', type: '오전 반차', period: '05.22 (목)', days: '0.5일', reason: '은행 업무', status: '승인' },
+      { date: '2026.04.28', type: '연차', period: '04.30 ~ 05.02', days: '2.0일', reason: '가족 행사 참석', status: '승인' },
+      { date: '2026.03.10', type: '경조사', period: '03.12 ~ 03.13', days: '2.0일', reason: '본인 결혼', status: '승인' },
+      { date: '2026.02.14', type: '연차', period: '02.17 (화)', days: '1.0일', reason: '개인 사유', status: '반려' },
+      { date: '2026.01.06', type: '연차', period: '01.08 (목)', days: '1.0일', reason: '휴식', status: '승인' },
+    ].map((r) => ({ ...r, badgeStyle: badge(r.status) }));
+
+    const tag = (kind) => {
+      const map = {
+        on: 'font:700 11px Pretendard;color:#34d399;background:rgba(52,211,153,.12);padding:5px 11px;border-radius:20px;',
+        soon: 'font:700 11px Pretendard;color:#7eb0ff;background:rgba(59,130,246,.13);padding:5px 11px;border-radius:20px;',
+      };
+      return map[kind];
+    };
+    const benefits = [
+      { glyph: '♥', iconBg: 'rgba(248,113,113,.14)', iconColor: '#f87171', title: '경조사 지원', desc: '결혼·출산·조사 시 경조금과 유급 휴가를 지원합니다.', amount: '최대 500,000원', tag: '신청 가능', tagStyle: tag('on') },
+      { glyph: '＋', iconBg: 'rgba(52,211,153,.14)', iconColor: '#34d399', title: '종합 건강검진', desc: '만 30세 이상 임직원 대상 연 1회 종합검진을 지원합니다.', amount: '연 1회', tag: '예약 가능', tagStyle: tag('on') },
+      { glyph: '◈', iconBg: 'rgba(59,130,246,.14)', iconColor: '#7eb0ff', title: '자기계발비', desc: '도서·강의·자격증 응시료를 분기별로 지원합니다.', amount: '분기 200,000원', tag: '12만원 사용', tagStyle: tag('soon') },
+      { glyph: '◆', iconBg: 'rgba(251,191,36,.14)', iconColor: '#fbbf24', title: '명절 선물', desc: '설·추석 명절에 임직원 선물 또는 포인트를 지급합니다.', amount: '연 2회', tag: '자동 지급', tagStyle: tag('on') },
+      { glyph: '●', iconBg: 'rgba(167,139,250,.16)', iconColor: '#a78bfa', title: '동호회 지원', desc: '사내 등록 동호회 활동비를 인원수에 따라 지원합니다.', amount: '월 30,000원', tag: '가입 가능', tagStyle: tag('on') },
+      { glyph: '☀', iconBg: 'rgba(56,189,248,.14)', iconColor: '#38bdf8', title: '리프레시 휴가', desc: '근속 3·5·10년 차에 유급 리프레시 휴가를 제공합니다.', amount: '최대 10일', tag: '3년차 D-340', tagStyle: tag('soon') },
+    ];
+
+    const approvals = [
+      { initial: '박', name: '박지훈', team: '개발팀 · 사원', type: '연차', days: '1.0일', period: '2026.07.22 (수)', reason: '개인 사유로 연차 사용' },
+      { initial: '최', name: '최유진', team: '디자인팀 · 주임', type: '오후 반차', days: '0.5일', period: '2026.07.04 (토)', reason: '병원 정기 진료' },
+    ];
+
+    return { rows, benefits, approvals };
+  }
+}
+</script>
+</body>
+</html>
