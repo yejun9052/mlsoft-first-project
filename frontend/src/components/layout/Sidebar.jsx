@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -9,8 +9,10 @@ import {
   ClipboardCheck,
   UsersRound,
   Settings,
+  LogOut,
 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../../constants/roles.js';
+import { logout } from '../../api/auth.js';
 
 // MENU 섹션 (전 직원 공통 6개)
 const MENU_ITEMS = [
@@ -64,6 +66,8 @@ function SidebarLink({ to, label, Icon }) {
 
 // 사이드바 — 236px 고정, 로고 → MENU → 관리자 → 하단 유저 카드 (docs/05 ①)
 export default function Sidebar() {
+  const navigate = useNavigate();
+
   // 로그인 유저 정보 (RequireAuth 통과 후 렌더되므로 존재 전제, 방어적 파싱만)
   let userInfo = null;
   try {
@@ -73,6 +77,18 @@ export default function Sidebar() {
   }
   const role = userInfo?.role;
   const adminItems = ADMIN_ITEMS.filter((item) => item.roles.includes(role));
+
+  // 로그아웃 — 서버 쿠키 만료 후 로컬 정보 정리, 실패해도 로컬은 항상 정리하고 로그인으로
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch {
+      // 서버 오류여도 클라이언트 세션은 종료
+    } finally {
+      localStorage.clear();
+      navigate('/login', { replace: true });
+    }
+  }
 
   return (
     <aside className="flex w-[236px] shrink-0 flex-col border-r border-white/6 bg-navy-app px-4 py-5">
@@ -111,7 +127,7 @@ export default function Sidebar() {
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-avatar text-sm font-semibold text-accent-label">
           {userInfo?.name?.charAt(0) ?? '?'}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-ink-hi">
             {userInfo?.name ?? '이름 없음'}
           </p>
@@ -119,6 +135,16 @@ export default function Sidebar() {
             {userInfo?.departmentName ?? '부서 미배정'} · {ROLE_LABEL[role] ?? '-'}
           </p>
         </div>
+        {/* 로그아웃 버튼 */}
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="로그아웃"
+          aria-label="로그아웃"
+          className="shrink-0 rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-white/5 hover:text-danger"
+        >
+          <LogOut size={16} />
+        </button>
       </div>
     </aside>
   );

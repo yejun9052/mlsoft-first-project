@@ -14,12 +14,15 @@ public enum ErrorCode {
     // 400 Bad Request
     INSUFFICIENT_LEAVE_BALANCE(400, "잔여 연차가 부족합니다."),
     ALREADY_PROCESSED(400, "이미 처리된 신청입니다."),
+    ALREADY_ONBOARDED(400, "이미 온보딩이 완료된 계정입니다."),
     INVALID_INPUT_VALUE(400, "입력값이 올바르지 않습니다."),
     INVALID_APPROVER(400, "승인자로 지정할 수 없는 사용자입니다."),
 
     // 401 Unauthorized
+    UNAUTHENTICATED(401, "로그인이 필요합니다."),
     UNAUTHORIZED_DOMAIN(401, "허용되지 않은 도메인입니다."),
     RETIRED_USER(401, "퇴직 처리된 계정입니다."),
+    OAUTH_LOGIN_FAILED(401, "로그인에 실패했습니다. 다시 시도해주세요."),
 
     // 403 Forbidden
     ACCESS_DENIED(403, "접근 권한이 없습니다."),

@@ -49,9 +49,16 @@ jwt:
 holiday:
   api-key: ${HOLIDAY_API_KEY}
 
-# 최초 관리자 부트스트랩 (docs/08 R-3) — 콤마 구분 이메일 목록
-admin:
-  emails: ${ADMIN_EMAILS:}
+# 앱 공통 설정 (AppProperties 바인딩 — 인증·CORS·쿠키)
+app:
+  # 로그인 허용 이메일 도메인 — 개발 중엔 ALLOWED_DOMAIN=gmail.com 등으로 대체 가능 (검증 R-2)
+  allowed-domain: ${ALLOWED_DOMAIN:mlsoft.com}
+  # 최초 관리자 부트스트랩 (검증 R-3) — 콤마 구분 이메일 목록
+  admin-emails: ${ADMIN_EMAILS:}
+  # 프론트 오리진 (CORS 허용 + OAuth 리다이렉트)
+  frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  # JWT 쿠키 Secure 플래그 — 운영(HTTPS)에서 true
+  cookie-secure: ${COOKIE_SECURE:false}
 
 logging:
   level:

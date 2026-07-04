@@ -19,3 +19,6 @@
 # | JWT_EXPIRATION_MS   | 86400000                                            | 토큰 만료(ms), 생략 시 24h             |
 # | HOLIDAY_API_KEY     | data-go-kr-service-key                              | 공공데이터포털 특일 정보 API 키        |
 # | ADMIN_EMAILS        | admin@mlsoft.com,cto@mlsoft.com                     | 첫 로그인 시 SYSTEM_ADMIN 부여 (R-3)   |
+# | ALLOWED_DOMAIN      | mlsoft.com                                          | 로그인 허용 도메인 (개발 중 gmail.com 대체 가능, 생략 시 mlsoft.com) |
+# | FRONTEND_URL        | http://localhost:5173                               | 프론트 오리진 — CORS·OAuth 리다이렉트 (생략 시 좌측 기본값) |
+# | COOKIE_SECURE       | false                                               | JWT 쿠키 Secure 플래그 — 운영 HTTPS는 true (생략 시 false) |

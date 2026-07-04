@@ -18,6 +18,7 @@ public final class ResponseMessage {
     // 사용자
     public static final String USER_INFO_FETCHED = "사용자 정보를 조회했습니다.";
     public static final String ONBOARDING_COMPLETED = "온보딩이 완료되었습니다.";
+    public static final String LOGOUT_COMPLETED = "로그아웃 되었습니다.";
 
     private ResponseMessage() {
         // 인스턴스화 방지

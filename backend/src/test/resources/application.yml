@@ -12,6 +12,18 @@ spring:
       ddl-auto: create-drop
     open-in-view: false
 
+  # OAuth2 클라이언트 더미 — 컨텍스트 로드용 (실제 인증 안 함)
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
+            scope:
+              - profile
+              - email
+
 jwt:
   secret: test-only-secret-key-for-context-load-0123456789
   expiration-ms: 86400000
@@ -19,5 +31,8 @@ jwt:
 holiday:
   api-key: test-holiday-api-key
 
-admin:
-  emails: admin@mlsoft.com
+app:
+  allowed-domain: mlsoft.com
+  admin-emails: admin@mlsoft.com
+  frontend-url: http://localhost:5173
+  cookie-secure: false
