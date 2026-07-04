@@ -1,0 +1,21 @@
+# =====================================================================
+# 환경변수 템플릿 (커밋용 — 실제 값 넣지 말 것)
+# application.yml이 참조하는 환경변수 목록과 예시값.
+# 로컬 실행 시 IntelliJ Run Configuration 또는 .env(도커)로 주입한다.
+# =====================================================================
+#
+# | 환경변수            | 예시값                                              | 설명                                   |
+# |---------------------|-----------------------------------------------------|----------------------------------------|
+# | DB_URL              | jdbc:mysql://localhost:3306/mlsoft_leave?serverTimezone=Asia/Seoul&characterEncoding=UTF-8 | MySQL 접속 URL (생략 시 좌측 기본값) |
+# | DB_USERNAME         | root                                                | DB 계정 (생략 시 root)                 |
+# | DB_PASSWORD         | your-db-password                                    | DB 비밀번호 (필수)                     |
+# | GOOGLE_CLIENT_ID    | 1234567890-abc.apps.googleusercontent.com           | Google OAuth 클라이언트 ID (필수)      |
+# | GOOGLE_CLIENT_SECRET| GOCSPX-xxxxxxxxxxxx                                 | Google OAuth 시크릿 (필수)             |
+# | MAIL_HOST           | smtp.gmail.com                                      | SMTP 호스트 (생략 시 Gmail)            |
+# | MAIL_PORT           | 587                                                 | SMTP 포트 (생략 시 587)                |
+# | MAIL_USERNAME       | noreply@mlsoft.com                                  | 발송 계정 (선결 조건 — docs/08 R-4)    |
+# | MAIL_PASSWORD       | your-mail-app-password                              | 발송 계정 비밀번호/앱 비밀번호         |
+# | JWT_SECRET          | base64-encoded-256bit-random-string                 | JWT 서명 키 (필수, 32byte 이상)        |
+# | JWT_EXPIRATION_MS   | 86400000                                            | 토큰 만료(ms), 생략 시 24h             |
+# | HOLIDAY_API_KEY     | data-go-kr-service-key                              | 공공데이터포털 특일 정보 API 키        |
+# | ADMIN_EMAILS        | admin@mlsoft.com,cto@mlsoft.com                     | 첫 로그인 시 SYSTEM_ADMIN 부여 (R-3)   |

@@ -1,0 +1,20 @@
+# 로컬 개발용 MySQL 8 — 실행: docker compose up -d
+# DB_PASSWORD는 .env 파일 또는 셸 환경변수로 주입 (하드코딩 금지)
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mlsoft-leave-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 환경변수를 설정하세요}
+      MYSQL_DATABASE: mlsoft_leave
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:

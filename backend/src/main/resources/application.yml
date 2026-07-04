@@ -1,0 +1,58 @@
+# 공통 설정 — 시크릿은 전부 환경변수 참조 (실제 값 커밋 금지, application-example.yml 참고)
+spring:
+  application:
+    name: backend
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/mlsoft_leave?serverTimezone=Asia/Seoul&characterEncoding=UTF-8}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update # 개발용. 운영 전환 시 validate + SQL/Flyway 관리 (docs/08 Y-6)
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - profile
+              - email
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# JWT (HttpOnly 쿠키 발급용 — SecurityConfig는 다음 단계)
+jwt:
+  secret: ${JWT_SECRET}
+  expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24h
+
+# 공공데이터포털 특일 정보 API (공휴일)
+holiday:
+  api-key: ${HOLIDAY_API_KEY}
+
+# 최초 관리자 부트스트랩 (docs/08 R-3) — 콤마 구분 이메일 목록
+admin:
+  emails: ${ADMIN_EMAILS:}
+
+logging:
+  level:
+    com.mlsoft.backend: debug

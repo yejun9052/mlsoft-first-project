@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+/* 디자인 토큰 (docs/05-디자인-가이드.md) — Tailwind v4 @theme 등록 */
+@theme {
+  /* 폰트 */
+  --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
+
+  /* 네이비 서피스 */
+  --color-navy-app: #0b121c;
+  --color-navy-content: #0f1722;
+  --color-navy-card: #141d2b;
+  --color-navy-header: #101926;
+  --color-navy-btn2: #172234;
+  --color-navy-avatar: #22304a;
+
+  /* Accent 파랑 */
+  --color-accent: #3b82f6;
+  --color-accent-dark: #1d4ed8;
+  --color-accent-light: #7eb0ff;
+  --color-accent-label: #9db8e8;
+
+  /* 텍스트 */
+  --color-ink-hi: #e9f0fa;
+  --color-ink-body: #cdd7e4;
+  --color-ink-mute: #8493a8;
+  --color-ink-faint: #6b7a90;
+  --color-ink-dim: #4a5870;
+
+  /* 상태 색 */
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-danger: #f87171;
+
+  /* 라디우스 */
+  --radius-window: 18px;
+  --radius-card: 16px;
+  --radius-btn: 10px;
+  --radius-badge: 20px;
+
+  /* 섀도우 */
+  --shadow-card: 0 18px 50px rgba(40, 52, 67, 0.22);
+  --shadow-btn: 0 6px 16px rgba(59, 130, 246, 0.3);
+}
+
+/* 기본 배경·글자색 (그 외 스타일은 전부 Tailwind 유틸리티로) */
+body {
+  @apply bg-navy-app font-sans text-ink-body antialiased;
+}

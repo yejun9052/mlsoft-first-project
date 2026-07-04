@@ -1,0 +1,23 @@
+# 테스트 전용 설정 — H2 인메모리 (MySQL 호환 모드)
+# NON_KEYWORDS: MySQL에서는 비예약어지만 H2에서 예약어인 컬럼명(year/day/value) 허용
+spring:
+  datasource:
+    url: jdbc:h2:mem:mlsoft_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE;NON_KEYWORDS=YEAR,DAY,VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+jwt:
+  secret: test-only-secret-key-for-context-load-0123456789
+  expiration-ms: 86400000
+
+holiday:
+  api-key: test-holiday-api-key
+
+admin:
+  emails: admin@mlsoft.com
