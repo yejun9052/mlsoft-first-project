@@ -17,7 +17,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -33,6 +35,8 @@ import java.util.List;
  * 연차 신청 (docs/02 3-3 leave_requests + 3-4 leave_dates).
  * - 신청(PENDING) 시 use_days 선차감, 반려/취소 시 복구 — 차감·복구는 서비스에서 User 도메인 메서드 호출
  * - 승인은 primary/sub 병렬 선착순: 먼저 처리한 1명으로 종료, 이중 처리는 ALREADY_PROCESSED (검증 R-5)
+ * - ⚠️ 여기의 상태 가드는 in-memory 검사일 뿐 — 서비스 계층은 반드시 status 조건부 갱신
+ *   (UPDATE ... WHERE status='PENDING')으로 동시 처리를 차단해야 한다 (검증 R-5, 리포트 체크리스트 2)
  */
 @Entity
 @Table(name = "leave_requests")
@@ -60,6 +64,11 @@ public class LeaveRequest extends BaseTimeEntity {
     @Column(nullable = false, precision = 4, scale = 1)
     private BigDecimal days;
 
+    /** 당겨쓰기 충당분 스냅샷 — 반려·취소 시 advance_days 복구 근거 (검증 B2, User.restoreLeave와 짝) */
+    @Column(nullable = false, precision = 4, scale = 1)
+    @Builder.Default
+    private BigDecimal advanceUsedDays = BigDecimal.ZERO;
+
     /** 신청 사유 (필수) */
     @Column(nullable = false)
     private String requestReason;
@@ -82,28 +91,43 @@ public class LeaveRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private RequestStatus status;
 
-    /** 사용 날짜 목록 (leave_dates 테이블) */
+    /** 사용 날짜 목록 (leave_dates 테이블) — 값 오름차순 조회 보장, (신청, 날짜) 중복은 DB 유니크로 차단 */
     @ElementCollection
-    @CollectionTable(name = "leave_dates", joinColumns = @JoinColumn(name = "leave_requests_id"))
+    @CollectionTable(
+            name = "leave_dates",
+            joinColumns = @JoinColumn(name = "leave_requests_id"),
+            uniqueConstraints = @UniqueConstraint(name = "uk_leave_dates_request_day",
+                    columnNames = {"leave_requests_id", "day"}))
+    @OrderBy // 기본(값) 오름차순 — 시작일·종료일 판정이 순서에 의존하므로 명시 (검증 B5)
     @Column(name = "day", nullable = false)
     @Builder.Default
     private List<LocalDate> dates = new ArrayList<>();
 
     /**
      * 연차 신청 생성 — PENDING으로 시작 (선차감은 서비스에서 user.deductLeave 호출).
+     * 중복 날짜는 제거 후 오름차순 정렬해 저장한다 — 같은 날짜 2회 전달 시 일수 이중 계산 방지 (검증 B5).
      */
     public static LeaveRequest create(User user, LeaveType leaveType, List<LocalDate> dates,
                                       String requestReason, User primaryApprover, User subApprover) {
+        List<LocalDate> distinctDates = dates.stream().distinct().sorted().toList();
         return LeaveRequest.builder()
                 .user(user)
                 .leaveType(leaveType)
-                .dates(new ArrayList<>(dates))
-                .days(leaveType.getDaysPerDate().multiply(BigDecimal.valueOf(dates.size())))
+                .dates(new ArrayList<>(distinctDates))
+                .days(leaveType.getDaysPerDate().multiply(BigDecimal.valueOf(distinctDates.size())))
                 .requestReason(requestReason)
                 .primaryApprover(primaryApprover)
                 .subApprover(subApprover)
                 .status(RequestStatus.PENDING)
                 .build();
+    }
+
+    /**
+     * 선차감 시 당겨쓰기로 충당된 일수 기록 (User.deductLeave 반환값).
+     * 반려·소급취소 승인 시 User.restoreLeave에 이 값을 넘겨 advance_days까지 원복한다 (검증 B2).
+     */
+    public void recordAdvanceUsage(BigDecimal advanceUsedDays) {
+        this.advanceUsedDays = advanceUsedDays;
     }
 
     /**

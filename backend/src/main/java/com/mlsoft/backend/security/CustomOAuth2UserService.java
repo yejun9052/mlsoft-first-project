@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
 import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -57,8 +58,13 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             throw unauthorizedDomain();
         }
 
-        // ② 이메일 도메인 검증 (개발 중 대체 방식)
-        if (email == null || !email.toLowerCase().endsWith("@" + appProperties.allowedDomain().toLowerCase())) {
+        // ② 이메일 도메인 검증 (개발 중 대체 방식) — allowed-domain이 비어 있으면 제한 없음(개발용)
+        String allowedDomain = appProperties.allowedDomain();
+        if (email == null) {
+            throw unauthorizedDomain();
+        }
+        if (allowedDomain != null && !allowedDomain.isBlank()
+                && !email.toLowerCase().endsWith("@" + allowedDomain.toLowerCase())) {
             throw unauthorizedDomain();
         }
 
@@ -66,8 +72,17 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         //  - OidcUser로 전환해 idToken.getClaim("hd") 확인 예정
 
         // ③ 미가입이면 자동 가입 (EMPLOYEE + 미배정 부서, ADMIN_EMAILS는 SYSTEM_ADMIN)
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> registerNewUser(email, name));
+        // 동시 첫 로그인 레이스로 중복 insert가 unique 제약에 걸리면 500 대신 재로그인 유도 (검증 리포트)
+        User user;
+        try {
+            user = userRepository.findByEmail(email)
+                    .orElseGet(() -> registerNewUser(email, name));
+        } catch (DataIntegrityViolationException e) {
+            log.warn("[OAuth2] 동시 가입 레이스 감지: {} — 재로그인 유도", email);
+            // FailureHandler의 default 분기(OAUTH_LOGIN_FAILED 메시지)를 타는 일반 실패 코드
+            throw new OAuth2AuthenticationException(
+                    new OAuth2Error("signup_race", ErrorCode.OAUTH_LOGIN_FAILED.getMessage(), null));
+        }
 
         // ④ 퇴직자 로그인 거부 — 인증 성공해도 토큰 발급 전 차단
         if (!user.isActive()) {

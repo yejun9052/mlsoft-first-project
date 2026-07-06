@@ -16,6 +16,12 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // OAuth 콜백 방어 — '/login' 전체를 프록시하면 SPA의 /login 라우트가 깨지므로
+      // 백엔드 콜백 경로(/login/oauth2/**)만 좁게 전달
+      '/login/oauth2': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 });

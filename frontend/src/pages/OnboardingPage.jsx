@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { CalendarCheck2, Loader2 } from 'lucide-react';
-import { me, submitOnboarding } from '../api/auth.js';
+import { submitOnboarding } from '../api/auth.js';
 
 // 오늘 날짜(YYYY-MM-DD, 로컬 기준) — 입사일 max 속성용 (미래 입사일 차단)
 const TODAY = (() => {
@@ -31,7 +31,8 @@ export default function OnboardingPage() {
     userName = '';
   }
 
-  // 제출 — 온보딩 등록 후 me() 재조회로 userInfo 갱신(onboarded=true 반영) → 대시보드
+  // 제출 — 온보딩 응답(UserMeResponse)을 바로 userInfo에 저장 (onboarded=true 반영).
+  // me() 재조회를 끼우면 그 호출이 실패했을 때 onboarded=false가 남아 탈출 불가 루프가 됨 (검증 F1)
   async function handleSubmit(event) {
     event.preventDefault();
     if (!birthDay || !hireDate) {
@@ -41,8 +42,7 @@ export default function OnboardingPage() {
 
     setSubmitting(true);
     try {
-      await submitOnboarding({ birthDay, hireDate });
-      const data = await me();
+      const data = await submitOnboarding({ birthDay, hireDate });
       localStorage.setItem('userInfo', JSON.stringify(data));
       toast.success('온보딩이 완료되었습니다. 환영합니다!');
       navigate('/dashboard', { replace: true });

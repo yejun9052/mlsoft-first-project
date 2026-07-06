@@ -11,7 +11,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -58,9 +57,8 @@ public class EmailHistory extends BaseTimeEntity {
     @Column(nullable = false)
     private String title;
 
-    /** 본문 (TEXT) */
-    @Lob
-    @Column(nullable = false)
+    /** 본문 — length 미지정 @Lob은 MySQL에서 TINYTEXT(255B)로 생성되므로 TEXT 명시 (검증 B1) */
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
     /** 발송 상태 */

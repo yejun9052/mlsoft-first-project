@@ -4,6 +4,7 @@ import com.mlsoft.backend.security.CustomOAuth2UserService;
 import com.mlsoft.backend.security.JwtFilter;
 import com.mlsoft.backend.security.OAuth2FailureHandler;
 import com.mlsoft.backend.security.OAuth2SuccessHandler;
+import com.mlsoft.backend.security.RestAccessDeniedHandler;
 import com.mlsoft.backend.security.RestAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -41,6 +42,7 @@ public class SecurityConfig {
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
     private final AppProperties appProperties;
 
     @Bean
@@ -64,8 +66,10 @@ public class SecurityConfig {
                         .successHandler(oAuth2SuccessHandler)
                         .failureHandler(oAuth2FailureHandler))
 
-                // 미인증 접근 → 401 JSON (기본 로그인 페이지 리다이렉트 방지)
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(restAuthenticationEntryPoint))
+                // 미인증 → 401 JSON, 필터 계층 인가 실패 → 403 JSON (기본 로그인 페이지 리다이렉트 방지)
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler))
 
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

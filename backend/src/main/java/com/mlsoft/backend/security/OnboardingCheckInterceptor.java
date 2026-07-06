@@ -64,7 +64,9 @@ public class OnboardingCheckInterceptor implements HandlerInterceptor {
         }
 
         // ③ 온보딩(생일·입사일 입력) 미완료 → /api/auth/* 외 403
-        if (!request.getRequestURI().startsWith(AUTH_PATH_PREFIX) && !user.isOnboardingCompleted()) {
+        // getRequestURI()는 context-path를 포함하므로 제거 후 판정 (context-path 도입 시 오차단 방지)
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        if (!path.startsWith(AUTH_PATH_PREFIX) && !user.isOnboardingCompleted()) {
             throw new BusinessException(ErrorCode.ONBOARDING_NOT_COMPLETED);
         }
         return true;

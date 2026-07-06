@@ -3,6 +3,7 @@ package com.mlsoft.backend.security;
 import com.mlsoft.backend.domain.user.entity.Role;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -63,10 +64,15 @@ public class JwtProvider {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+        String role = claims.get(CLAIM_ROLE, String.class);
+        if (role == null) {
+            // 서명은 유효하나 필수 클레임 누락(키 로테이션·수동 발급 실수 등) — NPE 500이 아니라 401 경로로
+            throw new MalformedJwtException("role 클레임이 없는 토큰입니다.");
+        }
         return new AuthUser(
                 Long.valueOf(claims.getSubject()),
                 claims.get(CLAIM_EMAIL, String.class),
-                Role.valueOf(claims.get(CLAIM_ROLE, String.class))
+                Role.valueOf(role)
         );
     }
 

@@ -4,10 +4,14 @@ import com.mlsoft.backend.global.response.CommonResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 전역 예외 처리 — 컨트롤러 try-catch 금지 (docs/04).
@@ -53,6 +57,51 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(ErrorCode.CONCURRENT_UPDATE.getStatus())
                 .body(CommonResponse.fail(ErrorCode.CONCURRENT_UPDATE.getMessage()));
+    }
+
+    /**
+     * 권한 거부(@PreAuthorize 등 메서드 시큐리티, AuthorizationDeniedException 포함) → 403.
+     * catch-all이 500으로 삼키지 않도록 명시 처리 (docs/03 ACCESS_DENIED 계약).
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<CommonResponse<Void>> handleAccessDeniedException(AccessDeniedException e) {
+        log.warn("Access denied: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.ACCESS_DENIED.getStatus())
+                .body(CommonResponse.fail(ErrorCode.ACCESS_DENIED.getMessage()));
+    }
+
+    /**
+     * 존재하지 않는 경로 → 404 (500으로 오인 방지, 검증 리포트).
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<CommonResponse<Void>> handleNoResourceFoundException(NoResourceFoundException e) {
+        log.warn("Resource not found: {}", e.getResourcePath());
+        return ResponseEntity
+                .status(ErrorCode.RESOURCE_NOT_FOUND.getStatus())
+                .body(CommonResponse.fail(ErrorCode.RESOURCE_NOT_FOUND.getMessage()));
+    }
+
+    /**
+     * 요청 본문 파싱 실패(깨진 JSON·타입 불일치) → 400.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<CommonResponse<Void>> handleMessageNotReadableException(HttpMessageNotReadableException e) {
+        log.warn("Message not readable: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+                .body(CommonResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getMessage()));
+    }
+
+    /**
+     * 미지원 HTTP 메서드 → 405.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<CommonResponse<Void>> handleMethodNotSupportedException(HttpRequestMethodNotSupportedException e) {
+        log.warn("Method not supported: {}", e.getMethod());
+        return ResponseEntity
+                .status(ErrorCode.METHOD_NOT_ALLOWED.getStatus())
+                .body(CommonResponse.fail(ErrorCode.METHOD_NOT_ALLOWED.getMessage()));
     }
 
     /**

@@ -151,22 +151,35 @@ public class User extends BaseTimeEntity {
      * 연차 차감 (신청 시 선차감).
      * - 잔여 부족 시: 당겨쓰기 비허용이면 INSUFFICIENT_LEAVE_BALANCE,
      *   허용(advance_leave_enabled=true)이면 부족분을 advance_days에 누적 (갭분석 A-3)
+     *
+     * @return 이번 차감에서 당겨쓰기로 충당된 일수 — LeaveRequest.recordAdvanceUsage로 스냅샷해
+     *         반려·취소 복구의 근거로 쓴다 (검증 B2)
      */
-    public void deductLeave(BigDecimal days, boolean advanceLeaveEnabled) {
+    public BigDecimal deductLeave(BigDecimal days, boolean advanceLeaveEnabled) {
         BigDecimal remaining = getRemainingDays();
+        BigDecimal advanceUsed = BigDecimal.ZERO;
         if (remaining.compareTo(days) < 0) {
             if (!advanceLeaveEnabled) {
                 throw new BusinessException(ErrorCode.INSUFFICIENT_LEAVE_BALANCE);
             }
             // 부족분만 당겨쓰기로 누적 — 다음 기산일에 정산
-            this.advanceDays = this.advanceDays.add(days.subtract(remaining.max(BigDecimal.ZERO)));
+            advanceUsed = days.subtract(remaining.max(BigDecimal.ZERO));
+            this.advanceDays = this.advanceDays.add(advanceUsed);
         }
         this.useDays = this.useDays.add(days);
+        return advanceUsed;
     }
 
-    /** 연차 복구 (반려·취소 시 선차감 원복). 당겨쓰기 복구 세부는 서비스 구현 시 확정. */
-    public void restoreLeave(BigDecimal days) {
+    /**
+     * 연차 복구 (반려·취소 시 선차감 원복).
+     * use_days와 함께 해당 신청이 당겨쓰기로 충당했던 일수(advance_days)도 되돌린다 (검증 B2 —
+     * 미복구 시 다음 기산일에 쓰지 않은 연차가 차감되는 결함).
+     *
+     * @param advanceUsedDays 해당 신청의 당겨쓰기 충당분 (LeaveRequest.advanceUsedDays 스냅샷)
+     */
+    public void restoreLeave(BigDecimal days, BigDecimal advanceUsedDays) {
         this.useDays = this.useDays.subtract(days);
+        this.advanceDays = this.advanceDays.subtract(advanceUsedDays);
     }
 
     /** 보너스 연차 가산 (복리후생 승인) */
