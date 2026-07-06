@@ -133,26 +133,26 @@ export default function DashboardPage() {
           right={
             <Link
               to="/history"
-              className="flex items-center gap-0.5 text-[12px] font-medium text-ink-mute transition-colors hover:text-accent-light"
+              className="flex items-center gap-0.5 text-[13px] font-medium text-ink-mute transition-colors hover:text-accent-light"
             >
-              전체 보기 <ChevronRight size={13} />
+              전체 보기 <ChevronRight size={14} />
             </Link>
           }
         >
           <ul className="divide-y divide-white/6">
             {myLeaveRequests.map((r) => (
-              <li key={r.id} className="flex items-center justify-between gap-3 py-3">
+              <li key={r.id} className="flex items-center justify-between gap-3 py-4">
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-semibold text-ink-hi">
+                  <p className="truncate text-[15px] font-semibold text-ink-hi">
                     {formatDates(r.dates)}
-                    <span className="ml-2 font-medium text-ink-mute">{LEAVE_TYPE_LABEL[r.type]}</span>
+                    <span className="ml-2 text-[14px] font-medium text-ink-mute">{LEAVE_TYPE_LABEL[r.type]}</span>
                   </p>
-                  <p className="mt-0.5 truncate text-[12px] text-ink-mute">
+                  <p className="mt-1 truncate text-[13px] text-ink-mute">
                     <span className="tabular-nums">{r.days}일</span> · {r.reason}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-[11px] text-ink-dim tabular-nums">
+                  <span className="text-[12px] text-ink-dim tabular-nums">
                     신청 {dayjs(r.appliedAt).format('M/D')}
                   </span>
                   <StatusBadge status={r.status} />
@@ -167,23 +167,23 @@ export default function DashboardPage() {
           {/* 연차 소진 현황 */}
           <Card title="연차 소진 현황">
             {/* 게이지 — 사용(파랑) / 대기 선차감(주황) / 잔여(회색) */}
-            <div className="flex h-2.5 overflow-hidden rounded-full bg-white/8">
+            <div className="flex h-3.5 overflow-hidden rounded-full bg-white/8">
               <div className="bg-accent" style={{ width: `${usedPct}%` }} />
               <div className="bg-warn/80" style={{ width: `${pendingPct}%` }} />
             </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
+            <div className="mt-4 grid grid-cols-3 gap-2 text-[13px]">
               <GaugeStat swatch="bg-accent" label="사용" value={confirmedUsed} />
               <GaugeStat swatch="bg-warn/80" label="대기 차감" value={leaveSummary.pendingDays} />
               <GaugeStat swatch="bg-white/25" label="잔여" value={leaveSummary.remainingDays} />
             </div>
-            <p className="mt-4 flex items-center justify-between border-t border-white/6 pt-3 text-[12px] text-ink-mute">
+            <p className="mt-4 flex items-center justify-between border-t border-white/6 pt-3.5 text-[13px] text-ink-mute">
               <span>
                 다음 기산일 <span className="text-ink-body tabular-nums">{dayjs(leaveSummary.nextResetDate).format('M월 D일')}</span>
-                <span className="ml-1.5 rounded-badge bg-warn/13 px-1.5 py-0.5 font-semibold text-warn tabular-nums">
+                <span className="ml-1.5 rounded-badge bg-warn/13 px-2 py-0.5 font-semibold text-warn tabular-nums">
                   D-{resetDday}
                 </span>
               </span>
-              <span>미사용분 이월 없이 소멸</span>
+              <span className="text-[12px]">미사용분 이월 없이 소멸</span>
             </p>
           </Card>
 
@@ -200,22 +200,22 @@ export default function DashboardPage() {
                 {upcomingEvents.map((ev, i) => {
                   const dday = dayjs(ev.date).diff(dayjs(TODAY), 'day');
                   return (
-                    <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                    <li key={i} className="flex items-center justify-between gap-3 py-3">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span
-                          className={`h-2 w-2 shrink-0 rounded-full ${
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                             ev.kind === 'holiday' ? 'bg-danger/70' : ev.mine ? 'bg-accent' : 'bg-ok/80'
                           }`}
                         />
-                        <span className="truncate text-[13px] text-ink-body">
+                        <span className="truncate text-[14px] text-ink-body">
                           {ev.label}
-                          {ev.mine && <span className="ml-1 text-[11px] text-accent-light">(나)</span>}
+                          {ev.mine && <span className="ml-1 text-[12px] text-accent-light">(나)</span>}
                         </span>
-                        <span className="shrink-0 text-[11px] text-ink-dim">{ev.sub}</span>
+                        <span className="shrink-0 text-[12px] text-ink-dim">{ev.sub}</span>
                       </div>
-                      <span className="shrink-0 text-[12px] text-ink-mute tabular-nums">
+                      <span className="shrink-0 text-[13px] text-ink-mute tabular-nums">
                         {dayjs(ev.date).format('M/D')}
-                        <span className="ml-1.5 text-[11px] text-ink-dim">
+                        <span className="ml-1.5 text-[12px] text-ink-dim">
                           {dday === 0 ? '오늘' : `D-${dday}`}
                         </span>
                       </span>
@@ -235,8 +235,8 @@ export default function DashboardPage() {
 function GaugeStat({ swatch, label, value }) {
   return (
     <span className="flex items-center gap-1.5 text-ink-mute">
-      <span className={`h-2.5 w-2.5 rounded ${swatch}`} />
-      {label} <span className="font-semibold text-ink-hi tabular-nums">{value}</span>일
+      <span className={`h-3 w-3 rounded ${swatch}`} />
+      {label} <span className="text-[15px] font-semibold text-ink-hi tabular-nums">{value}</span>일
     </span>
   );
 }

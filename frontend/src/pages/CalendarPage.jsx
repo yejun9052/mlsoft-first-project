@@ -110,7 +110,7 @@ export default function CalendarPage() {
       {/* 캘린더 카드 */}
       <section className="flex min-h-0 flex-1 flex-col rounded-card bg-navy-card p-5 shadow-card">
         {/* 범례 (사유는 마스킹 정책상 캘린더에 미표시 — 이름·종류만) */}
-        <div className="mb-3 flex items-center gap-4 text-[11px] text-ink-mute">
+        <div className="mb-3 flex items-center gap-4 text-[12px] text-ink-mute">
           <Legend className="border border-accent/40 bg-accent/25" label="내 연차" />
           <Legend className="bg-ok/18" label="동료 연차" />
           <Legend className="bg-danger/18" label="공휴일" />
@@ -122,7 +122,7 @@ export default function CalendarPage() {
           {WEEKDAYS.map((weekday, i) => (
             <div
               key={weekday}
-              className={`text-center text-[12px] font-semibold ${
+              className={`text-center text-[13px] font-semibold ${
                 i === 0 ? 'text-danger/80' : 'text-ink-dim'
               }`}
             >
@@ -162,7 +162,7 @@ export default function CalendarPage() {
                 {/* 날짜 숫자 + 공휴일명 / 선택 표시 */}
                 <div className="flex items-center justify-between gap-1">
                   <span
-                    className={`text-[13px] font-semibold ${
+                    className={`text-[14px] font-semibold ${
                       isToday
                         ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white'
                         : holiday || isSunday
@@ -173,7 +173,7 @@ export default function CalendarPage() {
                     {day}
                   </span>
                   {holiday && (
-                    <span className="truncate text-[11px] font-medium text-danger/85">{holiday}</span>
+                    <span className="truncate text-[12px] font-medium text-danger/85">{holiday}</span>
                   )}
                   {selected && <Check size={14} className="shrink-0 text-accent-light" />}
                 </div>
@@ -183,7 +183,7 @@ export default function CalendarPage() {
                   {leaves.slice(0, MAX_VISIBLE).map((leave, i) => (
                     <span
                       key={i}
-                      className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                      className={`flex items-center gap-1 rounded px-1.5 py-1 text-[12px] font-medium ${
                         leave.mine ? 'bg-accent/25 text-accent-light' : 'bg-ok/15 text-ok'
                       }`}
                     >
@@ -191,7 +191,7 @@ export default function CalendarPage() {
                       <span className="shrink-0 opacity-75">{LEAVE_TYPE_LABEL[leave.type]}</span>
                     </span>
                   ))}
-                  {overflow > 0 && <span className="text-[11px] text-ink-dim">+{overflow}건 더</span>}
+                  {overflow > 0 && <span className="text-[12px] text-ink-dim">+{overflow}건 더</span>}
                 </div>
               </button>
             );

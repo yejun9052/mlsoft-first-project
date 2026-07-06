@@ -5,7 +5,7 @@ export default function Card({ title, right, className = '', bodyClassName = '',
     <section className={`rounded-card bg-navy-card shadow-card ${className}`}>
       {(title || right) && (
         <header className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-4">
-          {title && <h2 className="text-[14px] font-semibold text-ink-hi">{title}</h2>}
+          {title && <h2 className="text-[15px] font-semibold text-ink-hi">{title}</h2>}
           {right}
         </header>
       )}

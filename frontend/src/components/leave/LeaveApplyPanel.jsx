@@ -23,7 +23,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
 
   // 패널 위치 — 처음엔 우측 상단, 이후 드래그 값 유지
   const [pos, setPos] = useState(() => ({
-    x: Math.max(16, window.innerWidth - 420),
+    x: Math.max(16, window.innerWidth - 452),
     y: 108,
   }));
   const dragOffset = useRef(null); // 드래그 중일 때만 {dx, dy}
@@ -70,7 +70,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
 
   return (
     <div
-      className="fixed z-50 w-[380px] rounded-card bg-navy-card shadow-card ring-1 ring-white/12"
+      className="fixed z-50 w-[424px] rounded-card bg-navy-card shadow-card ring-1 ring-white/12"
       style={{ left: pos.x, top: pos.y }}
     >
       {/* 드래그 핸들 헤더 */}
@@ -81,9 +81,9 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/8 bg-navy-app/50 px-4 py-3"
       >
         <div className="flex items-center gap-2">
-          <GripVertical size={14} className="text-ink-dim" />
-          <span className="text-[14px] font-semibold text-ink-hi">연차 신청</span>
-          <span className="text-[11px] text-ink-dim">끌어서 이동</span>
+          <GripVertical size={15} className="text-ink-dim" />
+          <span className="text-[15px] font-semibold text-ink-hi">연차 신청</span>
+          <span className="text-[12px] text-ink-dim">끌어서 이동</span>
         </div>
         <button
           type="button"
@@ -96,7 +96,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         </button>
       </div>
 
-      <div className="flex flex-col gap-4 px-4 py-4">
+      <div className="flex flex-col gap-4 px-5 py-4">
         {/* 종류 — 세그먼트 버튼 */}
         <div className="grid grid-cols-3 gap-1 rounded-btn bg-navy-app/50 p-1">
           {APPLY_TYPES.map((t) => (
@@ -104,7 +104,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
               key={t}
               type="button"
               onClick={() => setType(t)}
-              className={`rounded-btn px-2 py-1.5 text-[12px] font-semibold transition-colors ${
+              className={`rounded-btn px-2 py-2 text-[13px] font-semibold transition-colors ${
                 type === t ? 'bg-accent text-white' : 'text-ink-mute hover:text-ink-body'
               }`}
             >
@@ -117,7 +117,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         <div>
           <FieldLabel>선택한 날짜 ({dates.length}일)</FieldLabel>
           {dates.length === 0 ? (
-            <p className="rounded-btn border border-dashed border-white/12 px-3 py-2.5 text-[12px] text-ink-dim">
+            <p className="rounded-btn border border-dashed border-white/12 px-3 py-3 text-[13px] text-ink-dim">
               캘린더에서 날짜를 클릭해 담으세요. 다시 클릭하면 빠집니다.
             </p>
           ) : (
@@ -125,7 +125,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
               {dates.map((d) => (
                 <span
                   key={d}
-                  className="flex items-center gap-1 rounded-badge bg-accent/16 py-1 pl-2.5 pr-1.5 text-[12px] font-medium text-accent-light"
+                  className="flex items-center gap-1 rounded-badge bg-accent/16 py-1.5 pl-3 pr-2 text-[13px] font-medium text-accent-light"
                 >
                   {dayjs(d).format('M/D')} ({WEEKDAY_KO[dayjs(d).day()]})
                   <button
@@ -134,7 +134,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
                     className="rounded p-0.5 hover:bg-white/10"
                     aria-label={`${d} 제거`}
                   >
-                    <X size={11} />
+                    <X size={12} />
                   </button>
                 </span>
               ))}
@@ -150,7 +150,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
             onChange={(e) => setReason(e.target.value)}
             rows={2}
             placeholder="사유를 입력하세요 (승인자에게만 표시)"
-            className="w-full resize-none rounded-btn border border-white/8 bg-navy-btn2 px-3 py-2 text-[13px] text-ink-hi placeholder:text-ink-dim focus:border-accent/50 focus:outline-none"
+            className="w-full resize-none rounded-btn border border-white/8 bg-navy-btn2 px-3 py-2.5 text-[14px] text-ink-hi placeholder:text-ink-dim focus:border-accent/50 focus:outline-none"
           />
         </div>
 
@@ -177,10 +177,10 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         </div>
 
         {/* 차감 요약 + 제출 */}
-        <div className="flex items-center justify-between rounded-btn bg-navy-app/50 px-3 py-2.5 text-[12px]">
+        <div className="flex items-center justify-between rounded-btn bg-navy-app/50 px-3.5 py-3 text-[13px]">
           <span className="text-ink-mute">차감 예정</span>
           <span className="font-semibold text-ink-hi tabular-nums">
-            {days}일
+            <span className="text-[16px]">{days}</span>일
             <span className="ml-2 font-normal text-ink-mute">
               잔여 {remainingDays} → <span className={afterRemaining < 0 ? 'text-warn' : ''}>{afterRemaining}일</span>
             </span>
@@ -189,7 +189,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         <button
           type="button"
           onClick={handleSubmit}
-          className="rounded-btn bg-accent px-4 py-2.5 text-[13px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark"
+          className="rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark"
         >
           신청하기
         </button>
@@ -199,7 +199,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
 }
 
 function FieldLabel({ children }) {
-  return <p className="mb-1.5 text-[12px] font-medium text-ink-mute">{children}</p>;
+  return <p className="mb-1.5 text-[13px] font-medium text-ink-mute">{children}</p>;
 }
 
 function ApproverSelect({ value, onChange, approvers, placeholder }) {
@@ -207,7 +207,7 @@ function ApproverSelect({ value, onChange, approvers, placeholder }) {
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-btn border border-white/8 bg-navy-btn2 px-2.5 py-2 text-[13px] text-ink-hi focus:border-accent/50 focus:outline-none"
+      className="w-full rounded-btn border border-white/8 bg-navy-btn2 px-2.5 py-2.5 text-[14px] text-ink-hi focus:border-accent/50 focus:outline-none"
     >
       <option value="">{placeholder}</option>
       {approvers.map((a) => (
