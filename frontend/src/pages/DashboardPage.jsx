@@ -1,19 +1,20 @@
-import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { CalendarPlus, Clock3, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CalendarPlus, Clock3, Gift, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
+import Card from '../components/ui/Card.jsx';
+import StatusBadge from '../components/ui/StatusBadge.jsx';
 import {
   TODAY,
   getCurrentUser,
   leaveSummary,
-  getCalendarData,
+  calendarLeaves,
+  holidays,
   myLeaveRequests,
   myWelfareRequests,
+  LEAVE_TYPE_LABEL,
 } from '../mocks/data.js';
-
-// 요일 헤더 (일요일 시작)
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 // 통계 스트립 한 칸 (박스 없음 — 세로 구분선으로 분리)
 function Stat({ label, value, unit, hero, tone }) {
@@ -52,6 +53,29 @@ function QuickAction({ Icon, label, primary }) {
   );
 }
 
+// 다가오는 부재 일정 — 오늘 이후의 승인 연차 + 공휴일을 날짜순으로 병합
+const upcomingEvents = [
+  ...calendarLeaves
+    .filter((ev) => ev.date >= TODAY)
+    .map((ev) => ({
+      date: ev.date,
+      kind: 'leave',
+      label: ev.personName,
+      sub: LEAVE_TYPE_LABEL[ev.type],
+      mine: ev.mine,
+    })),
+  ...holidays
+    .filter((h) => h.date >= TODAY)
+    .map((h) => ({ date: h.date, kind: 'holiday', label: h.name, sub: '공휴일', mine: false })),
+].sort((a, b) => (a.date < b.date ? -1 : 1));
+
+// 날짜 목록 요약 — "7/20 (월)" 또는 "7/20 외 2일"
+function formatDates(dates) {
+  const first = dayjs(dates[0]);
+  const head = `${first.format('M/D')} (${'일월화수목금토'[first.day()]})`;
+  return dates.length > 1 ? `${head} 외 ${dates.length - 1}일` : head;
+}
+
 export default function DashboardPage() {
   const me = getCurrentUser();
 
@@ -60,43 +84,14 @@ export default function DashboardPage() {
     myLeaveRequests.filter((r) => r.status === 'PENDING').length +
     myWelfareRequests.filter((r) => r.status === 'PENDING').length;
 
-  // 표시 월 — 기본은 데모 기준일의 달, ◀▶로 이동
-  const [viewMonth, setViewMonth] = useState(() => ({
-    year: dayjs(TODAY).year(),
-    month: dayjs(TODAY).month() + 1,
-  }));
+  // 소진 현황 게이지 — 총 부여(base+bonus) 대비 확정 사용 / 대기 선차감 비율
+  const totalDays = leaveSummary.baseDays + leaveSummary.bonusDays;
+  const confirmedUsed = leaveSummary.usedDays - leaveSummary.pendingDays;
+  const usedPct = (confirmedUsed / totalDays) * 100;
+  const pendingPct = (leaveSummary.pendingDays / totalDays) * 100;
 
-  function shiftMonth(delta) {
-    setViewMonth(({ year, month }) => {
-      const next = dayjs(new Date(year, month - 1, 1)).add(delta, 'month');
-      return { year: next.year(), month: next.month() + 1 };
-    });
-  }
-
-  // 표시 월 캘린더 그리드 계산
-  const { weeks, monthLabel, calData } = useMemo(() => {
-    const base = dayjs(new Date(viewMonth.year, viewMonth.month - 1, 1));
-    const daysInMonth = base.daysInMonth();
-    const startOffset = base.day(); // 1일의 요일 (0=일)
-    const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
-    const cells = [];
-    for (let i = 0; i < totalCells; i += 1) {
-      const dayNum = i - startOffset + 1;
-      cells.push(dayNum >= 1 && dayNum <= daysInMonth ? dayNum : null);
-    }
-    const rows = [];
-    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-    return {
-      weeks: rows,
-      monthLabel: base.format('YYYY년 M월'),
-      calData: getCalendarData(viewMonth.year, viewMonth.month),
-    };
-  }, [viewMonth]);
-
-  // 오늘 강조는 기준일이 속한 달에서만 (다른 달의 같은 일자 오강조 방지)
-  const isTodayMonth =
-    viewMonth.year === dayjs(TODAY).year() && viewMonth.month === dayjs(TODAY).month() + 1;
-  const todayNum = dayjs(TODAY).date();
+  // 다음 기산일까지 남은 일수
+  const resetDday = dayjs(leaveSummary.nextResetDate).diff(dayjs(TODAY), 'day');
 
   return (
     <div className="flex h-full flex-col">
@@ -128,113 +123,120 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 팀 연차 캘린더 카드 */}
-      <section className="flex min-h-0 flex-1 flex-col rounded-card bg-navy-card p-5 shadow-card">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-ink-hi">팀 연차 캘린더</h2>
-          <div className="flex items-center gap-3 text-ink-mute">
-            <button
-              type="button"
-              onClick={() => shiftMonth(-1)}
-              className="rounded-btn p-1 hover:bg-white/5"
-              aria-label="이전 달"
+      {/* 본문 2단 — 좌: 최근 신청 내역 / 우: 소진 현황 + 다가오는 부재 (캘린더는 팀 캘린더 페이지 전담) */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+        {/* 최근 신청 내역 */}
+        <Card
+          title="최근 신청 내역"
+          className="flex min-h-0 flex-col"
+          bodyClassName="min-h-0 flex-1 overflow-y-auto !py-0"
+          right={
+            <Link
+              to="/history"
+              className="flex items-center gap-0.5 text-[12px] font-medium text-ink-mute transition-colors hover:text-accent-light"
             >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-[13px] font-semibold text-ink-body">{monthLabel}</span>
-            <button
-              type="button"
-              onClick={() => shiftMonth(1)}
-              className="rounded-btn p-1 hover:bg-white/5"
-              aria-label="다음 달"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* 범례 */}
-        <div className="mb-3 flex items-center gap-4 text-[11px] text-ink-mute">
-          <Legend className="bg-accent/25 border border-accent/40" label="내 연차" />
-          <Legend className="bg-ok/18" label="동료 연차" />
-          <Legend className="bg-danger/18" label="공휴일" />
-        </div>
-
-        {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-1.5 pb-2">
-          {WEEKDAYS.map((d, i) => (
-            <div
-              key={d}
-              className={`text-center text-[11px] font-semibold ${
-                i === 0 ? 'text-danger/80' : 'text-ink-dim'
-              }`}
-            >
-              {d}
-            </div>
-          ))}
-        </div>
-
-        {/* 날짜 그리드 */}
-        <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-1.5">
-          {weeks.flat().map((day, idx) => {
-            if (day === null) return <div key={idx} />;
-            const cell = calData[day];
-            const isSunday = idx % 7 === 0;
-            const isToday = isTodayMonth && day === todayNum;
-            const holiday = cell?.holiday;
-            const leaves = cell?.leaves ?? [];
-            return (
-              <div
-                key={idx}
-                className={`flex flex-col gap-1 rounded-btn border p-1.5 transition-colors ${
-                  holiday
-                    ? 'border-danger/25 bg-danger/8'
-                    : 'border-white/6 bg-navy-app/40 hover:border-white/12'
-                }`}
-              >
-                <span
-                  className={`text-[11px] font-semibold ${
-                    isToday
-                      ? 'inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white'
-                      : holiday || isSunday
-                        ? 'text-danger/90'
-                        : 'text-ink-mute'
-                  }`}
-                >
-                  {day}
-                </span>
-                <div className="flex flex-col gap-0.5 overflow-hidden">
-                  {holiday && (
-                    <span className="truncate text-[10px] font-medium text-danger/90">{holiday}</span>
-                  )}
-                  {leaves.slice(0, 2).map((lv, i) => (
-                    <span
-                      key={i}
-                      className={`truncate rounded px-1 py-0.5 text-[10px] font-medium ${
-                        lv.mine ? 'bg-accent/25 text-accent-light' : 'bg-ok/15 text-ok'
-                      }`}
-                    >
-                      {lv.personName}
-                    </span>
-                  ))}
-                  {leaves.length > 2 && (
-                    <span className="text-[10px] text-ink-dim">+{leaves.length - 2}</span>
-                  )}
+              전체 보기 <ChevronRight size={13} />
+            </Link>
+          }
+        >
+          <ul className="divide-y divide-white/6">
+            {myLeaveRequests.map((r) => (
+              <li key={r.id} className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-ink-hi">
+                    {formatDates(r.dates)}
+                    <span className="ml-2 font-medium text-ink-mute">{LEAVE_TYPE_LABEL[r.type]}</span>
+                  </p>
+                  <p className="mt-0.5 truncate text-[12px] text-ink-mute">
+                    <span className="tabular-nums">{r.days}일</span> · {r.reason}
+                  </p>
                 </div>
-              </div>
-            );
-          })}
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-[11px] text-ink-dim tabular-nums">
+                    신청 {dayjs(r.appliedAt).format('M/D')}
+                  </span>
+                  <StatusBadge status={r.status} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {/* 우측 스택 */}
+        <div className="flex min-h-0 flex-col gap-5">
+          {/* 연차 소진 현황 */}
+          <Card title="연차 소진 현황">
+            {/* 게이지 — 사용(파랑) / 대기 선차감(주황) / 잔여(회색) */}
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-white/8">
+              <div className="bg-accent" style={{ width: `${usedPct}%` }} />
+              <div className="bg-warn/80" style={{ width: `${pendingPct}%` }} />
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
+              <GaugeStat swatch="bg-accent" label="사용" value={confirmedUsed} />
+              <GaugeStat swatch="bg-warn/80" label="대기 차감" value={leaveSummary.pendingDays} />
+              <GaugeStat swatch="bg-white/25" label="잔여" value={leaveSummary.remainingDays} />
+            </div>
+            <p className="mt-4 flex items-center justify-between border-t border-white/6 pt-3 text-[12px] text-ink-mute">
+              <span>
+                다음 기산일 <span className="text-ink-body tabular-nums">{dayjs(leaveSummary.nextResetDate).format('M월 D일')}</span>
+                <span className="ml-1.5 rounded-badge bg-warn/13 px-1.5 py-0.5 font-semibold text-warn tabular-nums">
+                  D-{resetDday}
+                </span>
+              </span>
+              <span>미사용분 이월 없이 소멸</span>
+            </p>
+          </Card>
+
+          {/* 다가오는 부재 일정 */}
+          <Card
+            title="다가오는 부재 일정"
+            className="flex min-h-0 flex-1 flex-col"
+            bodyClassName="min-h-0 flex-1 overflow-y-auto !py-0"
+          >
+            {upcomingEvents.length === 0 ? (
+              <p className="py-4 text-[12px] text-ink-dim">예정된 일정이 없습니다.</p>
+            ) : (
+              <ul className="divide-y divide-white/6">
+                {upcomingEvents.map((ev, i) => {
+                  const dday = dayjs(ev.date).diff(dayjs(TODAY), 'day');
+                  return (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            ev.kind === 'holiday' ? 'bg-danger/70' : ev.mine ? 'bg-accent' : 'bg-ok/80'
+                          }`}
+                        />
+                        <span className="truncate text-[13px] text-ink-body">
+                          {ev.label}
+                          {ev.mine && <span className="ml-1 text-[11px] text-accent-light">(나)</span>}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-ink-dim">{ev.sub}</span>
+                      </div>
+                      <span className="shrink-0 text-[12px] text-ink-mute tabular-nums">
+                        {dayjs(ev.date).format('M/D')}
+                        <span className="ml-1.5 text-[11px] text-ink-dim">
+                          {dday === 0 ? '오늘' : `D-${dday}`}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
         </div>
-      </section>
+      </div>
     </div>
   );
 }
 
-function Legend({ className, label }) {
+// 게이지 아래 색상별 수치 한 칸
+function GaugeStat({ swatch, label, value }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <span className={`h-3 w-3 rounded ${className}`} />
-      {label}
+    <span className="flex items-center gap-1.5 text-ink-mute">
+      <span className={`h-2.5 w-2.5 rounded ${swatch}`} />
+      {label} <span className="font-semibold text-ink-hi tabular-nums">{value}</span>일
     </span>
   );
 }
