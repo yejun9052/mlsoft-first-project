@@ -25,6 +25,10 @@ frontend/.vite/
 *.iml
 .vscode/
 .claude/settings.local.json
+.claude/launch.json
+
+# ── 클로드 세션 포인터 (옵시디언 미러, /save-session 생성) ──
+SESSION.md
 
 # ── OS ──
 Thumbs.db
