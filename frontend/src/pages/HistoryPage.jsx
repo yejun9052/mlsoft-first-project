@@ -13,7 +13,7 @@ const TYPE_FILTERS = [
   { value: 'ALL', label: '전체' },
   { value: 'ANNUAL', label: '연차', match: (type) => type === 'ANNUAL' },
   { value: 'HALF', label: '반차', match: (type) => type === 'HALF_AM' || type === 'HALF_PM' },
-  { value: 'WELFARE', label: '경조복리', match: (type) => type === 'WELFARE' },
+  { value: 'WELFARE', label: LEAVE_TYPE_LABEL.WELFARE, match: (type) => type === 'WELFARE' },
 ];
 
 // 상태 필터 — 값이 곧 status 코드 (ALL 은 전체)
@@ -27,6 +27,7 @@ const STATUS_FILTERS = [
 ];
 
 // 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선)
+// ⚠️ mock 파생 계산 — 실제 연동 시 API 응답 기반으로 컴포넌트 내부(useMemo)로 이동
 const YEAR_OPTIONS = [...new Set(myLeaveRequests.map((req) => dayjs(req.dates[0]).year()))].sort(
   (a, b) => b - a,
 );

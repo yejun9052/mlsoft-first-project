@@ -21,8 +21,8 @@ api.interceptors.response.use(
     const message = error.response?.data?.message || '요청 처리 중 오류가 발생했습니다.';
 
     if (status === 401) {
-      // 인증 만료 — 저장된 유저 정보 제거 후 로그인 페이지로
-      localStorage.clear();
+      // 인증 만료 — 저장된 유저 정보만 제거 후 로그인 페이지로 (다른 키까지 지우지 않게 clear() 금지)
+      localStorage.removeItem('userInfo');
       if (window.location.pathname !== LOGIN_PATH) {
         window.location.href = LOGIN_PATH;
       }

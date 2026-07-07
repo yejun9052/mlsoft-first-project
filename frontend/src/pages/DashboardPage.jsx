@@ -1,5 +1,4 @@
 import dayjs from 'dayjs';
-import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { CalendarPlus, Clock3, Gift, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
@@ -35,12 +34,11 @@ function Stat({ label, value, unit, hero, tone }) {
   );
 }
 
-// 빠른 신청 버튼 (mock — 실제 신청 폼 연동 전)
-function QuickAction({ Icon, label, primary }) {
+// 빠른 신청 버튼 — 실제 신청 플로우가 있는 페이지로 이동 (연차·반차=캘린더 신청 패널, 경조사=복리후생)
+function QuickAction({ Icon, label, to, primary }) {
   return (
-    <button
-      type="button"
-      onClick={() => toast('연차 신청 화면은 준비 중입니다.', { icon: '🗓️' })}
+    <Link
+      to={to}
       className={`flex items-center gap-1.5 rounded-btn px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
         primary
           ? 'bg-accent text-white shadow-btn hover:bg-accent-dark'
@@ -49,11 +47,12 @@ function QuickAction({ Icon, label, primary }) {
     >
       <Icon size={15} />
       {label}
-    </button>
+    </Link>
   );
 }
 
 // 다가오는 부재 일정 — 오늘 이후의 승인 연차 + 공휴일을 날짜순으로 병합
+// ⚠️ mock 파생 계산 — 실제 연동 시 API 응답 기반으로 컴포넌트 내부(useMemo)로 이동
 const upcomingEvents = [
   ...calendarLeaves
     .filter((ev) => ev.date >= TODAY)
@@ -67,7 +66,7 @@ const upcomingEvents = [
   ...holidays
     .filter((h) => h.date >= TODAY)
     .map((h) => ({ date: h.date, kind: 'holiday', label: h.name, sub: '공휴일', mine: false })),
-].sort((a, b) => (a.date < b.date ? -1 : 1));
+].sort((a, b) => a.date.localeCompare(b.date));
 
 // 날짜 목록 요약 — "7/20 (월)" 또는 "7/20 외 2일"
 function formatDates(dates) {
@@ -80,9 +79,11 @@ export default function DashboardPage() {
   const me = getCurrentUser();
 
   // 내 신청 중 결재 대기 건수 (연차 + 복리후생) — 관리자 결재함이 아니라 '내' 대기 건 (검증 F2)
+  // 신규 신청(PENDING)과 소급 취소 신청(CANCEL_PENDING) 모두 결재자 처리를 기다리는 건이라 합산
+  const isAwaitingApproval = (r) => r.status === 'PENDING' || r.status === 'CANCEL_PENDING';
   const myPendingCount =
-    myLeaveRequests.filter((r) => r.status === 'PENDING').length +
-    myWelfareRequests.filter((r) => r.status === 'PENDING').length;
+    myLeaveRequests.filter(isAwaitingApproval).length +
+    myWelfareRequests.filter(isAwaitingApproval).length;
 
   // 소진 현황 게이지 — 총 부여(base+bonus) 대비 확정 사용 / 대기 선차감 비율
   const totalDays = leaveSummary.baseDays + leaveSummary.bonusDays;
@@ -117,9 +118,9 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <QuickAction Icon={CalendarPlus} label="연차 신청" primary />
-          <QuickAction Icon={Clock3} label="반차" />
-          <QuickAction Icon={Gift} label="경조사" />
+          <QuickAction Icon={CalendarPlus} label="연차 신청" to="/calendar" primary />
+          <QuickAction Icon={Clock3} label="반차" to="/calendar" />
+          <QuickAction Icon={Gift} label="경조사" to="/welfare" />
         </div>
       </div>
 
@@ -197,10 +198,10 @@ export default function DashboardPage() {
               <p className="py-4 text-[12px] text-ink-dim">예정된 일정이 없습니다.</p>
             ) : (
               <ul className="divide-y divide-white/6">
-                {upcomingEvents.map((ev, i) => {
+                {upcomingEvents.map((ev) => {
                   const dday = dayjs(ev.date).diff(dayjs(TODAY), 'day');
                   return (
-                    <li key={i} className="flex items-center justify-between gap-3 py-3">
+                    <li key={`${ev.date}-${ev.kind}-${ev.label}`} className="flex items-center justify-between gap-3 py-3">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span
                           className={`h-2.5 w-2.5 shrink-0 rounded-full ${

@@ -135,7 +135,7 @@ export default function CalendarPage() {
         <div className="mt-2 grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-2">
           {weeks.flat().map((day, idx) => {
             if (day === null) {
-              return <div key={idx} className="rounded-btn border border-transparent bg-navy-app/20" />;
+              return <div key={`pad-${idx}`} className="rounded-btn border border-transparent bg-navy-app/20" />;
             }
             const cell = calData[day];
             const isSunday = idx % 7 === 0;
@@ -148,7 +148,7 @@ export default function CalendarPage() {
             const selected = selectedDates.includes(dateStr);
             return (
               <button
-                key={idx}
+                key={dateStr}
                 type="button"
                 onClick={() => handleDayClick(dateStr, Boolean(holiday) || isSunday || isSaturday)}
                 className={`flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-colors ${
@@ -180,9 +180,9 @@ export default function CalendarPage() {
 
                 {/* 연차 일정 pill — 이름 + 종류 표시 (내 연차=파랑 / 동료=초록, 마스킹 대상은 사유뿐) */}
                 <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
-                  {leaves.slice(0, MAX_VISIBLE).map((leave, i) => (
+                  {leaves.slice(0, MAX_VISIBLE).map((leave) => (
                     <span
-                      key={i}
+                      key={`${leave.personName}-${leave.type}`}
                       className={`flex items-center gap-1 rounded px-1.5 py-1 text-[12px] font-medium ${
                         leave.mine ? 'bg-accent/25 text-accent-light' : 'bg-ok/15 text-ok'
                       }`}

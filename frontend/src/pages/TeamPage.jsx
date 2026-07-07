@@ -59,13 +59,13 @@ export default function TeamPage() {
     [dept],
   );
 
-  // 이번 달 팀 연차 사용 일수 — calendarLeaves 는 날짜별 엔트리(1건 = 1일)라 개수 합이 곧 사용 일수
+  // 이번 달 팀 연차 사용 일수 — calendarLeaves 는 날짜별 엔트리, 반차(HALF_*)는 0.5일로 가중 합산
   const teamLeaveDays = useMemo(() => {
     const thisMonth = dayjs(TODAY).format('YYYY-MM');
     const teamNames = new Set(teamMembers.map((m) => m.name));
-    return calendarLeaves.filter(
-      (lv) => teamNames.has(lv.personName) && lv.date.startsWith(thisMonth),
-    ).length;
+    return calendarLeaves
+      .filter((lv) => teamNames.has(lv.personName) && lv.date.startsWith(thisMonth))
+      .reduce((sum, lv) => sum + (lv.type.startsWith('HALF_') ? 0.5 : 1), 0);
   }, [teamMembers]);
 
   // 부서 매칭 실패 — 잘못된 팀을 보여주는 대신 빈 상태 카드 안내

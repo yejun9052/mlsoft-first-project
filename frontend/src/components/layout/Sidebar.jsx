@@ -85,7 +85,7 @@ export default function Sidebar() {
     } catch {
       // 서버 오류여도 클라이언트 세션은 종료
     } finally {
-      localStorage.clear();
+      localStorage.removeItem('userInfo');
       navigate('/login', { replace: true });
     }
   }

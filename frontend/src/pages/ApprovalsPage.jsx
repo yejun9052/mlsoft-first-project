@@ -17,10 +17,10 @@ const TABS = [
   { key: 'REJECTED', label: '반려' },
 ];
 
-// 신청 종류 라벨 (취소/복리는 별도 표기, 그 외는 휴가 종류 매핑)
+// 신청 종류 라벨 (취소는 별도 표기, 복리는 공용 라벨, 그 외는 휴가 종류 매핑)
 function typeText(item) {
   if (item.kind === 'CANCEL') return '취소';
-  if (item.kind === 'WELFARE') return '복리';
+  if (item.kind === 'WELFARE') return LEAVE_TYPE_LABEL.WELFARE;
   return LEAVE_TYPE_LABEL[item.type];
 }
 

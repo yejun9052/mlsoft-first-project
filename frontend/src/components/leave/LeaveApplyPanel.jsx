@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { GripVertical, X } from 'lucide-react';
@@ -27,6 +27,27 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
     y: 108,
   }));
   const dragOffset = useRef(null); // 드래그 중일 때만 {dx, dy}
+
+  // 창이 좁아져도(윈도우 스냅·모니터 변경) 패널이 화면 밖에 고립되지 않게 재클램프
+  useEffect(() => {
+    function clampToViewport() {
+      setPos((p) => ({
+        x: Math.min(Math.max(8, p.x), window.innerWidth - 120),
+        y: Math.min(Math.max(8, p.y), window.innerHeight - 60),
+      }));
+    }
+    window.addEventListener('resize', clampToViewport);
+    return () => window.removeEventListener('resize', clampToViewport);
+  }, []);
+
+  // Esc로 닫기 — 논모달이라 포커스 트랩이 없어 키보드 닫기 수단을 따로 제공
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   function onDragStart(e) {
     dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
@@ -64,12 +85,15 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
       return;
     }
     // mock 제출 — 실제 연동 시 여기서 POST /api/leaves 호출
+    // (잔여 초과분은 당겨쓰기 설계(advance_max_days, 기본 5일)에 따라 백엔드가 검증 — ADVANCE_LIMIT_EXCEEDED)
     toast.success(`(목업) ${LEAVE_TYPE_LABEL[type]} ${days}일 신청이 접수되었습니다.`, { icon: '🗓️' });
     onClose();
   }
 
   return (
     <div
+      role="dialog"
+      aria-label="연차 신청 패널"
       className="fixed z-50 w-[424px] rounded-card bg-navy-card shadow-card ring-1 ring-white/12"
       style={{ left: pos.x, top: pos.y }}
     >
@@ -78,6 +102,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
         className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/8 bg-navy-app/50 px-4 py-3"
       >
         <div className="flex items-center gap-2">
@@ -160,7 +185,11 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
             <FieldLabel>승인자</FieldLabel>
             <ApproverSelect
               value={approverId}
-              onChange={setApproverId}
+              onChange={(v) => {
+                setApproverId(v);
+                // 새 승인자가 서브 승인자와 같으면 서브를 비움 (동일인 이중 지정 방지)
+                if (v && v === subApproverId) setSubApproverId('');
+              }}
               approvers={approvers}
               placeholder="선택 (필수)"
             />
