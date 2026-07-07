@@ -20,7 +20,8 @@ import java.util.List;
 /**
  * 인증 유저 상태 검증 인터셉터 — /api/** 전체에 적용 (WebConfig 등록).
  * JWT는 발급 후 상태 변화를 반영하지 못하므로 매 요청 DB 기준으로 판별한다.
- * - ① 퇴직자(is_active=false): 모든 /api/** 경로 즉시 차단 (24h 토큰 잔존 창 봉쇄)
+ * - ① 퇴직자(is_active=false): 로그아웃 외 모든 /api/** 경로 즉시 차단 (24h 토큰 잔존 창 봉쇄,
+ *      로그아웃만 허용해 본인이 잔존 httpOnly 쿠키를 정리할 수단은 남긴다)
  * - ② 권한 신선도: DB role과 토큰 role이 다르면 SecurityContext 권한을 DB 기준으로 재구성
  *      (강등·승격이 다음 로그인까지 미뤄지지 않도록 — 401 처리보다 UX 우수)
  * - ③ 온보딩 미완료(hire_date null): /api/auth/* 외 접근 시 403 (검증 Y-2)
@@ -33,6 +34,9 @@ public class OnboardingCheckInterceptor implements HandlerInterceptor {
 
     /** 온보딩 미완료 상태에서도 허용하는 경로 접두사 (내 정보·온보딩·로그아웃) */
     private static final String AUTH_PATH_PREFIX = "/api/auth/";
+
+    /** 퇴직자에게도 허용하는 유일한 경로 — 잔존 쿠키 정리(로그아웃) */
+    private static final String LOGOUT_PATH = "/api/auth/logout";
 
     private final UserRepository userRepository;
 
@@ -47,8 +51,11 @@ public class OnboardingCheckInterceptor implements HandlerInterceptor {
         User user = userRepository.findById(authUser.id())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // ① 토큰 발급 이후 퇴직 처리된 계정 — 전 경로 차단
-        if (!user.isActive()) {
+        // getRequestURI()는 context-path를 포함하므로 제거 후 판정 (context-path 도입 시 오차단 방지)
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+
+        // ① 토큰 발급 이후 퇴직 처리된 계정 — 잔존 쿠키를 지울 로그아웃만 허용, 그 외 전 경로 차단
+        if (!user.isActive() && !LOGOUT_PATH.equals(path)) {
             throw new BusinessException(ErrorCode.RETIRED_USER);
         }
 
@@ -64,8 +71,6 @@ public class OnboardingCheckInterceptor implements HandlerInterceptor {
         }
 
         // ③ 온보딩(생일·입사일 입력) 미완료 → /api/auth/* 외 403
-        // getRequestURI()는 context-path를 포함하므로 제거 후 판정 (context-path 도입 시 오차단 방지)
-        String path = request.getRequestURI().substring(request.getContextPath().length());
         if (!path.startsWith(AUTH_PATH_PREFIX) && !user.isOnboardingCompleted()) {
             throw new BusinessException(ErrorCode.ONBOARDING_NOT_COMPLETED);
         }

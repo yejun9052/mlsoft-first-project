@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -23,6 +24,9 @@ import java.time.temporal.ChronoUnit;
 @Service
 @RequiredArgsConstructor
 public class AuthService {
+
+    // 연차 계산 기준일은 한국 시간으로 고정 — 서버 TZ가 UTC여도 KST 자정~09시 사이 하루 오차 방지 (DB도 Asia/Seoul)
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final UserRepository userRepository;
     private final LeavePolicyService leavePolicyService;
@@ -51,7 +55,7 @@ public class AuthService {
         }
 
         LocalDate hireDate = request.hireDate();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(KST);
         user.completeOnboarding(hireDate, request.birthDay());
 
         long elapsedYears = ChronoUnit.YEARS.between(hireDate, today);

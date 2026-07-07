@@ -9,8 +9,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -88,6 +91,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<CommonResponse<Void>> handleMessageNotReadableException(HttpMessageNotReadableException e) {
         log.warn("Message not readable: {}", e.getMessage());
+        return ResponseEntity
+                .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
+                .body(CommonResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getMessage()));
+    }
+
+    /**
+     * 요청 파라미터 오류(타입 불일치·필수 파라미터 누락·메서드 파라미터 검증 실패) → 400.
+     * 예: /api/holidays?year=abc — catch-all이 500으로 삼키지 않게 명시 처리 (docs/03 응답 계약).
+     */
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class,
+            HandlerMethodValidationException.class
+    })
+    public ResponseEntity<CommonResponse<Void>> handleRequestParameterException(Exception e) {
+        log.warn("Invalid request parameter: {}", e.getMessage());
         return ResponseEntity
                 .status(ErrorCode.INVALID_INPUT_VALUE.getStatus())
                 .body(CommonResponse.fail(ErrorCode.INVALID_INPUT_VALUE.getMessage()));

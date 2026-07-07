@@ -6,6 +6,7 @@ import com.mlsoft.backend.security.OAuth2FailureHandler;
 import com.mlsoft.backend.security.OAuth2SuccessHandler;
 import com.mlsoft.backend.security.RestAccessDeniedHandler;
 import com.mlsoft.backend.security.RestAuthenticationEntryPoint;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -57,6 +58,8 @@ public class SecurityConfig {
 
                 // OAuth2 진입·콜백만 공개, 나머지는 인증 필수
                 .authorizeHttpRequests(auth -> auth
+                        // ERROR 디스패치도 인가 대상(Security 6+) — 필터 계층 예외 시 401이 원인을 덮지 않게 허용
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/oauth2/**", "/login/**").permitAll()
                         .anyRequest().authenticated())
 
