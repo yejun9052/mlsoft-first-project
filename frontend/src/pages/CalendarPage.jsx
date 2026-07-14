@@ -4,29 +4,60 @@ import toast from 'react-hot-toast';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import LeaveApplyPanel from '../components/leave/LeaveApplyPanel.jsx';
-import { ROLE } from '../constants/roles.js';
-import { TODAY, getCalendarData, leaveSummary, members, LEAVE_TYPE_LABEL } from '../mocks/data.js';
+import { LEAVE_TYPE_LABEL } from '../constants/status.js';
+import { useCurrentUser } from '../hooks/useAuth.js';
+import { useLeaveCalendar, useLeaveSummary } from '../hooks/useLeaves.js';
+import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holidays 생기면 이 mock 제거
 
 // 요일 헤더 (일요일 시작)
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 // 한 셀에 최대 표시할 일정 수 (초과분은 '+N건 더'로 요약)
 const MAX_VISIBLE = 3;
 
-// 승인자 후보 — 팀장만 (mock). 실제 연동 시 승인자 후보 API로 교체.
-const approverCandidates = members.filter((m) => m.isActive && m.role === ROLE.TEAM_LEADER);
+// 서브 승인자 후보 — 승인자 후보 API가 아직 없어(다음에 직접 설계 예정) 로컬 DB에 미리
+// 넣어둔 실제 TEAM_LEADER 테스트 계정(id 2, 3)을 임시로 하드코딩. 실제 존재하는 유저라
+// 신청 시 정상적으로 서브 승인자로 지정된다. API가 생기면 이 배열만 걷어내면 됨.
+const TEST_APPROVER_CANDIDATES = [
+  { id: 2, name: '테스트팀장1', departmentName: '미배정' },
+  { id: 3, name: '테스트팀장2', departmentName: '미배정' },
+];
+
+// 연·월별 캘린더 셀 데이터(연차 + 공휴일)를 날짜별로 묶는다.
+// leaves는 이미 날짜 단위로 펼쳐진 목록: { date, personName, type, mine }
+function buildCalendarData(leaves, year, month) {
+  const mm = String(month).padStart(2, '0');
+  const prefix = `${year}-${mm}-`;
+  const map = {};
+  for (const lv of leaves) {
+    if (!lv.date.startsWith(prefix)) continue;
+    const day = Number(lv.date.slice(8, 10));
+    (map[day] ??= { leaves: [], holiday: null }).leaves.push(lv);
+  }
+  for (const h of holidays) {
+    if (!h.date.startsWith(prefix)) continue;
+    const day = Number(h.date.slice(8, 10));
+    (map[day] ??= { leaves: [], holiday: null }).holiday = h.name;
+  }
+  return map;
+}
 
 // 팀 캘린더 — 회사 전체 연차·공휴일을 큰 월간 그리드로 조회 (docs/05 §②·§2-5b)
 // 날짜 셀을 클릭하면 드래그 가능한 신청 패널이 떠서, 캘린더를 보면서 날짜를 담아 신청한다.
 export default function CalendarPage() {
-  // 조회 기준 연·월 (초기값 = 데모 오늘)
-  const [year, setYear] = useState(dayjs(TODAY).year());
-  const [month, setMonth] = useState(dayjs(TODAY).month() + 1); // 1-12
+  const { data: me } = useCurrentUser();
+  const summaryQuery = useLeaveSummary();
+
+  // 조회 기준 연·월 (초기값 = 오늘)
+  const [year, setYear] = useState(dayjs().year());
+  const [month, setMonth] = useState(dayjs().month() + 1); // 1-12
+
+  const calendarQuery = useLeaveCalendar(year, month);
 
   // 신청 패널 — 선택 날짜(YYYY-MM-DD)는 페이지가 소유, 패널 닫으면 선택도 초기화
   const [panelOpen, setPanelOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState([]);
 
-  // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산 — 연·월이 바뀔 때만 재계산
+  // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산 — 연·월 또는 캘린더 응답이 바뀔 때만 재계산
   const { weeks, calData } = useMemo(() => {
     const base = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
     const daysInMonth = base.daysInMonth();
@@ -39,12 +70,22 @@ export default function CalendarPage() {
     }
     const rows = [];
     for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-    // 데이터 없는 달은 빈 맵을 반환 → 빈 캘린더로 정상 표시
-    return { weeks: rows, calData: getCalendarData(year, month) };
-  }, [year, month]);
+
+    // 서버 응답(신청 건 단위, dates 배열)을 날짜 단위 엔트리로 펼침
+    const flatLeaves = (calendarQuery.data ?? []).flatMap((lv) =>
+      lv.dates.map((date) => ({
+        date,
+        personName: lv.userName,
+        type: lv.leaveType,
+        mine: lv.userId === me?.id,
+      })),
+    );
+    // 데이터 없는 달(로딩 중 포함)은 빈 맵을 반환 → 빈 캘린더로 정상 표시
+    return { weeks: rows, calData: buildCalendarData(flatLeaves, year, month) };
+  }, [year, month, calendarQuery.data, me?.id]);
 
   // 오늘 강조는 조회 중인 달이 실제 '오늘'의 달과 같을 때만 적용
-  const today = dayjs(TODAY);
+  const today = dayjs();
   const isTodayMonth = year === today.year() && month === today.month() + 1;
   const todayDate = today.date();
 
@@ -203,8 +244,8 @@ export default function CalendarPage() {
       {panelOpen && (
         <LeaveApplyPanel
           dates={selectedDates}
-          remainingDays={leaveSummary.remainingDays}
-          approvers={approverCandidates}
+          remainingDays={summaryQuery.data?.remainingDays ?? 0}
+          approvers={TEST_APPROVER_CANDIDATES}
           onRemoveDate={(d) => setSelectedDates((prev) => prev.filter((x) => x !== d))}
           onClose={closePanel}
         />

@@ -218,15 +218,7 @@ export const myWelfareRequests = [
   { id: 2002, category: '건강검진', name: '종합 건강검진', days: 1, reason: '연 1회 정기 검진', status: 'PENDING', appliedAt: '2026-07-02', approver: '박민수' },
 ];
 
-// ── 결재 대기 목록 (결재 관리 페이지 — 팀장/총관리자) ────────────────────────
-export const pendingApprovals = [
-  { id: 3001, kind: 'LEAVE', applicantName: '한지민', applicantDept: '개발팀', type: 'ANNUAL', dates: ['2026-07-27', '2026-07-28'], days: 2, reason: '개인 휴가', appliedAt: '2026-07-04' },
-  { id: 3002, kind: 'LEAVE', applicantName: '오세훈', applicantDept: '개발팀', type: 'HALF_AM', dates: ['2026-07-15'], days: 0.5, reason: '병원 진료', appliedAt: '2026-07-04' },
-  { id: 3003, kind: 'WELFARE', applicantName: '차은우', applicantDept: '경영지원팀', type: 'WELFARE', dates: ['2026-07-22'], days: 1, reason: '본인 졸업 (자기계발)', appliedAt: '2026-07-03' },
-  { id: 3004, kind: 'CANCEL', applicantName: '강하늘', applicantDept: '디자인팀', type: 'ANNUAL', dates: ['2026-06-30'], days: 1, reason: '소급 취소 요청 — 일정 변경', appliedAt: '2026-07-02' },
-];
-
-// 처리 완료된 결재 (승인/반려 탭)
+// 처리 완료된 결재 (승인/반려 탭) — 대기 목록은 실 API(GET /api/leaves/pending)로 대체되어 여기선 삭제됨
 export const processedApprovals = [
   { id: 3101, kind: 'LEAVE', applicantName: '정우성', applicantDept: '개발팀', type: 'ANNUAL', dates: ['2026-07-13', '2026-07-14'], days: 2, reason: '여름 휴가', status: 'APPROVED', processedAt: '2026-07-02', comment: '승인합니다.' },
   { id: 3102, kind: 'LEAVE', applicantName: '수지', applicantDept: '디자인팀', type: 'HALF_AM', dates: ['2026-07-24'], days: 0.5, reason: '개인 사유', status: 'APPROVED', processedAt: '2026-07-01', comment: '' },

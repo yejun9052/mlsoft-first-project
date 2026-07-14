@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical, Loader2, X } from 'lucide-react';
 import { LEAVE_TYPE_LABEL } from '../../constants/status.js';
+import { useApplyLeave } from '../../hooks/useLeaves.js';
 
 // 신청 가능한 연차 종류 (WELFARE는 복리후생 페이지에서 별도 신청)
 const APPLY_TYPES = ['ANNUAL', 'HALF_AM', 'HALF_PM'];
@@ -11,15 +12,20 @@ const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 /**
  * 연차 신청 플로팅 패널 — 캘린더 위에 떠서 헤더를 잡고 드래그로 옮길 수 있다.
  * 배경을 가리지 않는 논모달이라 패널을 열어둔 채 캘린더 날짜를 계속 클릭해 담는 흐름.
- * 날짜 선택 상태는 부모(캘린더)가 소유하고, 이 패널은 종류·사유·승인자만 관리한다.
+ * 날짜 선택 상태는 부모(캘린더)가 소유하고, 이 패널은 종류·사유·서브 승인자만 관리한다.
  *
- * ⚠️ 제출은 mock — 실제 서버 연동 시 handleSubmit을 POST /api/leaves 호출로 교체.
+ * 기본(primary) 승인자는 서버가 신청자의 부서장(없으면 SYSTEM_ADMIN) 기준으로 자동 배정한다
+ * (LeaveCreateRequest에 필드 자체가 없음) — 그래서 이 패널엔 서브 승인자 선택만 있다.
+ *
+ * 서브 승인자 후보를 내려주는 API가 아직 없어(승인자 후보 API — 다음에 직접 설계 예정),
+ * approvers prop은 지금은 실제 DB에 존재하는 테스트 계정(TEAM_LEADER)을 가리키는 하드코딩
+ * 값을 받는다 (CalendarPage 참고). API가 생기면 이 prop의 출처만 바꾸면 된다.
  */
 export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRemoveDate, onClose }) {
   const [type, setType] = useState('ANNUAL');
   const [reason, setReason] = useState('');
-  const [approverId, setApproverId] = useState('');
   const [subApproverId, setSubApproverId] = useState('');
+  const applyLeaveMutation = useApplyLeave();
 
   // 패널 위치 — 처음엔 우측 상단, 이후 드래그 값 유지
   const [pos, setPos] = useState(() => ({
@@ -71,7 +77,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
   const days = dates.length * (type === 'ANNUAL' ? 1 : 0.5);
   const afterRemaining = Math.round((remainingDays - days) * 10) / 10;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (dates.length === 0) {
       toast.error('캘린더에서 날짜를 먼저 선택해 주세요.');
       return;
@@ -80,14 +86,19 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
       toast.error('신청 사유를 입력해 주세요.');
       return;
     }
-    if (!approverId) {
-      toast.error('승인자를 선택해 주세요.');
-      return;
+    try {
+      // 잔여 초과분은 당겨쓰기 설계(advance_max_days, 기본 5일)에 따라 백엔드가 검증 (ADVANCE_LIMIT_EXCEEDED)
+      await applyLeaveMutation.mutateAsync({
+        leaveType: type,
+        dates,
+        reason,
+        subApproverId: subApproverId || null,
+      });
+      toast.success(`${LEAVE_TYPE_LABEL[type]} ${days}일 신청이 접수되었습니다.`, { icon: '🗓️' });
+      onClose();
+    } catch {
+      // 실패 toast는 api 인터셉터가 일괄 처리 — 패널은 열어둔 채 재시도할 수 있게 둔다
     }
-    // mock 제출 — 실제 연동 시 여기서 POST /api/leaves 호출
-    // (잔여 초과분은 당겨쓰기 설계(advance_max_days, 기본 5일)에 따라 백엔드가 검증 — ADVANCE_LIMIT_EXCEEDED)
-    toast.success(`(목업) ${LEAVE_TYPE_LABEL[type]} ${days}일 신청이 접수되었습니다.`, { icon: '🗓️' });
-    onClose();
   }
 
   return (
@@ -179,30 +190,18 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
           />
         </div>
 
-        {/* 승인자 — 기본(필수) / 서브(선택) */}
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <FieldLabel>승인자</FieldLabel>
-            <ApproverSelect
-              value={approverId}
-              onChange={(v) => {
-                setApproverId(v);
-                // 새 승인자가 서브 승인자와 같으면 서브를 비움 (동일인 이중 지정 방지)
-                if (v && v === subApproverId) setSubApproverId('');
-              }}
-              approvers={approvers}
-              placeholder="선택 (필수)"
-            />
-          </div>
-          <div>
-            <FieldLabel>서브 승인자</FieldLabel>
-            <ApproverSelect
-              value={subApproverId}
-              onChange={setSubApproverId}
-              approvers={approvers.filter((a) => String(a.id) !== approverId)}
-              placeholder="선택 안 함"
-            />
-          </div>
+        {/* 기본 승인자는 부서장 자동 배정 — 서브 승인자만 선택 */}
+        <div>
+          <p className="mb-2 rounded-btn bg-navy-app/50 px-3 py-2.5 text-[12px] text-ink-mute">
+            담당 승인자는 부서장이 자동으로 배정됩니다.
+          </p>
+          <FieldLabel>서브 승인자 (선택)</FieldLabel>
+          <ApproverSelect
+            value={subApproverId}
+            onChange={setSubApproverId}
+            approvers={approvers}
+            placeholder="선택 안 함"
+          />
         </div>
 
         {/* 차감 요약 + 제출 */}
@@ -218,9 +217,11 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         <button
           type="button"
           onClick={handleSubmit}
-          className="rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark"
+          disabled={applyLeaveMutation.isPending}
+          className="flex items-center justify-center gap-2 rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
         >
-          신청하기
+          {applyLeaveMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+          {applyLeaveMutation.isPending ? '신청 중…' : '신청하기'}
         </button>
       </div>
     </div>

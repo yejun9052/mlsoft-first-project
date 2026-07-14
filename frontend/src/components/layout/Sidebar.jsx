@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../../constants/roles.js';
 import { logout } from '../../api/auth.js';
+import { useAllLeavesCount, usePendingApprovals } from '../../hooks/useLeaves.js';
 
 // MENU 섹션 (전 직원 공통 6개)
 const MENU_ITEMS = [
@@ -37,7 +38,7 @@ const ADMIN_ITEMS = [
 ];
 
 // 사이드바 메뉴 한 줄 (활성: 파랑 틴트 배경 + accent-light 텍스트 + 좌측 도트)
-function SidebarLink({ to, label, Icon }) {
+function SidebarLink({ to, label, Icon, badge }) {
   return (
     <NavLink
       to={to}
@@ -57,7 +58,13 @@ function SidebarLink({ to, label, Icon }) {
             <span className="absolute left-0 h-1.5 w-1.5 rounded-full bg-accent" />
           )}
           <Icon size={16} />
-          <span>{label}</span>
+          <span className="flex-1">{label}</span>
+          {/* 대기 중인 결재 건수 — 0이면 숨김 */}
+          {Boolean(badge) && (
+            <span className="rounded-badge bg-accent/16 px-1.5 py-0.5 text-[11px] font-semibold text-accent-light">
+              {badge}
+            </span>
+          )}
         </>
       )}
     </NavLink>
@@ -77,6 +84,17 @@ export default function Sidebar() {
   }
   const role = userInfo?.role;
   const adminItems = ADMIN_ITEMS.filter((item) => item.roles.includes(role));
+
+  // 결재 관리 배지 — 팀장은 "내가 승인자인 대기"(개인 스코프), 관리자는 회사 전체 대기(신규+취소)
+  // 합계를 보여준다. 다른 role은 enabled=false라 두 쿼리 다 아예 호출되지 않는다.
+  const isTeamLeader = role === ROLE.TEAM_LEADER;
+  const isAdmin = role === ROLE.SYSTEM_ADMIN;
+  const myPendingQuery = usePendingApprovals({ size: 1, enabled: isTeamLeader });
+  const allPendingCountQuery = useAllLeavesCount('PENDING', isAdmin);
+  const allCancelPendingCountQuery = useAllLeavesCount('CANCEL_PENDING', isAdmin);
+  const approvalsBadge = isAdmin
+    ? (allPendingCountQuery.data ?? 0) + (allCancelPendingCountQuery.data ?? 0)
+    : (myPendingQuery.data?.page?.totalElements ?? 0);
 
   // 로그아웃 — 서버 쿠키 만료 후 로컬 정보 정리, 실패해도 로컬은 항상 정리하고 로그인으로
   async function handleLogout() {
@@ -116,7 +134,11 @@ export default function Sidebar() {
           </p>
           <nav className="flex flex-col gap-1">
             {adminItems.map((item) => (
-              <SidebarLink key={item.to} {...item} />
+              <SidebarLink
+                key={item.to}
+                {...item}
+                badge={item.to === '/approvals' ? approvalsBadge : undefined}
+              />
             ))}
           </nav>
         </>

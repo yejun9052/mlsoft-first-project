@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { Inbox } from 'lucide-react';
+import { Inbox, Loader2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
-import { leaveSummary, myLeaveRequests, LEAVE_TYPE_LABEL } from '../mocks/data.js';
+import { LEAVE_TYPE_LABEL } from '../constants/status.js';
+import { useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
 
 // 테이블 그리드 (docs/05 §④): 신청일 / 종류 / 기간 / 일수 / 사유 / 상태
 const GRID_COLS = 'grid grid-cols-[120px_100px_190px_80px_1fr_100px] gap-3';
@@ -26,12 +27,6 @@ const STATUS_FILTERS = [
   { value: 'CANCEL_PENDING', label: '취소 대기' },
 ];
 
-// 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선)
-// ⚠️ mock 파생 계산 — 실제 연동 시 API 응답 기반으로 컴포넌트 내부(useMemo)로 이동
-const YEAR_OPTIONS = [...new Set(myLeaveRequests.map((req) => dayjs(req.dates[0]).year()))].sort(
-  (a, b) => b - a,
-);
-
 // 기간 표기 — 단일일이면 'M.D', 여러 날이면 'M.D ~ M.D'
 function formatPeriod(dates) {
   const start = dayjs(dates[0]).format('M.D');
@@ -40,25 +35,45 @@ function formatPeriod(dates) {
 }
 
 // 사용 내역 — 내 연차·복리후생 신청 이력 필터·조회 (docs/05 §④)
+// WELFARE 항목은 복리후생 API가 아직 없어 이 목록엔 나타나지 않는다 (종류 필터의 '경조/복리'는 항상 빈 결과).
 export default function HistoryPage() {
-  const [yearFilter, setYearFilter] = useState(YEAR_OPTIONS[0]);
+  const { data: page, isLoading } = useMyLeaves();
+  const { data: summary } = useLeaveSummary();
+  const myLeaveRequests = useMemo(() => page?.content ?? [], [page]);
+
+  // 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선)
+  const yearOptions = useMemo(
+    () => [...new Set(myLeaveRequests.map((req) => dayjs(req.dates[0]).year()))].sort((a, b) => b - a),
+    [myLeaveRequests],
+  );
+  const [yearFilter, setYearFilter] = useState(null);
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-
-  // 통계 스트립 값 (선차감 정책상 '사용'은 확정 + 대기 합산이라 캡션으로 구분)
-  const grantedDays = leaveSummary.baseDays + leaveSummary.bonusDays;
-  const confirmedUsed = leaveSummary.usedDays - leaveSummary.pendingDays;
+  const activeYear = yearFilter ?? yearOptions[0];
 
   // 필터(연도·종류·상태) 적용 결과
   const filtered = useMemo(() => {
     const typeOption = TYPE_FILTERS.find((option) => option.value === typeFilter);
     return myLeaveRequests.filter((req) => {
-      if (dayjs(req.dates[0]).year() !== yearFilter) return false;
-      if (typeOption?.match && !typeOption.match(req.type)) return false;
+      if (dayjs(req.dates[0]).year() !== activeYear) return false;
+      if (typeOption?.match && !typeOption.match(req.leaveType)) return false;
       if (statusFilter !== 'ALL' && req.status !== statusFilter) return false;
       return true;
     });
-  }, [yearFilter, typeFilter, statusFilter]);
+  }, [myLeaveRequests, activeYear, typeFilter, statusFilter]);
+
+  if (isLoading || !summary) {
+    return (
+      <div className="flex h-40 items-center justify-center gap-2 text-ink-mute">
+        <Loader2 size={18} className="animate-spin" />
+        <span className="text-[13px]">불러오는 중…</span>
+      </div>
+    );
+  }
+
+  // 통계 스트립 값 (선차감 정책상 '사용'은 확정 + 대기 합산이라 캡션으로 구분)
+  const grantedDays = Number(summary.baseDays) + Number(summary.bonusDays);
+  const confirmedUsed = Number(summary.useDays) - Number(summary.pendingDays);
 
   return (
     <div>
@@ -67,8 +82,8 @@ export default function HistoryPage() {
       {/* 필터 칩 행 */}
       <div className="mb-6 flex flex-col gap-3">
         <FilterGroup label="연도">
-          {YEAR_OPTIONS.map((year) => (
-            <Chip key={year} active={yearFilter === year} onClick={() => setYearFilter(year)}>
+          {yearOptions.map((year) => (
+            <Chip key={year} active={activeYear === year} onClick={() => setYearFilter(year)}>
               {year}년
             </Chip>
           ))}
@@ -103,20 +118,21 @@ export default function HistoryPage() {
         <div className="pl-8">
           <Stat
             label="사용"
-            value={leaveSummary.usedDays}
+            value={summary.useDays}
             unit="일"
             caption={
-              leaveSummary.pendingDays > 0
-                ? `확정 ${confirmedUsed}일 · 대기 ${leaveSummary.pendingDays}일`
+              Number(summary.pendingDays) > 0
+                ? `확정 ${confirmedUsed}일 · 대기 ${summary.pendingDays}일`
                 : null
             }
           />
         </div>
         <div className="pl-8">
-          <Stat label="잔여" value={leaveSummary.remainingDays} unit="일" tone="text-accent-light" />
+          <Stat label="잔여" value={summary.remainingDays} unit="일" tone="text-accent-light" />
         </div>
         <div className="pl-8">
-          <Stat label="소멸 예정" value={leaveSummary.expiringDays} unit="일" tone="text-warn" />
+          {/* 미사용 이월 없이 소멸되는 정책이라 소멸 예정 = 잔여와 동일 (백엔드에 별도 필드 없음) */}
+          <Stat label="소멸 예정" value={summary.remainingDays} unit="일" tone="text-warn" />
         </div>
       </div>
 
@@ -149,12 +165,12 @@ export default function HistoryPage() {
                     key={req.id}
                     className={`${GRID_COLS} items-center px-5 py-3.5 text-[13px] transition-colors hover:bg-white/3`}
                   >
-                    <span className="text-ink-body">{dayjs(req.appliedAt).format('YYYY.MM.DD')}</span>
-                    <span className="font-medium text-ink-hi">{LEAVE_TYPE_LABEL[req.type]}</span>
+                    <span className="text-ink-body">{dayjs(req.createdAt).format('YYYY.MM.DD')}</span>
+                    <span className="font-medium text-ink-hi">{LEAVE_TYPE_LABEL[req.leaveType]}</span>
                     <span className="text-ink-body">{formatPeriod(req.dates)}</span>
                     <span className="text-right font-semibold text-ink-hi">{req.days}일</span>
-                    <span className="min-w-0 truncate text-ink-mute" title={req.reason}>
-                      {req.reason}
+                    <span className="min-w-0 truncate text-ink-mute" title={req.requestReason}>
+                      {req.requestReason}
                     </span>
                     <span>
                       <StatusBadge status={req.status} />
