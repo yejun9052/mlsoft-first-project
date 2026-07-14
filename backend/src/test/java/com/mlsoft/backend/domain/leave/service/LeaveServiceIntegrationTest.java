@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * 부서 팀장을 직접 지정해 승인자를 통제하므로 OAuth 인증 우회가 필요 없다.
  */
 @SpringBootTest
+@ActiveProfiles("test")
 class LeaveServiceIntegrationTest {
 
     @Autowired
