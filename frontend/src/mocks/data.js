@@ -55,7 +55,7 @@ const MOCK_ME = {
   birthDay: '1989-06-15',
   phone: '010-1234-5678',
   baseDays: 24,
-  bonusDays: 1, // 형제·자매 결혼(2001 승인)으로 가산 — myWelfareRequests와 정합
+  bonusDays: 1, // 형제·자매 결혼(복리후생 승인)으로 가산
   usedDays: 7.5, // 승인 5.5(0.5+3+1+1) + 대기 선차감 2 — myLeaveRequests와 정합 (검증 F2)
   advanceDays: 0,
 };
@@ -158,65 +158,8 @@ export function getCalendarData(year, month /* 1-12 */) {
   return map;
 }
 
-// ── 복리후생 정책 (복리후생 페이지 — 6개 카테고리) ───────────────────────────
-// icon 은 lucide-react 아이콘 '이름' 문자열. 페이지에서 아이콘 컴포넌트로 매핑.
-export const welfareCategories = [
-  {
-    key: 'family', label: '경조사', icon: 'HeartHandshake', color: 'danger',
-    items: [
-      { id: 1, name: '본인 결혼', days: 7, target: '본인', proof: '청첩장 또는 혼인관계증명서' },
-      { id: 2, name: '형제·자매 결혼', days: 1, target: '형제/자매', proof: '청첩장 및 가족관계증명서' },
-      { id: 3, name: '배우자 출산', days: 5, target: '배우자', proof: '출생증명서' },
-      { id: 4, name: '부모 조의', days: 7, target: '부모', proof: '부고장 또는 가족관계증명서' },
-      { id: 5, name: '조부모 조의', days: 3, target: '조부모', proof: '부고장 또는 가족관계증명서' },
-    ],
-  },
-  {
-    key: 'health', label: '건강검진', icon: 'Stethoscope', color: 'ok',
-    items: [
-      { id: 6, name: '종합 건강검진', days: 1, target: '본인', proof: '검진 예약 확인서' },
-      { id: 7, name: '가족 건강검진 동행', days: 0.5, target: '직계가족', proof: '검진 확인서' },
-    ],
-  },
-  {
-    key: 'growth', label: '자기계발', icon: 'GraduationCap', color: 'accent',
-    items: [
-      { id: 8, name: '자격증 시험 응시', days: 1, target: '본인', proof: '수험표' },
-      { id: 9, name: '본인 졸업', days: 1, target: '본인', proof: '졸업증명서' },
-    ],
-  },
-  {
-    key: 'gift', label: '명절 선물', icon: 'Gift', color: 'warn',
-    items: [
-      { id: 10, name: '설 명절 선물', days: 0, target: '전 직원', proof: '자동 지급' },
-      { id: 11, name: '추석 명절 선물', days: 0, target: '전 직원', proof: '자동 지급' },
-    ],
-  },
-  {
-    key: 'club', label: '동호회', icon: 'Users', color: 'purple',
-    items: [
-      { id: 12, name: '사내 동호회 활동비', days: 0, target: '동호회원', proof: '활동 내역' },
-    ],
-  },
-  {
-    key: 'refresh', label: '리프레시', icon: 'Sun', color: 'cyan',
-    items: [
-      { id: 13, name: '근속 5년 리프레시 휴가', days: 5, target: '근속 5년', proof: '자동 부여' },
-      { id: 14, name: '근속 10년 리프레시 휴가', days: 10, target: '근속 10년', proof: '자동 부여' },
-    ],
-  },
-];
-
-/** 복리후생 정책 플랫 목록 (신청 폼 드롭다운용) */
-export const welfarePolicies = welfareCategories.flatMap((c) =>
-  c.items.map((it) => ({ ...it, category: c.label })),
-);
-
-// ── 내 복리후생 신청 내역 — 2001 승인이 bonusDays 1 가산의 근거 (연차 사용 1004와 짝, 검증 F2)
-export const myWelfareRequests = [
-  { id: 2001, category: '경조사', name: '형제·자매 결혼', days: 1, reason: '2026-05-28 형제 결혼', status: 'APPROVED', appliedAt: '2026-05-10', approver: '박민수' },
-  { id: 2002, category: '건강검진', name: '종합 건강검진', days: 1, reason: '연 1회 정기 검진', status: 'PENDING', appliedAt: '2026-07-02', approver: '박민수' },
-];
+// ── 복리후생: mock(welfareCategories/myWelfareRequests) 제거됨 — 실 API로 대체 (검증 F3).
+// WelfarePage는 이제 useWelfarePoliciesAll()/useMyWelfareRequests()(hooks/useWelfare.js)로 조회한다.
 
 // 처리 완료된 결재 (승인/반려 탭) — 대기 목록은 실 API(GET /api/leaves/pending)로 대체되어 여기선 삭제됨
 export const processedApprovals = [

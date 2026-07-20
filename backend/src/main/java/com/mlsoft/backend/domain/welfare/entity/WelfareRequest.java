@@ -22,6 +22,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * 복리후생 신청 (docs/02 3-7 welfare_requests).
  * - category/target/evidence_guide는 신청 시점 정책 값의 스냅샷 (정책이 나중에 바뀌어도 근거 보존)
@@ -71,6 +73,13 @@ public class WelfareRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private String evidenceGuide;
 
+    /**
+     * 부여 일수 (신청 시점 policy.default_days 스냅샷 — docs/02 3-7 메모 7 확정).
+     * 정책이 나중에 바뀌어도 이 신청 건의 부여 근거는 유지되며, 승인 시 이 값으로 bonus_days를 가산한다.
+     */
+    @Column(name = "add_days", nullable = false, precision = 4, scale = 1)
+    private BigDecimal addDays;
+
     /** 자세한 사유 */
     @Column(nullable = false)
     private String reason;
@@ -81,7 +90,7 @@ public class WelfareRequest extends BaseTimeEntity {
     private RequestStatus status;
 
     /**
-     * 복리후생 신청 생성 — 정책 값을 스냅샷으로 복사, PENDING으로 시작.
+     * 복리후생 신청 생성 — 정책 값(구분·대상·제출자료·부여일수)을 스냅샷으로 복사, PENDING으로 시작.
      */
     public static WelfareRequest create(WelfarePolicy policy, User user, String reason,
                                         Long primaryApproverId, Long subApproverId) {
@@ -94,6 +103,7 @@ public class WelfareRequest extends BaseTimeEntity {
                 .category(policy.getCategory())
                 .target(policy.getTarget())
                 .evidenceGuide(policy.getDefaultEvidence())
+                .addDays(policy.getDefaultDays())
                 .status(RequestStatus.PENDING)
                 .build();
     }

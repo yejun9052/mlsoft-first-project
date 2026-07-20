@@ -71,6 +71,16 @@ public class WelfarePolicy extends BaseTimeEntity {
                 .build();
     }
 
+    /** 정책 수정 — 구분·대상·부여일수·제출자료·설명 전체 갱신 (PATCH /api/welfare-policies/{id}) */
+    public void update(String category, WelfareTarget target, BigDecimal defaultDays,
+                       String defaultEvidence, String description) {
+        this.category = category;
+        this.target = target;
+        this.defaultDays = defaultDays;
+        this.defaultEvidence = defaultEvidence;
+        this.description = description;
+    }
+
     /** 정책 비활성화 (소프트 삭제) */
     public void deactivate() {
         this.active = false;

@@ -16,8 +16,18 @@ public final class ResponseMessage {
     public static final String LEAVE_CANCEL_REJECTED = "취소 요청이 거부되었습니다.";
     public static final String LEAVE_FETCHED = "연차 정보를 조회했습니다.";
 
-    // 복리후생
+    // 복리후생 신청
     public static final String WELFARE_CREATED = "복리후생 신청이 완료되었습니다.";
+    public static final String WELFARE_APPROVED = "승인 처리가 완료되었습니다.";
+    public static final String WELFARE_REJECTED = "반려 처리가 완료되었습니다.";
+    public static final String WELFARE_CANCELLED = "복리후생 신청이 취소되었습니다.";
+    public static final String WELFARE_FETCHED = "복리후생 신청 정보를 조회했습니다.";
+
+    // 복리후생 정책
+    public static final String WELFARE_POLICY_CREATED = "복리후생 정책이 추가되었습니다.";
+    public static final String WELFARE_POLICY_UPDATED = "복리후생 정책이 수정되었습니다.";
+    public static final String WELFARE_POLICY_DEACTIVATED = "복리후생 정책이 비활성화되었습니다.";
+    public static final String WELFARE_POLICY_FETCHED = "복리후생 정책 정보를 조회했습니다.";
 
     // 사용자
     public static final String USER_INFO_FETCHED = "사용자 정보를 조회했습니다.";

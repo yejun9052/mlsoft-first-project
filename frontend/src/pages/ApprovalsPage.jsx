@@ -11,6 +11,7 @@ import {
   useProcessApproval,
   useProcessCancelApproval,
 } from '../hooks/useLeaves.js';
+import { usePendingWelfareApprovals, useProcessWelfareApproval } from '../hooks/useWelfare.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 
@@ -37,6 +38,20 @@ function mapPendingItem(item) {
   };
 }
 
+// 복리후생 대기 목록 응답(WelfareResponse) → 카드가 기대하는 모양으로 정규화.
+// 연차와 달리 dates 배열이 없어(단발성 신청) periodText가 appliedAt으로 대체 표시한다.
+function mapPendingWelfareItem(item) {
+  return {
+    id: item.id,
+    kind: 'WELFARE',
+    applicantName: item.userName,
+    applicantDept: item.departmentName ?? '미배정',
+    days: item.addDays,
+    reason: item.reason,
+    appliedAt: item.createdAt,
+  };
+}
+
 // 신청 종류 라벨 (취소는 별도 표기, 복리는 공용 라벨, 그 외는 휴가 종류 매핑)
 function typeText(item) {
   if (item.kind === 'CANCEL') return '취소';
@@ -44,8 +59,11 @@ function typeText(item) {
   return LEAVE_TYPE_LABEL[item.type];
 }
 
-// 기간 문자열 (단일일이면 하나, 여러 날이면 시작~종료)
-function periodText(dates) {
+// 기간 문자열 (단일일이면 하나, 여러 날이면 시작~종료). 복리후생은 dates가 없는 단발성 신청이라
+// 신청일(appliedAt)을 대신 보여준다.
+function periodText(item) {
+  if (item.kind === 'WELFARE') return dayjs(item.appliedAt).format('YYYY.MM.DD');
+  const { dates } = item;
   const start = dayjs(dates[0]).format('YYYY.MM.DD');
   if (dates.length <= 1) return start;
   return `${start} ~ ${dayjs(dates[dates.length - 1]).format('MM.DD')}`;
@@ -103,7 +121,7 @@ function ApprovalCard({ item, mode, onApprove, onReject, actionDisabled }) {
         </div>
 
         {/* 기간 */}
-        <div className="w-[170px] shrink-0 text-[13px] text-ink-body">{periodText(item.dates)}</div>
+        <div className="w-[170px] shrink-0 text-[13px] text-ink-body">{periodText(item)}</div>
 
         {/* 사유 */}
         <div className="min-w-0 flex-1 truncate text-[13px] text-ink-mute" title={item.reason}>
@@ -225,26 +243,39 @@ export default function ApprovalsPage() {
   const { data: me } = useCurrentUser();
   const isAdmin = me?.role === 'SYSTEM_ADMIN';
   const pendingQuery = usePendingApprovals();
+  const pendingWelfareQuery = usePendingWelfareApprovals();
   const approvalMutation = useProcessApproval();
   const cancelApprovalMutation = useProcessCancelApproval();
+  const welfareApprovalMutation = useProcessWelfareApproval();
   // 회사 전체 대기 건수 — 관리자만 조회(그 외 역할이 부르면 403이라 enabled로 막아둠)
   const allPendingCountQuery = useAllLeavesCount('PENDING', isAdmin);
   const allCancelPendingCountQuery = useAllLeavesCount('CANCEL_PENDING', isAdmin);
 
-  const pendingList = (pendingQuery.data?.content ?? []).map(mapPendingItem);
-  const actionDisabled = approvalMutation.isPending || cancelApprovalMutation.isPending;
+  // 연차(신규·취소) 대기 + 복리후생 대기를 한 탭에 병합. id는 테이블이 서로 달라 겹칠 수 있어
+  // 렌더링 key는 kind까지 포함해서 만든다(아래 list.map 참고).
+  const pendingList = [
+    ...(pendingQuery.data?.content ?? []).map(mapPendingItem),
+    ...(pendingWelfareQuery.data?.content ?? []).map(mapPendingWelfareItem),
+  ];
+  const pendingLoading = pendingQuery.isLoading || pendingWelfareQuery.isLoading;
+  const actionDisabled =
+    approvalMutation.isPending || cancelApprovalMutation.isPending || welfareApprovalMutation.isPending;
 
-  // CANCEL_PENDING 건은 cancel-approval 엔드포인트로, 그 외 일반 대기 건은 approval 엔드포인트로 분기
+  // 건 종류별로 처리 엔드포인트 분기: CANCEL_PENDING은 cancel-approval, 복리후생은 welfare 승인,
+  // 그 외 일반 연차 대기 건은 approval 엔드포인트로.
+  function mutationFor(kind) {
+    if (kind === 'CANCEL') return cancelApprovalMutation;
+    if (kind === 'WELFARE') return welfareApprovalMutation;
+    return approvalMutation;
+  }
   function handleApprove(item, comment) {
-    const mutation = item.kind === 'CANCEL' ? cancelApprovalMutation : approvalMutation;
-    mutation.mutate(
+    mutationFor(item.kind).mutate(
       { id: item.id, approved: true, comment },
       { onSuccess: () => toast.success(`${item.applicantName}님의 신청을 승인했습니다.`) },
     );
   }
   function handleReject(item, comment) {
-    const mutation = item.kind === 'CANCEL' ? cancelApprovalMutation : approvalMutation;
-    mutation.mutate(
+    mutationFor(item.kind).mutate(
       { id: item.id, approved: false, comment },
       { onSuccess: () => toast.success(`${item.applicantName}님의 신청을 반려했습니다.`) },
     );
@@ -296,7 +327,7 @@ export default function ApprovalsPage() {
       </div>
 
       {/* 결재 카드 리스트 */}
-      {activeTab === 'PENDING' && pendingQuery.isLoading ? (
+      {activeTab === 'PENDING' && pendingLoading ? (
         <div className="flex items-center justify-center gap-2 rounded-card bg-navy-card py-16 text-ink-mute shadow-card">
           <Loader2 size={18} className="animate-spin" />
           <span className="text-[13px]">불러오는 중…</span>
@@ -307,7 +338,7 @@ export default function ApprovalsPage() {
         <div className="flex flex-col gap-3">
           {list.map((item) => (
             <ApprovalCard
-              key={item.id}
+              key={`${item.kind}-${item.id}`}
               item={item}
               mode={mode}
               onApprove={handleApprove}

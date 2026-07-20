@@ -5,6 +5,7 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import LeaveApplyPanel from '../components/leave/LeaveApplyPanel.jsx';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
+import { TEST_APPROVER_CANDIDATES } from '../constants/approvers.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary } from '../hooks/useLeaves.js';
 import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holidays 생기면 이 mock 제거
@@ -13,14 +14,6 @@ import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holiday
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 // 한 셀에 최대 표시할 일정 수 (초과분은 '+N건 더'로 요약)
 const MAX_VISIBLE = 3;
-
-// 서브 승인자 후보 — 승인자 후보 API가 아직 없어(다음에 직접 설계 예정) 로컬 DB에 미리
-// 넣어둔 실제 TEAM_LEADER 테스트 계정(id 2, 3)을 임시로 하드코딩. 실제 존재하는 유저라
-// 신청 시 정상적으로 서브 승인자로 지정된다. API가 생기면 이 배열만 걷어내면 됨.
-const TEST_APPROVER_CANDIDATES = [
-  { id: 2, name: '테스트팀장1', departmentName: '미배정' },
-  { id: 3, name: '테스트팀장2', departmentName: '미배정' },
-];
 
 // 연·월별 캘린더 셀 데이터(연차 + 공휴일)를 날짜별로 묶는다.
 // leaves는 이미 날짜 단위로 펼쳐진 목록: { date, personName, type, mine }

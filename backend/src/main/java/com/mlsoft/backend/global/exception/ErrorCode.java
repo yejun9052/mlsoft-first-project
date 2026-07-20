@@ -44,6 +44,7 @@ public enum ErrorCode {
     // 409 Conflict
     OVERLAPPING_LEAVE_REQUEST(409, "이미 신청된 기간과 중복됩니다."),
     CONCURRENT_UPDATE(409, "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
+    DUPLICATE_WELFARE_POLICY(409, "이미 동일한 구분/대상 조합의 정책이 존재합니다."),
 
     // 500 Internal Server Error
     INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다.");
