@@ -4,6 +4,7 @@
 # ── 시크릿 / 로컬 설정 ──
 .env
 .env.*
+!.env.*.example
 *-secret.yml
 *-secret.properties
 application-local.yml

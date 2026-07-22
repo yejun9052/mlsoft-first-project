@@ -1,0 +1,19 @@
+# 배포용 Dockerfile 빌드 컨텍스트 최적화 — 빌드에 안 쓰는 큰 디렉터리 제외
+.git/
+참고자료/
+연차 관리 프로그램 디자인/
+docs/
+*.md
+!README.md
+
+backend/build/
+backend/.gradle/
+backend/out/
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+.claude/
+.idea/
+.vscode/

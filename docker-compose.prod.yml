@@ -1,0 +1,49 @@
+# 홈서버 데모 배포용 — MySQL + 앱(백엔드+프론트 통합 이미지) 2개 컨테이너.
+# 로컬 개발용 backend/docker-compose.yml(MySQL만)과는 별개.
+#
+# 실행: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# (.env.prod는 .env.prod.example을 복사해서 실제 값 채운 파일 — .gitignore(.env.*)로 커밋 제외됨)
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mlsoft-leave-mysql-prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?.env.prod에 DB_PASSWORD를 설정하세요}
+      MYSQL_DATABASE: mlsoft_leave
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-prod-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-uroot', '-p${DB_PASSWORD}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mlsoft-leave-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env.prod
+    environment:
+      # 컨테이너 네트워크 내부 접속 정보 — .env.prod가 아니라 여기서 고정
+      # (mysql은 localhost가 아니라 서비스명으로 접속)
+      DB_URL: jdbc:mysql://mysql:3306/mlsoft_leave?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      DB_USERNAME: root
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - '8080:8080'
+
+volumes:
+  mysql-prod-data:
