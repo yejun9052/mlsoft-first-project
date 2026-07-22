@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { Check, X, Inbox, Loader2 } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { processedApprovals } from '../mocks/data.js'; // TODO(backend): "내가 처리한 결재" 조회 API 없어 처리완료 탭은 아직 mock
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
@@ -13,7 +13,18 @@ import {
 } from '../hooks/useLeaves.js';
 import { usePendingWelfareApprovals, useProcessWelfareApproval } from '../hooks/useWelfare.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
+import Card from '../components/ui/Card.jsx';
+import StatStrip from '../components/ui/StatStrip.jsx';
+import Stat from '../components/ui/Stat.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
+import Button from '../components/ui/Button.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
+import Tabs from '../components/ui/Tabs.jsx';
+import TableCard from '../components/ui/TableCard.jsx';
+import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import Field from '../components/ui/Field.jsx';
+import Textarea from '../components/ui/Textarea.jsx';
 
 // 탭 정의 (대기 / 승인 / 반려)
 const TABS = [
@@ -22,7 +33,7 @@ const TABS = [
   { key: 'REJECTED', label: '반려' },
 ];
 
-// 대기 목록 응답(LeaveResponse) → 카드가 기대하는 모양으로 정규화.
+// 대기 목록 응답(LeaveResponse) → 테이블 행이 기대하는 모양으로 정규화.
 // CANCEL_PENDING(소급취소 승인 대기)은 kind='CANCEL'로 표시하고, 사유는 취소 사유를 우선 보여준다.
 function mapPendingItem(item) {
   return {
@@ -38,7 +49,7 @@ function mapPendingItem(item) {
   };
 }
 
-// 복리후생 대기 목록 응답(WelfareResponse) → 카드가 기대하는 모양으로 정규화.
+// 복리후생 대기 목록 응답(WelfareResponse) → 테이블 행이 기대하는 모양으로 정규화.
 // 연차와 달리 dates 배열이 없어(단발성 신청) periodText가 appliedAt으로 대체 표시한다.
 function mapPendingWelfareItem(item) {
   return {
@@ -69,138 +80,79 @@ function periodText(item) {
   return `${start} ~ ${dayjs(dates[dates.length - 1]).format('MM.DD')}`;
 }
 
-// 아바타 — 이름 첫 글자
-function Avatar({ name }) {
-  return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-avatar text-[13px] font-semibold text-accent-light">
-      {name.charAt(0)}
-    </span>
-  );
-}
-
-// 결재 카드 한 건 — mode 'pending'이면 승인/반려 버튼(+의견 입력), 'processed'면 상태 배지+처리일
-function ApprovalCard({ item, mode, onApprove, onReject, actionDisabled }) {
-  const [comment, setComment] = useState('');
-  // 승인/반려 오클릭 방지 — 버튼을 누르면 바로 처리하지 않고 확인 문구로 한 번 더 확인받는다.
-  const [confirming, setConfirming] = useState(null); // null | 'approve' | 'reject'
+// 결재 테이블 한 행 — mode 'pending'이면 승인/반려 버튼, 'processed'면 상태 배지+처리일.
+// 승인/반려를 눌러도 바로 처리하지 않고 onOpenConfirm으로 부모에 알려, 페이지 전체에서
+// ConfirmDialog가 하나만 뜨도록 한다(여러 건이 대기 중이어도 입력창은 하나).
+function ApprovalRow({ item, mode, onOpenConfirm, actionDisabled }) {
   const isCancel = item.kind === 'CANCEL';
 
-  function confirmAction() {
-    if (confirming === 'approve') onApprove(item, comment);
-    else onReject(item, comment);
-    setConfirming(null);
-  }
-
   return (
-    <div
-      className={`flex flex-col rounded-card bg-navy-card shadow-card ${
-        isCancel ? 'border-l-2 border-warn/60' : ''
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-4 p-4">
-        {/* 신청자 */}
-        <div className="flex w-[180px] shrink-0 items-center gap-3">
+    <TR className={isCancel ? 'border-l-2 border-warn/60' : ''}>
+      {/* 신청자 */}
+      <Td>
+        <div className="flex items-center gap-3">
           <Avatar name={item.applicantName} />
           <div className="min-w-0">
             <div className="truncate text-[14px] font-semibold text-ink-hi">{item.applicantName}</div>
             <div className="truncate text-[12px] text-ink-mute">{item.applicantDept}</div>
           </div>
         </div>
+      </Td>
 
-        {/* 종류 · 일수 */}
-        <div className="w-[130px] shrink-0">
-          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-body">
-            {typeText(item)}
-            {isCancel && (
-              <span className="rounded-badge bg-warn/13 px-2 py-0.5 text-[10px] font-semibold text-warn">
-                취소 요청
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 text-[12px] text-ink-mute">{item.days}일</div>
+      {/* 종류 · 일수 */}
+      <Td>
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-body">
+          {typeText(item)}
+          {isCancel && (
+            <span className="rounded-badge bg-warn/13 px-2 py-0.5 text-[10px] font-semibold text-warn">
+              취소 요청
+            </span>
+          )}
         </div>
+        <div className="mt-0.5 text-[12px] text-ink-mute">{item.days}일</div>
+      </Td>
 
-        {/* 기간 */}
-        <div className="w-[170px] shrink-0 text-[13px] text-ink-body">{periodText(item)}</div>
+      {/* 기간 */}
+      <Td className="text-ink-body">{periodText(item)}</Td>
 
-        {/* 사유 */}
-        <div className="min-w-0 flex-1 truncate text-[13px] text-ink-mute" title={item.reason}>
+      {/* 사유 */}
+      <Td className="text-ink-mute">
+        <span className="block max-w-[240px] truncate" title={item.reason}>
           {item.reason}
-        </div>
+        </span>
+      </Td>
 
-        {/* 우측: 버튼(대기) 또는 상태(처리 완료) */}
+      {/* 상태-액션 */}
+      <Td right>
         {mode === 'pending' ? (
-          confirming ? (
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="text-[13px] text-ink-mute">
-                정말 {confirming === 'approve' ? '승인' : '반려'}하시겠습니까?
-              </span>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="rounded-btn px-2.5 py-1.5 text-[12px] font-semibold text-ink-mute transition-colors hover:bg-white/6 hover:text-ink-body"
-              >
-                아니오
-              </button>
-              <button
-                type="button"
-                onClick={confirmAction}
-                disabled={actionDisabled}
-                className={
-                  confirming === 'approve'
-                    ? 'rounded-btn bg-accent px-3 py-1.5 text-[12px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50'
-                    : 'rounded-btn border border-danger/50 px-3 py-1.5 text-[12px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50'
-                }
-              >
-                예, {confirming === 'approve' ? '승인' : '반려'}
-              </button>
-            </div>
-          ) : (
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirming('reject')}
-                disabled={actionDisabled}
-                className="flex items-center gap-1 rounded-btn border border-danger/50 px-3 py-2 text-[13px] font-semibold text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <X size={15} />반려
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirming('approve')}
-                disabled={actionDisabled}
-                className="flex items-center gap-1 rounded-btn bg-accent px-3.5 py-2 text-[13px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Check size={15} />승인
-              </button>
-            </div>
-          )
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              variant="danger"
+              size="sm"
+              Icon={X}
+              onClick={() => onOpenConfirm(item, 'reject')}
+              disabled={actionDisabled}
+            >
+              반려
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              Icon={Check}
+              onClick={() => onOpenConfirm(item, 'approve')}
+              disabled={actionDisabled}
+            >
+              승인
+            </Button>
+          </div>
         ) : (
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-1">
             <StatusBadge status={item.status} />
-            <span className="text-[12px] text-ink-faint">{item.processedAt} 처리</span>
+            <span className="text-[11px] text-ink-faint">{item.processedAt} 처리</span>
           </div>
         )}
-      </div>
-
-      {/* 결재 의견 — 대기 탭은 입력, 처리완료 탭은 기록된 의견 표시 */}
-      {mode === 'pending' && (
-        <div className="border-t border-white/6 px-4 py-2.5">
-          <input
-            type="text"
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-            placeholder="결재 의견 (선택)"
-            className="w-full rounded-btn border border-white/8 bg-navy-btn2 px-3 py-1.5 text-[12px] text-ink-hi placeholder:text-ink-dim focus:border-accent/50 focus:outline-none"
-          />
-        </div>
-      )}
-      {mode === 'processed' && item.comment && (
-        <div className="border-t border-white/6 px-4 py-2.5 text-[12px] text-ink-mute">
-          결재 의견 · {item.comment}
-        </div>
-      )}
-    </div>
+      </Td>
+    </TR>
   );
 }
 
@@ -209,32 +161,12 @@ function ApprovalCard({ item, mode, onApprove, onReject, actionDisabled }) {
 // 이 통계는 관리자 화면에만 노출한다.
 function AdminOverview({ pendingCount, cancelPendingCount }) {
   return (
-    <div className="mb-5 flex items-end gap-8 rounded-card bg-navy-card px-5 py-4 shadow-card">
-      <AdminStat label="전체 신규 신청 대기" value={pendingCount} />
-      <AdminStat label="전체 취소 요청 대기" value={cancelPendingCount} />
-    </div>
-  );
-}
-
-function AdminStat({ label, value }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[12px] font-medium text-ink-mute">{label}</span>
-      <span className="text-[28px] font-bold leading-none text-ink-hi">
-        {value}
-        <span className="ml-1 text-[13px] font-medium text-ink-mute">건</span>
-      </span>
-    </div>
-  );
-}
-
-// 비어 있는 탭 안내
-function EmptyState({ label }) {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-card bg-navy-card py-16 text-ink-faint shadow-card">
-      <Inbox size={28} />
-      <span className="text-[13px]">{label} 결재 건이 없습니다.</span>
-    </div>
+    <Card className="mb-5">
+      <StatStrip>
+        <Stat label="전체 신규 신청 대기" value={pendingCount} unit="건" />
+        <Stat label="전체 취소 요청 대기" value={cancelPendingCount} unit="건" />
+      </StatStrip>
+    </Card>
   );
 }
 
@@ -251,8 +183,12 @@ export default function ApprovalsPage() {
   const allPendingCountQuery = useAllLeavesCount('PENDING', isAdmin);
   const allCancelPendingCountQuery = useAllLeavesCount('CANCEL_PENDING', isAdmin);
 
+  // 승인/반려 확인 다이얼로그 — 클릭한 건 하나만 담는다(여러 건이 대기 중이어도 다이얼로그는 1개).
+  const [confirmTarget, setConfirmTarget] = useState(null); // { item, action: 'approve' | 'reject' } | null
+  const [comment, setComment] = useState('');
+
   // 연차(신규·취소) 대기 + 복리후생 대기를 한 탭에 병합. id는 테이블이 서로 달라 겹칠 수 있어
-  // 렌더링 key는 kind까지 포함해서 만든다(아래 list.map 참고).
+  // 렌더링 key는 kind까지 포함해서 만든다.
   const pendingList = [
     ...(pendingQuery.data?.content ?? []).map(mapPendingItem),
     ...(pendingWelfareQuery.data?.content ?? []).map(mapPendingWelfareItem),
@@ -268,17 +204,29 @@ export default function ApprovalsPage() {
     if (kind === 'WELFARE') return welfareApprovalMutation;
     return approvalMutation;
   }
-  function handleApprove(item, comment) {
-    mutationFor(item.kind).mutate(
-      { id: item.id, approved: true, comment },
-      { onSuccess: () => toast.success(`${item.applicantName}님의 신청을 승인했습니다.`) },
-    );
+
+  function openConfirm(item, action) {
+    setConfirmTarget({ item, action });
+    setComment('');
   }
-  function handleReject(item, comment) {
+
+  function closeConfirm() {
+    setConfirmTarget(null);
+    setComment('');
+  }
+
+  function handleConfirm() {
+    if (!confirmTarget) return;
+    const { item, action } = confirmTarget;
+    const approved = action === 'approve';
     mutationFor(item.kind).mutate(
-      { id: item.id, approved: false, comment },
-      { onSuccess: () => toast.success(`${item.applicantName}님의 신청을 반려했습니다.`) },
+      { id: item.id, approved, comment },
+      {
+        onSuccess: () =>
+          toast.success(`${item.applicantName}님의 신청을 ${approved ? '승인' : '반려'}했습니다.`),
+      },
     );
+    closeConfirm();
   }
 
   // 처리 완료(승인/반려) 탭 — "내가 처리한 결재" 목록을 주는 API가 아직 없어 mock 유지.
@@ -288,6 +236,12 @@ export default function ApprovalsPage() {
     activeTab === 'PENDING' ? pendingList : processedApprovals.filter((p) => p.status === activeTab);
   const mode = activeTab === 'PENDING' ? 'pending' : 'processed';
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? '';
+
+  const tabItems = TABS.map((tab) => ({
+    value: tab.key,
+    label: tab.label,
+    count: tab.key === 'PENDING' && pendingList.length > 0 ? pendingList.length : undefined,
+  }));
 
   return (
     <div>
@@ -300,54 +254,62 @@ export default function ApprovalsPage() {
         />
       )}
 
-      {/* 탭 */}
-      <div className="mb-5 flex items-center gap-1 border-b border-white/6">
-        {TABS.map((tab) => {
-          const active = tab.key === activeTab;
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-[13px] font-semibold transition-colors ${
-                active
-                  ? 'border-accent text-accent-light'
-                  : 'border-transparent text-ink-mute hover:text-ink-body'
-              }`}
-            >
-              {tab.label}
-              {tab.key === 'PENDING' && pendingList.length > 0 && (
-                <span className="rounded-badge bg-accent/16 px-1.5 py-0.5 text-[11px] font-semibold text-accent-light">
-                  {pendingList.length}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs tabs={tabItems} value={activeTab} onChange={setActiveTab} className="mb-5" />
 
-      {/* 결재 카드 리스트 */}
-      {activeTab === 'PENDING' && pendingLoading ? (
-        <div className="flex items-center justify-center gap-2 rounded-card bg-navy-card py-16 text-ink-mute shadow-card">
-          <Loader2 size={18} className="animate-spin" />
-          <span className="text-[13px]">불러오는 중…</span>
-        </div>
-      ) : list.length === 0 ? (
-        <EmptyState label={activeLabel} />
-      ) : (
-        <div className="flex flex-col gap-3">
-          {list.map((item) => (
-            <ApprovalCard
-              key={`${item.kind}-${item.id}`}
-              item={item}
-              mode={mode}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              actionDisabled={actionDisabled}
-            />
-          ))}
-        </div>
-      )}
+      {/* 결재 테이블 */}
+      <TableCard
+        loading={activeTab === 'PENDING' && pendingLoading}
+        empty={list.length === 0}
+        emptyLabel={`${activeLabel} 결재 건이 없습니다.`}
+      >
+        <Table className="min-w-[820px]">
+          <THead>
+            <Th>신청자</Th>
+            <Th>종류·일수</Th>
+            <Th>기간</Th>
+            <Th>사유</Th>
+            <Th right>상태</Th>
+          </THead>
+          <tbody>
+            {list.map((item) => (
+              <ApprovalRow
+                key={`${item.kind}-${item.id}`}
+                item={item}
+                mode={mode}
+                onOpenConfirm={openConfirm}
+                actionDisabled={actionDisabled}
+              />
+            ))}
+          </tbody>
+        </Table>
+      </TableCard>
+
+      {/* 승인/반려 확인 다이얼로그 — 카드마다 상시 노출되던 결재의견 인풋 + 인라인 2단계 확인을 대체.
+          승인/반려 클릭 시 이 다이얼로그 하나만 뜬다(여러 건 대기 중이어도 입력창은 하나). */}
+      <ConfirmDialog
+        open={Boolean(confirmTarget)}
+        title={confirmTarget?.action === 'approve' ? '신청 승인' : '신청 반려'}
+        message={
+          confirmTarget &&
+          `${confirmTarget.item.applicantName}님의 ${typeText(confirmTarget.item)} 신청을 ${
+            confirmTarget.action === 'approve' ? '승인' : '반려'
+          }하시겠습니까?`
+        }
+        tone={confirmTarget?.action === 'reject' ? 'danger' : 'default'}
+        confirmLabel={confirmTarget?.action === 'approve' ? '승인' : '반려'}
+        onConfirm={handleConfirm}
+        onCancel={closeConfirm}
+        loading={actionDisabled}
+      >
+        <Field label="결재 의견" hint="선택 입력 — 신청자에게 표시됩니다." className="mt-3">
+          <Textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows={2}
+            placeholder="결재 의견을 입력하세요 (선택)"
+          />
+        </Field>
+      </ConfirmDialog>
     </div>
   );
 }

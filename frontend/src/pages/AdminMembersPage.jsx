@@ -100,7 +100,7 @@ export default function AdminMembersPage() {
       )}
 
       {/* 테이블 카드 */}
-      <Card bodyClassName="!p-0">
+      <Card padding="none">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[880px] text-left text-[13px]">
             <thead>

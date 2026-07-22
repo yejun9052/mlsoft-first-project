@@ -51,6 +51,11 @@ public class Department extends BaseTimeEntity {
     @Column(name = "parent_id")
     private Long parentId;
 
+    /** 활성화 여부 — 소프트 삭제 (docs/02 갭: DELETE=비활성화 API 계약 충족을 위해 엔티티 확장, WelfarePolicy와 동일 패턴) */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean active = true;
+
     /** 부서 생성 */
     public static Department create(String name, String description, Long parentId) {
         return Department.builder()
@@ -68,5 +73,17 @@ public class Department extends BaseTimeEntity {
     /** 팀장 해제 — 팀장 퇴직 시 결재 이관 규칙 (갭분석 B-4) */
     public void clearLeader() {
         this.leader = null;
+    }
+
+    /** 부서 정보 수정 (PUT /api/departments/{id}) — 이름·설명·상위부서 전체 갱신 */
+    public void update(String name, String description, Long parentId) {
+        this.name = name;
+        this.description = description;
+        this.parentId = parentId;
+    }
+
+    /** 부서 비활성화 (소프트 삭제, DELETE /api/departments/{id}) */
+    public void deactivate() {
+        this.active = false;
     }
 }

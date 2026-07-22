@@ -221,4 +221,15 @@ public class User extends BaseTimeEntity {
     public void assignDepartment(Department department) {
         this.department = department;
     }
+
+    /** 내 정보 수정 — 이름·생일만 (PATCH /api/users/me) */
+    public void updateProfile(String name, LocalDate birthDay) {
+        this.name = name;
+        this.birthDay = birthDay;
+    }
+
+    /** 연차 직접 설정 (관리자 조작, PATCH /api/users/{id}/base-days) — 음수 검증은 서비스 책임 */
+    public void updateBaseDays(BigDecimal baseDays) {
+        this.baseDays = baseDays;
+    }
 }

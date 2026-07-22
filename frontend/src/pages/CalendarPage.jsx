@@ -3,6 +3,9 @@ import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
+import Card from '../components/ui/Card.jsx';
+import IconButton from '../components/ui/IconButton.jsx';
+import Legend from '../components/ui/Legend.jsx';
 import LeaveApplyPanel from '../components/leave/LeaveApplyPanel.jsx';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { TEST_APPROVER_CANDIDATES } from '../constants/approvers.js';
@@ -119,36 +122,24 @@ export default function CalendarPage() {
       <PageHeader title="팀 캘린더" subtitle="회사 전체 연차 일정과 공휴일 · 날짜를 클릭하면 바로 신청">
         {/* 월 이동 컨트롤 */}
         <div className="flex items-center gap-1 rounded-btn bg-navy-card p-1 shadow-card">
-          <button
-            type="button"
-            onClick={() => shiftMonth(-1)}
-            className="rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-white/6 hover:text-ink-body"
-            aria-label="이전 달"
-          >
-            <ChevronLeft size={18} />
-          </button>
+          <IconButton Icon={ChevronLeft} label="이전 달" onClick={() => shiftMonth(-1)} />
           <span className="min-w-[100px] text-center text-[14px] font-semibold text-ink-hi">
             {year}년 {month}월
           </span>
-          <button
-            type="button"
-            onClick={() => shiftMonth(1)}
-            className="rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-white/6 hover:text-ink-body"
-            aria-label="다음 달"
-          >
-            <ChevronRight size={18} />
-          </button>
+          <IconButton Icon={ChevronRight} label="다음 달" onClick={() => shiftMonth(1)} />
         </div>
       </PageHeader>
 
       {/* 캘린더 카드 */}
-      <section className="flex min-h-0 flex-1 flex-col rounded-card bg-navy-card p-5 shadow-card">
-        {/* 범례 (사유는 마스킹 정책상 캘린더에 미표시 — 이름·종류만) */}
+      <Card fill padding="tight">
+        {/* 범례 (사유는 마스킹 정책상 캘린더에 미표시 — 이름·종류만)
+            "내 연차"(채워진 pill)와 "신청 선택"(굵은 보더+체크)은 색만으로는 구분이 미묘해서
+            형태(채움 vs 굵은 보더+체크)로도 구분한다 */}
         <div className="mb-3 flex items-center gap-4 text-[12px] text-ink-mute">
-          <Legend className="border border-accent/40 bg-accent/25" label="내 연차" />
-          <Legend className="bg-ok/18" label="동료 연차" />
-          <Legend className="bg-danger/18" label="공휴일" />
-          <Legend className="border border-accent/70 bg-accent/12" label="신청 선택" />
+          <Legend swatch="bg-accent/25 text-accent-light" label="내 연차" />
+          <Legend swatch="bg-ok/18" label="동료 연차" />
+          <Legend swatch="bg-danger/18" label="공휴일" />
+          <Legend swatch="border-2 border-accent bg-accent/12" label="신청 선택" Icon={Check} />
         </div>
 
         {/* 요일 헤더 */}
@@ -231,7 +222,7 @@ export default function CalendarPage() {
             );
           })}
         </div>
-      </section>
+      </Card>
 
       {/* 신청 패널 — 닫을 때 언마운트해서 폼 상태 초기화 */}
       {panelOpen && (
@@ -244,15 +235,5 @@ export default function CalendarPage() {
         />
       )}
     </div>
-  );
-}
-
-// 범례 항목 — 색 스와치 + 라벨
-function Legend({ className, label }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className={`h-3 w-3 rounded ${className}`} />
-      {label}
-    </span>
   );
 }

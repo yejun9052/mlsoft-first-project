@@ -19,6 +19,7 @@ public enum ErrorCode {
     INVALID_APPROVER(400, "승인자로 지정할 수 없는 사용자입니다."),
     WEEKEND_NOT_ALLOWED(400, "주말은 연차로 신청할 수 없습니다."),
     PAST_DATE_NOT_ALLOWED(400, "지난 날짜는 신청할 수 없습니다."),
+    ALREADY_RETIRED(400, "이미 퇴직 처리된 사용자입니다."),
 
     // 401 Unauthorized
     UNAUTHENTICATED(401, "로그인이 필요합니다."),

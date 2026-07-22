@@ -132,4 +132,14 @@ public class WelfareRequest extends BaseTimeEntity {
             throw new BusinessException(ErrorCode.ALREADY_PROCESSED);
         }
     }
+
+    /** 기본 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
+    public void reassignPrimaryApprover(Long newApproverId) {
+        this.primaryApproverId = newApproverId;
+    }
+
+    /** 서브 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
+    public void reassignSubApprover(Long newApproverId) {
+        this.subApproverId = newApproverId;
+    }
 }

@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CalendarCheck2 } from 'lucide-react';
 
 // Google OAuth 진입 경로 (Spring Security 제공, vite proxy 경유)
 const GOOGLE_LOGIN_URL = '/oauth2/authorization/google';
@@ -62,34 +61,45 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center bg-navy-app px-6">
-      {/* 브랜드 로고 */}
-      <div className="mb-8 flex flex-col items-center gap-4">
-        <span className="flex h-16 w-16 items-center justify-center rounded-card bg-accent shadow-btn">
-          <CalendarCheck2 size={32} className="text-white" />
+    <div className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-navy-app px-6">
+      {/* 배경 글로우 — 카드 뒤 은은한 블러 원 (다크 SaaS 로그인 화면에서 자주 쓰는 깊이감 장치) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/18 blur-[110px]"
+      />
+
+      {/* 브랜드 — MLsoft 워드마크(eyebrow) + 사이드바와 동일한 '연' 모노그램 + 제품명 + 한 줄 소개 */}
+      <div className="relative mb-9 flex flex-col items-center gap-3">
+        <span className="text-[12px] font-bold uppercase tracking-[0.32em] text-ink-mute">MLsoft</span>
+        <span className="flex h-14 w-14 items-center justify-center rounded-card bg-accent text-[22px] font-extrabold text-white shadow-btn">
+          연
         </span>
-        <h1 className="text-[32px] font-extrabold tracking-[-0.03em] text-ink-hi">연차ON</h1>
-        <p className="text-[14px] text-ink-mute">MLsoft 연차 관리 시스템</p>
+        <h1 className="text-[30px] font-extrabold tracking-[-0.03em] text-ink-hi">연차ON</h1>
+        <p className="max-w-[300px] text-center text-[13px] leading-relaxed text-ink-mute">
+          연차·경조사 신청부터 결재까지 한 곳에서 —<br />MLsoft 임직원을 위한 연차 관리 시스템
+        </p>
       </div>
 
       {/* 로그인 카드 */}
-      <div className="w-full max-w-[380px] rounded-card bg-navy-card p-8 shadow-card">
-        <p className="mb-6 text-center text-[13px] leading-relaxed text-ink-body">
-          <span className="font-semibold text-accent-light">@mlsoft.com</span> 계정으로 로그인
+      <div className="relative w-full max-w-[380px] rounded-card border border-white/6 bg-navy-card p-8 shadow-card">
+        <p className="mb-6 text-center text-[14px] font-semibold text-ink-hi">
+          사내 계정으로 로그인하고 시작하세요
         </p>
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-btn bg-white px-4 py-3 text-[14px] font-semibold text-gray-800 transition-opacity hover:opacity-90"
+          className="flex w-full items-center justify-center gap-3 rounded-btn bg-white px-4 py-3 text-[14px] font-semibold text-gray-800 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
         >
           <GoogleLogo />
           Google 계정으로 로그인
         </button>
         <p className="mt-5 text-center text-[11px] leading-relaxed text-ink-faint">
-          회사 Google Workspace 계정만 사용할 수 있습니다.
+          <span className="font-semibold text-accent-light">@mlsoft.com</span> 회사 Google Workspace 계정만 사용할 수 있습니다.
           <br />첫 로그인 시 자동으로 가입됩니다.
         </p>
       </div>
+
+      <p className="relative mt-8 text-[11px] text-ink-dim">© {new Date().getFullYear()} MLsoft. All rights reserved.</p>
     </div>
   );
 }

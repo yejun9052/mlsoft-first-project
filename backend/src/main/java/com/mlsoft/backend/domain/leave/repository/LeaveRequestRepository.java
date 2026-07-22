@@ -95,4 +95,10 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                       @Param("expected") RequestStatus expected,
                                       @Param("next") RequestStatus next,
                                       @Param("reason") String reason);
+
+    /** 이 사람이 primary 승인자인 대기 건 — 퇴직 이관 대상 조회 (PENDING·CANCEL_PENDING, docs/01 2-9) */
+    List<LeaveRequest> findByPrimaryApproverAndStatusIn(User primaryApprover, Collection<RequestStatus> statuses);
+
+    /** 이 사람이 sub 승인자인 대기 건 — 퇴직 이관 대상 조회 (PENDING·CANCEL_PENDING, docs/01 2-9) */
+    List<LeaveRequest> findBySubApproverAndStatusIn(User subApprover, Collection<RequestStatus> statuses);
 }

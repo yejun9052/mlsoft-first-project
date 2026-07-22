@@ -25,7 +25,7 @@ export default function AdminPolicyPage() {
         <Card
           title="근속년수별 연차 정책"
           right={<span className="text-[11px] text-ink-faint">근로기준법 §60 기준</span>}
-          bodyClassName="!p-0"
+          padding="none"
         >
           <div className="max-h-[420px] overflow-y-auto">
             <table className="w-full text-left text-[13px]">
@@ -106,7 +106,7 @@ export default function AdminPolicyPage() {
       </div>
 
       {/* ③ 기산일 리셋·소멸 이력 */}
-      <Card title="기산일 리셋 · 소멸 이력" bodyClassName="!p-0" className="mt-5">
+      <Card title="기산일 리셋 · 소멸 이력" padding="none" className="mt-5">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-[13px]">
             <thead>

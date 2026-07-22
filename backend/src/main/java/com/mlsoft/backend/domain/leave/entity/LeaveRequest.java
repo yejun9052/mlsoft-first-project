@@ -190,4 +190,14 @@ public class LeaveRequest extends BaseTimeEntity {
             throw new BusinessException(ErrorCode.ALREADY_PROCESSED);
         }
     }
+
+    /** 기본 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
+    public void reassignPrimaryApprover(User newApprover) {
+        this.primaryApprover = newApprover;
+    }
+
+    /** 서브 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
+    public void reassignSubApprover(User newApprover) {
+        this.subApprover = newApprover;
+    }
 }

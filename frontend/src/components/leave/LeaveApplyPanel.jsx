@@ -1,17 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { GripVertical, Loader2, X } from 'lucide-react';
+import { GripVertical, X } from 'lucide-react';
 import { LEAVE_TYPE_LABEL } from '../../constants/status.js';
 import { useApplyLeave } from '../../hooks/useLeaves.js';
+import Field from '../ui/Field.jsx';
+import SegmentedControl from '../ui/SegmentedControl.jsx';
+import Textarea from '../ui/Textarea.jsx';
+import Select from '../ui/Select.jsx';
+import Button from '../ui/Button.jsx';
+import IconButton from '../ui/IconButton.jsx';
 
 // 신청 가능한 연차 종류 (WELFARE는 복리후생 페이지에서 별도 신청)
 const APPLY_TYPES = ['ANNUAL', 'HALF_AM', 'HALF_PM'];
+const TYPE_OPTIONS = APPLY_TYPES.map((type) => ({ value: type, label: LEAVE_TYPE_LABEL[type] }));
 const WEEKDAY_KO = ['일', '월', '화', '수', '목', '금', '토'];
 
 /**
  * 연차 신청 플로팅 패널 — 캘린더 위에 떠서 헤더를 잡고 드래그로 옮길 수 있다.
- * 배경을 가리지 않는 논모달이라 패널을 열어둔 채 캘린더 날짜를 계속 클릭해 담는 흐름.
+ * 배경을 가리지 않는 논모달이라 패널을 열어둔 채 캘린더 날짜를 계속 클릭해 담는 흐름
+ * (복리후생의 중앙 오버레이 모달과는 의도적으로 다른 패턴 — 통일하지 않음).
  * 날짜 선택 상태는 부모(캘린더)가 소유하고, 이 패널은 종류·사유·서브 승인자만 관리한다.
  *
  * 기본(primary) 승인자는 서버가 신청자의 부서장(없으면 SYSTEM_ADMIN) 기준으로 자동 배정한다
@@ -121,37 +129,20 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
           <span className="text-[15px] font-semibold text-ink-hi">연차 신청</span>
           <span className="text-[12px] text-ink-dim">끌어서 이동</span>
         </div>
-        <button
-          type="button"
+        <IconButton
+          Icon={X}
+          label="닫기"
           onClick={onClose}
           onPointerDown={(e) => e.stopPropagation()}
-          className="rounded-btn p-1 text-ink-mute transition-colors hover:bg-white/6 hover:text-ink-body"
-          aria-label="닫기"
-        >
-          <X size={16} />
-        </button>
+        />
       </div>
 
       <div className="flex flex-col gap-4 px-5 py-4">
         {/* 종류 — 세그먼트 버튼 */}
-        <div className="grid grid-cols-3 gap-1 rounded-btn bg-navy-app/50 p-1">
-          {APPLY_TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setType(t)}
-              className={`rounded-btn px-2 py-2 text-[13px] font-semibold transition-colors ${
-                type === t ? 'bg-accent text-white' : 'text-ink-mute hover:text-ink-body'
-              }`}
-            >
-              {LEAVE_TYPE_LABEL[t]}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl options={TYPE_OPTIONS} value={type} onChange={setType} />
 
         {/* 선택한 날짜 칩 — 캘린더 클릭으로 추가, ×로 제거 */}
-        <div>
-          <FieldLabel>선택한 날짜 ({dates.length}일)</FieldLabel>
+        <Field label={`선택한 날짜 (${dates.length}일)`}>
           {dates.length === 0 ? (
             <p className="rounded-btn border border-dashed border-white/12 px-3 py-3 text-[13px] text-ink-dim">
               캘린더에서 날짜를 클릭해 담으세요. 다시 클릭하면 빠집니다.
@@ -176,32 +167,33 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
               ))}
             </div>
           )}
-        </div>
+        </Field>
 
         {/* 사유 (필수) */}
-        <div>
-          <FieldLabel>신청 사유</FieldLabel>
-          <textarea
+        <Field label="신청 사유">
+          <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={2}
             placeholder="사유를 입력하세요 (승인자에게만 표시)"
-            className="w-full resize-none rounded-btn border border-white/8 bg-navy-btn2 px-3 py-2.5 text-[14px] text-ink-hi placeholder:text-ink-dim focus:border-accent/50 focus:outline-none"
           />
-        </div>
+        </Field>
 
         {/* 기본 승인자는 부서장 자동 배정 — 서브 승인자만 선택 */}
         <div>
           <p className="mb-2 rounded-btn bg-navy-app/50 px-3 py-2.5 text-[12px] text-ink-mute">
             담당 승인자는 부서장이 자동으로 배정됩니다.
           </p>
-          <FieldLabel>서브 승인자 (선택)</FieldLabel>
-          <ApproverSelect
-            value={subApproverId}
-            onChange={setSubApproverId}
-            approvers={approvers}
-            placeholder="선택 안 함"
-          />
+          <Field label="서브 승인자 (선택)">
+            <Select value={subApproverId} onChange={(e) => setSubApproverId(e.target.value)}>
+              <option value="">선택 안 함</option>
+              {approvers.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name} · {a.departmentName}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
 
         {/* 차감 요약 + 제출 */}
@@ -214,37 +206,10 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
             </span>
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={applyLeaveMutation.isPending}
-          className="flex items-center justify-center gap-2 rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {applyLeaveMutation.isPending && <Loader2 size={16} className="animate-spin" />}
+        <Button onClick={handleSubmit} loading={applyLeaveMutation.isPending} size="lg" className="w-full">
           {applyLeaveMutation.isPending ? '신청 중…' : '신청하기'}
-        </button>
+        </Button>
       </div>
     </div>
-  );
-}
-
-function FieldLabel({ children }) {
-  return <p className="mb-1.5 text-[13px] font-medium text-ink-mute">{children}</p>;
-}
-
-function ApproverSelect({ value, onChange, approvers, placeholder }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-btn border border-white/8 bg-navy-btn2 px-2.5 py-2.5 text-[14px] text-ink-hi focus:border-accent/50 focus:outline-none"
-    >
-      <option value="">{placeholder}</option>
-      {approvers.map((a) => (
-        <option key={a.id} value={a.id}>
-          {a.name} · {a.departmentName}
-        </option>
-      ))}
-    </select>
   );
 }

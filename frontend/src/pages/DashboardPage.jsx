@@ -1,9 +1,12 @@
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { CalendarPlus, Clock3, Gift, ChevronRight, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { CalendarPlus, Gift, ChevronRight, Loader2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
+import Button from '../components/ui/Button.jsx';
+import Stat from '../components/ui/Stat.jsx';
+import StatStrip from '../components/ui/StatStrip.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
@@ -11,42 +14,6 @@ import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holiday
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
-
-// 통계 스트립 한 칸 (박스 없음 — 세로 구분선으로 분리)
-function Stat({ label, value, unit, hero, tone }) {
-  return (
-    <div className="flex flex-col gap-1 pr-8">
-      <span className="text-[12px] font-medium text-ink-mute">{label}</span>
-      <span
-        className={
-          hero
-            ? 'text-[46px] font-extrabold leading-none tracking-[-0.03em] text-accent-light'
-            : `text-[28px] font-bold leading-none ${tone ?? 'text-ink-hi'}`
-        }
-      >
-        {value}
-        {unit && <span className="ml-1 text-[14px] font-medium text-ink-mute">{unit}</span>}
-      </span>
-    </div>
-  );
-}
-
-// 빠른 신청 버튼 — 실제 신청 플로우가 있는 페이지로 이동 (연차·반차=캘린더 신청 패널, 경조사=복리후생)
-function QuickAction({ Icon, label, to, primary }) {
-  return (
-    <Link
-      to={to}
-      className={`flex items-center gap-1.5 rounded-btn px-3.5 py-2.5 text-[13px] font-semibold transition-colors ${
-        primary
-          ? 'bg-accent text-white shadow-btn hover:bg-accent-dark'
-          : 'bg-navy-btn2 text-ink-body hover:bg-white/8'
-      }`}
-    >
-      <Icon size={15} />
-      {label}
-    </Link>
-  );
-}
 
 // 날짜 목록 요약 — "7/20 (월)" 또는 "7/20 외 2일"
 function formatDates(dates) {
@@ -56,6 +23,7 @@ function formatDates(dates) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { data: me } = useCurrentUser();
   const summaryQuery = useLeaveSummary();
   const myLeavesQuery = useMyLeaves();
@@ -126,21 +94,27 @@ export default function DashboardPage() {
         </span>
       </PageHeader>
 
-      {/* 통계 스트립 (박스 없음) + 빠른 신청 */}
+      {/* 통계 스트립 + 빠른 신청 — 퀵액션은 실제 신청 플로우가 있는 페이지로 이동
+          (연차·반차는 캘린더의 신청 패널, 경조사는 복리후생 페이지) */}
       <div className="mb-5 flex items-end justify-between gap-6 border-b border-white/6 pb-6">
-        <div className="flex items-end divide-x divide-white/8">
-          <Stat label="잔여 연차" value={summary.remainingDays} unit="일" hero />
-          <div className="pl-8">
-            <Stat label="소멸 예정" value={expiringDays} unit="일" tone="text-warn" />
-          </div>
-          <div className="pl-8">
-            <Stat label="내 결재 대기" value={myPendingCount} unit="건" tone="text-ink-hi" />
-          </div>
-        </div>
+        <StatStrip>
+          <Stat label="잔여 연차" value={summary.remainingDays} unit="일" size="hero" />
+          <Stat label="소멸 예정" value={expiringDays} unit="일" tone="text-warn" />
+          <Stat label="내 결재 대기" value={myPendingCount} unit="건" />
+          <Stat
+            label="다음 기산일"
+            value={resetDday !== null ? `D-${resetDday}` : '-'}
+            tone={resetDday !== null ? 'text-warn' : undefined}
+            caption={summary.nextResetDate ? dayjs(summary.nextResetDate).format('M월 D일') : undefined}
+          />
+        </StatStrip>
         <div className="flex items-center gap-2">
-          <QuickAction Icon={CalendarPlus} label="연차 신청" to="/calendar" primary />
-          <QuickAction Icon={Clock3} label="반차" to="/calendar" />
-          <QuickAction Icon={Gift} label="경조사" to="/welfare" />
+          <Button variant="primary" Icon={CalendarPlus} onClick={() => navigate('/calendar')}>
+            연차·반차 신청
+          </Button>
+          <Button variant="secondary" Icon={Gift} onClick={() => navigate('/welfare')}>
+            경조사 신청
+          </Button>
         </div>
       </div>
 
@@ -149,8 +123,8 @@ export default function DashboardPage() {
         {/* 최근 신청 내역 */}
         <Card
           title="최근 신청 내역"
-          className="flex min-h-0 flex-col"
-          bodyClassName="min-h-0 flex-1 overflow-y-auto !py-0"
+          fill
+          scroll
           right={
             <Link
               to="/history"
@@ -198,33 +172,18 @@ export default function DashboardPage() {
               <div className="bg-accent" style={{ width: `${usedPct}%` }} />
               <div className="bg-warn/80" style={{ width: `${pendingPct}%` }} />
             </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-[13px]">
-              <GaugeStat swatch="bg-accent" label="사용" value={confirmedUsed} />
-              <GaugeStat swatch="bg-warn/80" label="대기 차감" value={summary.pendingDays} />
-              <GaugeStat swatch="bg-white/25" label="잔여" value={summary.remainingDays} />
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <Stat swatch="bg-accent" label="사용" value={confirmedUsed} unit="일" />
+              <Stat swatch="bg-warn/80" label="대기 차감" value={summary.pendingDays} unit="일" />
+              <Stat swatch="bg-white/25" label="잔여" value={summary.remainingDays} unit="일" />
             </div>
-            <p className="mt-4 flex items-center justify-between border-t border-white/6 pt-3.5 text-[13px] text-ink-mute">
-              <span>
-                다음 기산일{' '}
-                <span className="text-ink-body tabular-nums">
-                  {summary.nextResetDate ? dayjs(summary.nextResetDate).format('M월 D일') : '-'}
-                </span>
-                {resetDday !== null && (
-                  <span className="ml-1.5 rounded-badge bg-warn/13 px-2 py-0.5 font-semibold text-warn tabular-nums">
-                    D-{resetDday}
-                  </span>
-                )}
-              </span>
-              <span className="text-[12px]">미사용분 이월 없이 소멸</span>
+            <p className="mt-4 border-t border-white/6 pt-3.5 text-center text-[12px] text-ink-mute">
+              미사용분은 이월 없이 소멸됩니다.
             </p>
           </Card>
 
           {/* 다가오는 부재 일정 */}
-          <Card
-            title="다가오는 부재 일정"
-            className="flex min-h-0 flex-1 flex-col"
-            bodyClassName="min-h-0 flex-1 overflow-y-auto !py-0"
-          >
+          <Card title="다가오는 부재 일정" fill scroll>
             {upcomingEvents.length === 0 ? (
               <p className="py-4 text-[12px] text-ink-dim">예정된 일정이 없습니다.</p>
             ) : (
@@ -260,15 +219,5 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-// 게이지 아래 색상별 수치 한 칸
-function GaugeStat({ swatch, label, value }) {
-  return (
-    <span className="flex items-center gap-1.5 text-ink-mute">
-      <span className={`h-3 w-3 rounded ${swatch}`} />
-      {label} <span className="text-[15px] font-semibold text-ink-hi tabular-nums">{value}</span>일
-    </span>
   );
 }

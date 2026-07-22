@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
+
 /**
  * 복리후생 신청 저장소.
  * - 승인자는 FK 연관 없이 primary_approver_id/sub_approver_id로 보관하므로(엔티티 설계) Long 비교로 조회한다.
@@ -40,4 +42,13 @@ public interface WelfareRequestRepository extends JpaRepository<WelfareRequest, 
     int updateStatusIfCurrent(@Param("id") Long id,
                               @Param("expected") RequestStatus expected,
                               @Param("next") RequestStatus next);
+
+    /**
+     * 이 사람이 primary 승인자인 대기 건 — 퇴직 이관 대상 조회 (docs/01 2-9).
+     * WelfareRequest는 CANCEL_PENDING 상태가 없고 cancel()도 PENDING에서만 가능하므로 PENDING만 대상이다.
+     */
+    List<WelfareRequest> findByPrimaryApproverIdAndStatus(Long primaryApproverId, RequestStatus status);
+
+    /** 이 사람이 sub 승인자인 대기 건 — 퇴직 이관 대상 조회 (PENDING만, docs/01 2-9) */
+    List<WelfareRequest> findBySubApproverIdAndStatus(Long subApproverId, RequestStatus status);
 }

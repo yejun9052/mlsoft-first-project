@@ -34,6 +34,19 @@ public final class ResponseMessage {
     public static final String ONBOARDING_COMPLETED = "온보딩이 완료되었습니다.";
     public static final String LOGOUT_COMPLETED = "로그아웃 되었습니다.";
 
+    // 사용자 관리
+    public static final String USER_PROFILE_UPDATED = "내 정보가 수정되었습니다.";
+    public static final String USER_ROLE_UPDATED = "권한이 변경되었습니다.";
+    public static final String USER_DEPARTMENT_UPDATED = "부서가 변경되었습니다.";
+    public static final String USER_BASE_DAYS_UPDATED = "연차 일수가 설정되었습니다.";
+    public static final String USER_RETIRED = "퇴직 처리가 완료되었습니다.";
+
+    // 부서 관리
+    public static final String DEPARTMENT_FETCHED = "부서 정보를 조회했습니다.";
+    public static final String DEPARTMENT_CREATED = "부서가 생성되었습니다.";
+    public static final String DEPARTMENT_UPDATED = "부서 정보가 수정되었습니다.";
+    public static final String DEPARTMENT_DEACTIVATED = "부서가 비활성화되었습니다.";
+
     private ResponseMessage() {
         // 인스턴스화 방지
     }
