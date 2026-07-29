@@ -1,11 +1,30 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, UserPlus, Shield, Building2, UserMinus } from 'lucide-react';
-import { members } from '../mocks/data.js';
+import { Search, Shield, Building2, UserMinus } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
-import Card from '../components/ui/Card.jsx';
+import Tabs from '../components/ui/Tabs.jsx';
+import FilterGroup from '../components/ui/FilterGroup.jsx';
+import Chip from '../components/ui/Chip.jsx';
+import TextInput from '../components/ui/TextInput.jsx';
+import TableCard from '../components/ui/TableCard.jsx';
+import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
+import IconButton from '../components/ui/IconButton.jsx';
+import Modal from '../components/ui/Modal.jsx';
+import Field from '../components/ui/Field.jsx';
+import Select from '../components/ui/Select.jsx';
+import Button from '../components/ui/Button.jsx';
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import {
+  useRetiredUsers,
+  useRetireUser,
+  useUpdateUserDepartment,
+  useUpdateUserRole,
+  useUsers,
+} from '../hooks/useUsers.js';
+import { useDepartments } from '../hooks/useDepartments.js';
 
 // 탭 정의 (재직 / 퇴직)
 const TAB_ACTIVE = 'active';
@@ -14,260 +33,279 @@ const TAB_RETIRED = 'retired';
 // 역할 필터 칩 (전체 + 3개 역할)
 const ROLE_FILTERS = [
   { value: 'ALL', label: '전체' },
-  { value: ROLE.EMPLOYEE, label: '사원' },
-  { value: ROLE.TEAM_LEADER, label: '팀장' },
-  { value: ROLE.SYSTEM_ADMIN, label: '총관리자' },
+  { value: ROLE.EMPLOYEE, label: ROLE_LABEL[ROLE.EMPLOYEE] },
+  { value: ROLE.TEAM_LEADER, label: ROLE_LABEL[ROLE.TEAM_LEADER] },
+  { value: ROLE.SYSTEM_ADMIN, label: ROLE_LABEL[ROLE.SYSTEM_ADMIN] },
 ];
 
+// 역할 변경 모달의 선택지 (전체 필터의 'ALL'은 제외)
+const ROLE_OPTIONS = [ROLE.EMPLOYEE, ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN];
+
+// 구성원 관리 — 재직/퇴직 조회 + 역할·부서 변경, 퇴직 처리 (docs/05 §관리자)
+// "구성원 추가"는 회원가입/OAuth로만 생성되고 관리자 생성 API가 없어 버튼 자체를 두지 않는다.
 export default function AdminMembersPage() {
   const [tab, setTab] = useState(TAB_ACTIVE);
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
 
-  // 재직자: 검색(이름/이메일) + 역할 필터 적용
-  const activeMembers = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return members
-      .filter((m) => m.isActive)
-      .filter((m) => roleFilter === 'ALL' || m.role === roleFilter)
-      .filter(
-        (m) => !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q),
-      );
-  }, [search, roleFilter]);
+  // 검색어 디바운스(300ms) — 키 입력마다 서버로 재조회하지 않도록
+  useEffect(() => {
+    const timer = setTimeout(() => setKeyword(searchInput.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  // 퇴직자 (필터 미적용)
-  const retiredMembers = useMemo(() => members.filter((m) => !m.isActive), []);
+  // 탭 배지가 필터와 무관하게 항상 정확한 건수를 보여줄 수 있도록 재직·퇴직 둘 다 항상 조회한다
+  // (ApprovalsPage가 탭과 무관하게 대기 목록을 항상 조회하는 것과 동일한 전략).
+  const activeQuery = useUsers({ keyword, role: roleFilter === 'ALL' ? undefined : roleFilter });
+  const retiredQuery = useRetiredUsers();
+  const departmentsQuery = useDepartments();
 
-  const activeCount = useMemo(() => members.filter((m) => m.isActive).length, []);
-  const rows = tab === TAB_ACTIVE ? activeMembers : retiredMembers;
+  const updateRoleMutation = useUpdateUserRole();
+  const updateDepartmentMutation = useUpdateUserDepartment();
+  const retireMutation = useRetireUser();
+
+  // 역할 변경 모달 — 대상 하나만 담는다(여러 행이 있어도 모달은 1개)
+  const [roleTarget, setRoleTarget] = useState(null);
+  const [roleValue, setRoleValue] = useState(ROLE.EMPLOYEE);
+  // 부서 변경 모달
+  const [deptTarget, setDeptTarget] = useState(null);
+  const [deptValue, setDeptValue] = useState('');
+  // 퇴직 처리 확인
+  const [retireTarget, setRetireTarget] = useState(null);
+
+  const rows = tab === TAB_ACTIVE ? (activeQuery.data?.content ?? []) : (retiredQuery.data?.content ?? []);
+  const loading = tab === TAB_ACTIVE ? activeQuery.isLoading : retiredQuery.isLoading;
+  const activeDepartments = (departmentsQuery.data ?? []).filter((d) => d.active);
+
+  function openRoleModal(user) {
+    setRoleTarget(user);
+    setRoleValue(user.role);
+  }
+  function closeRoleModal() {
+    setRoleTarget(null);
+  }
+  // 저장 — ApprovalsPage 컨벤션과 동일하게 모달은 즉시 닫고, 성공/실패 안내는 토스트로(성공은 여기서,
+  // 실패는 api 인터셉터가 일괄 처리) 보여준다.
+  function handleRoleSave() {
+    if (!roleTarget) return;
+    updateRoleMutation.mutate(
+      { id: roleTarget.id, role: roleValue },
+      { onSuccess: () => toast.success(`${roleTarget.name}님의 역할을 변경했습니다.`) },
+    );
+    closeRoleModal();
+  }
+
+  function openDeptModal(user) {
+    setDeptTarget(user);
+    setDeptValue(user.departmentId ? String(user.departmentId) : '');
+  }
+  function closeDeptModal() {
+    setDeptTarget(null);
+  }
+  function handleDeptSave() {
+    if (!deptTarget || !deptValue) return;
+    updateDepartmentMutation.mutate(
+      { id: deptTarget.id, departmentId: Number(deptValue) },
+      { onSuccess: () => toast.success(`${deptTarget.name}님의 부서를 변경했습니다.`) },
+    );
+    closeDeptModal();
+  }
+
+  function closeRetireConfirm() {
+    setRetireTarget(null);
+  }
+  function handleRetireConfirm() {
+    if (!retireTarget) return;
+    retireMutation.mutate(retireTarget.id, {
+      onSuccess: () => toast.success(`${retireTarget.name}님을 퇴직 처리했습니다.`),
+    });
+    closeRetireConfirm();
+  }
+
+  const tabItems = [
+    { value: TAB_ACTIVE, label: '재직', count: activeQuery.data?.page?.totalElements },
+    { value: TAB_RETIRED, label: '퇴직', count: retiredQuery.data?.page?.totalElements },
+  ];
 
   return (
     <div>
-      <PageHeader title="구성원 관리" subtitle="전체 구성원 조회 및 권한·부서 관리">
-        <button
-          type="button"
-          onClick={() => toast('구성원 추가 (준비 중)')}
-          className="flex items-center gap-1.5 rounded-btn bg-accent px-3.5 py-2.5 text-[13px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark"
-        >
-          <UserPlus size={15} />
-          구성원 추가
-        </button>
-      </PageHeader>
+      <PageHeader title="구성원 관리" subtitle="전체 구성원 조회 및 권한·부서 관리" />
 
-      {/* 탭 (재직 / 퇴직) */}
-      <div className="mb-5 flex items-center gap-1 border-b border-white/6">
-        <TabButton
-          active={tab === TAB_ACTIVE}
-          label="재직"
-          count={activeCount}
-          onClick={() => setTab(TAB_ACTIVE)}
-        />
-        <TabButton
-          active={tab === TAB_RETIRED}
-          label="퇴직"
-          count={retiredMembers.length}
-          onClick={() => setTab(TAB_RETIRED)}
-        />
-      </div>
+      <Tabs tabs={tabItems} value={tab} onChange={setTab} className="mb-5" />
 
       {/* 검색 + 역할 필터 (재직 탭 전용) */}
       {tab === TAB_ACTIVE && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="relative">
+          <div className="relative w-72">
             <Search
               size={15}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"
             />
-            <input
+            <TextInput
               type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="이름 또는 이메일 검색"
-              className="w-72 rounded-btn border border-white/8 bg-navy-btn2 py-2.5 pl-9 pr-3 text-[13px] text-ink-hi placeholder:text-ink-faint focus:border-accent/50 focus:outline-none"
+              className="!pl-9"
             />
           </div>
-          <div className="flex items-center gap-1.5">
+          <FilterGroup label="역할">
             {ROLE_FILTERS.map((f) => (
-              <FilterChip
-                key={f.value}
-                active={roleFilter === f.value}
-                label={f.label}
-                onClick={() => setRoleFilter(f.value)}
-              />
+              <Chip key={f.value} active={roleFilter === f.value} onClick={() => setRoleFilter(f.value)}>
+                {f.label}
+              </Chip>
             ))}
-          </div>
+          </FilterGroup>
         </div>
       )}
 
       {/* 테이블 카드 */}
-      <Card padding="none">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-[13px]">
-            <thead>
-              <tr className="border-b border-white/6 bg-navy-header">
-                <Th>구성원</Th>
-                <Th>이메일</Th>
-                <Th>부서</Th>
-                <Th>직책</Th>
-                <Th>{tab === TAB_ACTIVE ? '역할' : '상태'}</Th>
-                <Th right>연차 (잔여/기본)</Th>
-                <Th>입사일</Th>
-                {tab === TAB_ACTIVE ? <Th right>관리</Th> : <Th>퇴직일</Th>}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-[13px] text-ink-mute">
-                    검색 결과가 없습니다.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((m) => (
-                  <tr
-                    key={m.id}
-                    className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.02]"
-                  >
-                    <td className="whitespace-nowrap px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={m.name} />
-                        <span className="font-medium text-ink-hi">{m.name}</span>
-                      </div>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-ink-mute">{m.email}</td>
-                    <td className="whitespace-nowrap px-5 py-3 text-ink-body">{m.departmentName}</td>
-                    <td className="whitespace-nowrap px-5 py-3 text-ink-body">{m.position}</td>
-                    <td className="whitespace-nowrap px-5 py-3">
-                      {tab === TAB_ACTIVE ? (
-                        <StatusBadge
-                          label={ROLE_LABEL[m.role]}
-                          tone={m.role === ROLE.EMPLOYEE ? 'muted' : 'accent'}
-                        />
-                      ) : (
-                        <StatusBadge label="퇴직" tone="muted" />
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">
-                      <span className="font-semibold text-ink-hi">{m.remainingDays}</span>
-                      <span className="text-ink-faint"> / {m.baseDays}일</span>
-                    </td>
-                    <td className="whitespace-nowrap px-5 py-3 text-ink-mute tabular-nums">
-                      {m.hireDate}
-                    </td>
-                    {tab === TAB_ACTIVE ? (
-                      <td className="whitespace-nowrap px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <IconAction
-                            Icon={Shield}
-                            label="역할 변경"
-                            onClick={() => toast(`${m.name}님의 역할 변경 (준비 중)`)}
-                          />
-                          <IconAction
-                            Icon={Building2}
-                            label="부서 변경"
-                            onClick={() => toast(`${m.name}님의 부서 변경 (준비 중)`)}
-                          />
-                          <IconAction
-                            Icon={UserMinus}
-                            label="퇴직 처리"
-                            danger
-                            onClick={() => toast(`${m.name}님 퇴직 처리 (준비 중)`)}
-                          />
-                        </div>
-                      </td>
-                    ) : (
-                      <td className="whitespace-nowrap px-5 py-3 text-ink-mute tabular-nums">
-                        {m.retiredAt}
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <TableCard loading={loading} empty={!loading && rows.length === 0} emptyLabel="조회된 구성원이 없습니다.">
+        <Table className="min-w-[920px]">
+          <THead>
+            <Th>구성원</Th>
+            <Th>이메일</Th>
+            <Th>부서</Th>
+            <Th>직책</Th>
+            <Th>{tab === TAB_ACTIVE ? '역할' : '상태'}</Th>
+            <Th right>연차 (잔여/기본)</Th>
+            <Th>입사일</Th>
+            {tab === TAB_ACTIVE ? <Th right>관리</Th> : <Th>퇴직일</Th>}
+          </THead>
+          <tbody>
+            {rows.map((m) => (
+              <TR key={m.id}>
+                <Td>
+                  <div className="flex items-center gap-3">
+                    <Avatar name={m.name} />
+                    <span className="font-medium text-ink-hi">{m.name}</span>
+                  </div>
+                </Td>
+                <Td className="text-ink-mute">{m.email}</Td>
+                <Td className="text-ink-body">{m.departmentName ?? '미배정'}</Td>
+                <Td className="text-ink-body">{m.position}</Td>
+                <Td>
+                  {tab === TAB_ACTIVE ? (
+                    <StatusBadge
+                      label={ROLE_LABEL[m.role]}
+                      tone={m.role === ROLE.EMPLOYEE ? 'muted' : 'accent'}
+                    />
+                  ) : (
+                    <StatusBadge label="퇴직" tone="muted" />
+                  )}
+                </Td>
+                <Td right>
+                  <span className="font-semibold text-ink-hi">{Number(m.remainingDays)}</span>
+                  <span className="text-ink-faint"> / {Number(m.baseDays)}일</span>
+                </Td>
+                <Td className="text-ink-mute">{m.hireDate}</Td>
+                {tab === TAB_ACTIVE ? (
+                  <Td right>
+                    <div className="flex items-center justify-end gap-1">
+                      <IconButton Icon={Shield} label="역할 변경" onClick={() => openRoleModal(m)} />
+                      <IconButton Icon={Building2} label="부서 변경" onClick={() => openDeptModal(m)} />
+                      <IconButton
+                        Icon={UserMinus}
+                        label="퇴직 처리"
+                        tone="danger"
+                        onClick={() => setRetireTarget(m)}
+                      />
+                    </div>
+                  </Td>
+                ) : (
+                  <Td className="text-ink-mute">{m.retiredAt}</Td>
+                )}
+              </TR>
+            ))}
+          </tbody>
+        </Table>
+      </TableCard>
+
+      {/* 역할 변경 모달 */}
+      {roleTarget && (
+        <Modal
+          title="역할 변경"
+          onClose={closeRoleModal}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeRoleModal} lift={false}>
+                취소
+              </Button>
+              <Button onClick={handleRoleSave} loading={updateRoleMutation.isPending} lift={false}>
+                저장
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3 text-[13px] text-ink-mute">
+            <span className="font-semibold text-ink-hi">{roleTarget.name}</span>님의 역할을 변경합니다.
+          </p>
+          <Field label="역할">
+            <Select value={roleValue} onChange={(e) => setRoleValue(e.target.value)}>
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABEL[r]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </Modal>
+      )}
+
+      {/* 부서 변경 모달 */}
+      {deptTarget && (
+        <Modal
+          title="부서 변경"
+          onClose={closeDeptModal}
+          footer={
+            <>
+              <Button variant="secondary" onClick={closeDeptModal} lift={false}>
+                취소
+              </Button>
+              <Button
+                onClick={handleDeptSave}
+                loading={updateDepartmentMutation.isPending}
+                disabled={!deptValue}
+                lift={false}
+              >
+                저장
+              </Button>
+            </>
+          }
+        >
+          <p className="mb-3 text-[13px] text-ink-mute">
+            <span className="font-semibold text-ink-hi">{deptTarget.name}</span>님의 부서를 변경합니다.
+          </p>
+          <Field label="부서">
+            <Select value={deptValue} onChange={(e) => setDeptValue(e.target.value)}>
+              <option value="" disabled>
+                부서 선택
+              </option>
+              {activeDepartments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </Modal>
+      )}
+
+      {/* 퇴직 처리 확인 — 되돌릴 수 없는 작업이라 ConfirmDialog로 한 번 더 확인 */}
+      <ConfirmDialog
+        open={Boolean(retireTarget)}
+        title="퇴직 처리"
+        message={
+          retireTarget &&
+          `${retireTarget.name}님을 퇴직 처리하시겠습니까? 진행 중인 결재는 관리자에게 자동 이관되고, 팀장으로 지정된 부서는 팀장이 해제됩니다. 이 작업은 되돌릴 수 없습니다.`
+        }
+        tone="danger"
+        confirmLabel="퇴직 처리"
+        onConfirm={handleRetireConfirm}
+        onCancel={closeRetireConfirm}
+        loading={retireMutation.isPending}
+      />
     </div>
-  );
-}
-
-// 탭 버튼 — 활성 시 하단 2px 파랑 보더 + 카운트 배지
-function TabButton({ active, label, count, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative px-4 py-2.5 text-[13px] font-semibold transition-colors ${
-        active ? 'text-accent-light' : 'text-ink-mute hover:text-ink-body'
-      }`}
-    >
-      {label}
-      <span
-        className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] ${
-          active ? 'bg-accent/16 text-accent-light' : 'bg-white/6 text-ink-faint'
-        }`}
-      >
-        {count}
-      </span>
-      {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" />}
-    </button>
-  );
-}
-
-// 역할 필터 칩
-function FilterChip({ active, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-badge px-3 py-1.5 text-[12px] font-semibold transition-colors ${
-        active
-          ? 'bg-accent/16 text-accent-light'
-          : 'bg-navy-btn2 text-ink-mute hover:bg-white/8 hover:text-ink-body'
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-// 이니셜 아바타
-function Avatar({ name }) {
-  return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-avatar text-[13px] font-semibold text-ink-body">
-      {name.slice(0, 1)}
-    </span>
-  );
-}
-
-// 액션 아이콘 버튼 (퇴직 처리는 danger 틴트)
-function IconAction({ Icon, label, onClick, danger }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`rounded-btn p-1.5 transition-colors ${
-        danger
-          ? 'text-ink-mute hover:bg-danger/12 hover:text-danger'
-          : 'text-ink-mute hover:bg-white/6 hover:text-ink-body'
-      }`}
-    >
-      <Icon size={15} />
-    </button>
-  );
-}
-
-// 테이블 헤더 셀
-function Th({ children, right }) {
-  return (
-    <th
-      className={`whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-ink-faint ${
-        right ? 'text-right' : 'text-left'
-      }`}
-    >
-      {children}
-    </th>
   );
 }

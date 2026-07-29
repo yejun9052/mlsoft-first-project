@@ -1,22 +1,19 @@
 import { useState } from 'react';
+import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { Mail, Building2, CalendarDays, Cake, Phone } from 'lucide-react';
+import { Mail, Building2, CalendarDays, Cake } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
-import { getCurrentUser, leaveSummary } from '../mocks/data.js';
+import Field from '../components/ui/Field.jsx';
+import TextInput from '../components/ui/TextInput.jsx';
+import Button from '../components/ui/Button.jsx';
+import LoadingState from '../components/ui/LoadingState.jsx';
 import { ROLE_LABEL } from '../constants/roles.js';
-
-// 텍스트 입력 공통 스타일 (OnboardingPage 폼 스타일 기준)
-const TEXT_INPUT_CLASS =
-  'w-full rounded-btn border border-white/8 bg-navy-btn2 px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-colors focus:border-accent';
-// 날짜 입력 — 다크 테마 캘린더 아이콘 반전 포함
-const DATE_INPUT_CLASS = `${TEXT_INPUT_CLASS} [color-scheme:dark]`;
-
-// 소수 첫째자리 반올림 (연차 0.5일 단위) — 확정 사용일 계산용
-function round1(n) {
-  return Math.round(n * 10) / 10;
-}
+import { useCurrentUser } from '../hooks/useAuth.js';
+import { useLeaveSummary } from '../hooks/useLeaves.js';
+import { useUpdateMyProfile } from '../hooks/useUsers.js';
 
 // 프로필 정보 행 — 아이콘 + 라벨(ink-mute) + 값(ink-body)
 function InfoRow({ Icon, label, value }) {
@@ -50,20 +47,35 @@ function SummaryRow({ label, value, unit = '일', tone, hero }) {
   );
 }
 
-// 내 정보 — 프로필 / 연차 요약 / 정보 수정 (2컬럼)
+// 내 정보 — 프로필 / 연차 요약 / 정보 수정 (2컬럼, docs/05 §④)
+// UserMeResponse(GET /api/auth/me)에는 직책·전화번호 필드가 없어(관리자용 UserResponse와 달리 경량 응답)
+// 해당 항목은 화면에서 노출하지 않는다 — 없는 데이터를 다른 API로 우회 보강하지 않는다.
 export default function MyInfoPage() {
-  const me = getCurrentUser();
-  // 정보 수정 폼 (mock — 저장 시 toast 안내만)
-  const [name, setName] = useState(me.name);
-  const [birthDay, setBirthDay] = useState(me.birthDay);
+  const { data: me } = useCurrentUser();
+  const { data: summary } = useLeaveSummary();
+  const updateProfileMutation = useUpdateMyProfile();
 
-  // 선차감 정책: usedDays 는 대기 중(선차감)을 포함 → 확정 사용 = 사용 − 대기
-  const confirmedUsed = round1(leaveSummary.usedDays - leaveSummary.pendingDays);
+  // 수정 폼 — useCurrentUser는 localStorage initialData 덕에 첫 렌더부터 값이 채워져 있다.
+  const [name, setName] = useState(me?.name ?? '');
+  const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
 
-  // 저장 (데모)
+  if (!me || !summary) {
+    return <LoadingState className="h-full" />;
+  }
+
+  // 선차감 정책: useDays는 대기 중(선차감) 포함 → 확정 사용 = 사용 − 대기
+  const confirmedUsed = Number(summary.useDays) - Number(summary.pendingDays);
+
   function handleSave(event) {
     event.preventDefault();
-    toast.success('저장되었습니다. (데모)');
+    if (!name.trim() || !birthDay) {
+      toast.error('이름과 생년월일을 모두 입력해 주세요.');
+      return;
+    }
+    updateProfileMutation.mutate(
+      { name: name.trim(), birthDay },
+      { onSuccess: () => toast.success('저장되었습니다.') },
+    );
   }
 
   return (
@@ -72,75 +84,64 @@ export default function MyInfoPage() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.2fr]">
         {/* 좌: 프로필 카드 */}
-        <div className="rounded-card bg-navy-card p-6 shadow-card">
+        <Card>
           <div className="flex flex-col items-center gap-3 border-b border-white/6 pb-6 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-navy-avatar text-[26px] font-bold text-accent-label">
-              {me.name.charAt(0)}
-            </span>
+            <Avatar name={me.name} size="lg" />
             <div>
               <h2 className="text-[18px] font-bold text-ink-hi">{me.name}</h2>
-              <p className="mt-0.5 text-[12px] text-ink-mute">{me.position}</p>
+              <p className="mt-0.5 text-[12px] text-ink-mute">{me.departmentName ?? '부서 미배정'}</p>
             </div>
             <StatusBadge label={ROLE_LABEL[me.role]} tone="accent" />
           </div>
 
           <div className="mt-2 divide-y divide-white/5">
             <InfoRow Icon={Mail} label="이메일" value={me.email} />
-            <InfoRow Icon={Building2} label="부서·직책" value={`${me.departmentName} · ${me.position}`} />
+            <InfoRow Icon={Building2} label="부서" value={me.departmentName ?? '미배정'} />
             <InfoRow Icon={CalendarDays} label="입사일" value={me.hireDate} />
             <InfoRow Icon={Cake} label="생년월일" value={me.birthDay} />
-            <InfoRow Icon={Phone} label="전화" value={me.phone} />
           </div>
-        </div>
+        </Card>
 
         {/* 우: 연차 요약 + 정보 수정 */}
         <div className="flex flex-col gap-5">
           {/* 연차 요약 카드 */}
           <Card title="연차 요약">
             <div className="divide-y divide-white/5">
-              <SummaryRow label="기본 부여" value={leaveSummary.baseDays} />
-              <SummaryRow label="복리 가산" value={leaveSummary.bonusDays} />
+              <SummaryRow label="기본 부여" value={summary.baseDays} />
+              <SummaryRow label="복리 가산" value={summary.bonusDays} />
               <SummaryRow label="사용 (확정)" value={confirmedUsed} />
-              <SummaryRow label="대기 중" value={leaveSummary.pendingDays} tone="text-ink-mute" />
-              <SummaryRow label="잔여 연차" value={leaveSummary.remainingDays} hero />
-              <SummaryRow label="소멸 예정" value={leaveSummary.expiringDays} tone="text-warn" />
-              <SummaryRow label="다음 기산일" value={leaveSummary.nextResetDate} unit="" />
+              <SummaryRow label="대기 중" value={summary.pendingDays} tone="text-ink-mute" />
+              <SummaryRow label="잔여 연차" value={summary.remainingDays} hero />
+              {/* 미사용 이월 없이 소멸되는 정책이라 소멸 예정 = 잔여와 동일 (백엔드에 별도 필드 없음) */}
+              <SummaryRow label="소멸 예정" value={summary.remainingDays} tone="text-warn" />
+              <SummaryRow
+                label="다음 기산일"
+                value={summary.nextResetDate ? dayjs(summary.nextResetDate).format('YYYY.MM.DD') : '-'}
+                unit=""
+              />
             </div>
           </Card>
 
           {/* 정보 수정 카드 */}
           <Card title="정보 수정">
             <form onSubmit={handleSave} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="name" className="mb-1.5 block text-[13px] font-medium text-ink-body">
-                  이름
-                </label>
-                <input
-                  id="name"
+              <Field label="이름">
+                <TextInput
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className={TEXT_INPUT_CLASS}
+                  onChange={(e) => setName(e.target.value)}
                 />
-              </div>
-              <div>
-                <label htmlFor="birthDay" className="mb-1.5 block text-[13px] font-medium text-ink-body">
-                  생년월일
-                </label>
-                <input
-                  id="birthDay"
+              </Field>
+              <Field label="생년월일">
+                <TextInput
                   type="date"
                   value={birthDay}
-                  onChange={(event) => setBirthDay(event.target.value)}
-                  className={DATE_INPUT_CLASS}
+                  onChange={(e) => setBirthDay(e.target.value)}
                 />
-              </div>
-              <button
-                type="submit"
-                className="mt-1 self-start rounded-btn bg-accent px-5 py-2.5 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark"
-              >
+              </Field>
+              <Button type="submit" className="mt-1 self-start" loading={updateProfileMutation.isPending}>
                 저장
-              </button>
+              </Button>
             </form>
           </Card>
         </div>

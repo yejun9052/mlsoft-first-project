@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
-import dayjs from 'dayjs';
-import { Building2, Users, Crown, CalendarDays } from 'lucide-react';
-import {
-  TODAY,
-  getCurrentUser,
-  departments,
-  members,
-  calendarLeaves,
-} from '../mocks/data.js';
+import { Building2, Users, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
+import Stat from '../components/ui/Stat.jsx';
+import TableCard from '../components/ui/TableCard.jsx';
+import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
+import Avatar from '../components/ui/Avatar.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
+import { useCurrentUser } from '../hooks/useAuth.js';
+import { useTeamMembers } from '../hooks/useUsers.js';
+import { useTeamLeaves } from '../hooks/useLeaves.js';
+import { useDepartments } from '../hooks/useDepartments.js';
 
 // 역할별 배지 톤 (총관리자·팀장은 강조 accent, 사원은 muted)
 const ROLE_TONE = {
@@ -20,148 +21,124 @@ const ROLE_TONE = {
   [ROLE.EMPLOYEE]: 'muted',
 };
 
-// 아바타 — 이름 첫 글자를 원형 배경 위에 표시
-function Avatar({ name }) {
-  return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-navy-avatar text-[13px] font-semibold text-accent-light">
-      {name.charAt(0)}
-    </span>
-  );
-}
-
-// 부서 요약 카드의 미니 통계 한 칸 (아이콘 + 라벨 + 값)
-function SummaryStat({ Icon, label, value }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-btn bg-white/5 text-ink-mute">
-        <Icon size={16} />
-      </span>
-      <div className="flex flex-col">
-        <span className="text-[11px] font-medium text-ink-mute">{label}</span>
-        <span className="text-[14px] font-semibold text-ink-hi">{value}</span>
-      </div>
-    </div>
-  );
-}
-
+// 팀 정보 — 내 부서 팀원 목록 + 이번 달 팀 연차 현황 (docs/05 §③)
+// UserSummaryResponse(팀원 목록)는 개인정보 보호를 위해 잔여/기본 연차를 내려주지 않는다 — 의도된
+// 백엔드 설계라 다른 API로 우회 보강하지 않고, 명단은 이름·직책·역할 중심으로 구성한다.
 export default function TeamPage() {
-  const me = getCurrentUser();
+  const { data: me } = useCurrentUser();
+  const teamMembersQuery = useTeamMembers();
+  const teamLeavesQuery = useTeamLeaves();
+  const departmentsQuery = useDepartments();
 
-  // 현재 사용자 부서 찾기 (이름 매칭 실패 시 폴백 없이 null → 빈 상태 렌더)
+  const teamMembers = teamMembersQuery.data ?? [];
+  // useMemo로 감싸 참조를 안정화 — 아래 소진 현황 useMemo의 불필요한 재계산 경고를 피한다
+  // (DashboardPage의 calendarLeaves와 동일한 패턴).
+  const teamLeaves = useMemo(() => teamLeavesQuery.data ?? [], [teamLeavesQuery.data]);
+
+  // 내 부서 상세(설명·팀장) — 요약 카드용. useCurrentUser에는 부서 설명이 없어 전체 목록에서 찾는다.
   const dept = useMemo(
-    () => departments.find((d) => d.name === me.departmentName) ?? null,
-    [me.departmentName],
+    () => departmentsQuery.data?.find((d) => d.id === me?.departmentId) ?? null,
+    [departmentsQuery.data, me?.departmentId],
   );
 
-  // 해당 부서의 재직 중 팀원 목록
-  const teamMembers = useMemo(
-    () => (dept ? members.filter((m) => m.departmentId === dept.id && m.isActive) : []),
-    [dept],
-  );
+  // 이번 달 팀 연차 사용 — 승인 확정 / 대기(신규+소급취소) 선차감을 구분해 합산 (선차감 정책, docs/01)
+  const { confirmedDays, pendingDays } = useMemo(() => {
+    let confirmed = 0;
+    let pending = 0;
+    for (const leave of teamLeaves) {
+      const amount = Number(leave.days);
+      if (leave.status === 'APPROVED') confirmed += amount;
+      else pending += amount;
+    }
+    return { confirmedDays: confirmed, pendingDays: pending };
+  }, [teamLeaves]);
 
-  // 이번 달 팀 연차 사용 일수 — calendarLeaves 는 날짜별 엔트리, 반차(HALF_*)는 0.5일로 가중 합산
-  const teamLeaveDays = useMemo(() => {
-    const thisMonth = dayjs(TODAY).format('YYYY-MM');
-    const teamNames = new Set(teamMembers.map((m) => m.name));
-    return calendarLeaves
-      .filter((lv) => teamNames.has(lv.personName) && lv.date.startsWith(thisMonth))
-      .reduce((sum, lv) => sum + (lv.type.startsWith('HALF_') ? 0.5 : 1), 0);
-  }, [teamMembers]);
-
-  // 부서 매칭 실패 — 잘못된 팀을 보여주는 대신 빈 상태 카드 안내
-  if (!dept) {
+  // 부서 미배정 — 팀원·팀 현황 모두 조회 대상이 없어(서버가 빈 배열로 응답) 전용 안내로 대체
+  if (me && !me.departmentId) {
     return (
       <div>
         <PageHeader title="팀 정보" subtitle="부서 정보 없음" />
-        <section className="flex flex-col items-center justify-center gap-3 rounded-card bg-navy-card px-6 py-16 text-center shadow-card">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-ink-dim">
-            <Users size={22} />
-          </span>
-          <p className="text-[14px] font-semibold text-ink-hi">부서 정보를 찾을 수 없습니다</p>
-          <p className="text-[13px] text-ink-mute">
-            소속 부서 &lsquo;{me.departmentName}&rsquo;이(가) 부서 목록에 없습니다. 관리자에게
-            문의해 주세요.
-          </p>
-        </section>
+        <Card>
+          <EmptyState Icon={Users} label="소속된 부서가 없습니다. 관리자에게 문의해 주세요." />
+        </Card>
       </div>
     );
   }
 
   return (
     <div>
-      <PageHeader title="팀 정보" subtitle={dept.name} />
+      <PageHeader title="팀 정보" subtitle={dept?.name ?? me?.departmentName} />
 
       {/* 부서 요약 카드 */}
-      <section className="mb-5 rounded-card bg-navy-card p-5 shadow-card">
+      <Card className="mb-5">
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <span className="flex h-12 w-12 items-center justify-center rounded-btn bg-accent/12 text-accent-light">
               <Building2 size={22} />
             </span>
             <div>
-              <h2 className="text-[18px] font-bold tracking-[-0.02em] text-ink-hi">{dept.name}</h2>
-              <p className="mt-0.5 text-[13px] text-ink-mute">{dept.description}</p>
+              <h2 className="text-[18px] font-bold tracking-[-0.02em] text-ink-hi">
+                {dept?.name ?? me?.departmentName}
+              </h2>
+              {dept?.description && <p className="mt-0.5 text-[13px] text-ink-mute">{dept.description}</p>}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-6">
-            <SummaryStat Icon={Crown} label="팀장" value={dept.leaderName ?? '미지정'} />
-            <SummaryStat Icon={Users} label="인원" value={`${dept.memberCount}명`} />
-            {/* 엔트리 = 일 단위 데이터이므로 '건'이 아닌 '일'로 표기 */}
-            <SummaryStat Icon={CalendarDays} label="이번 달 팀 연차 사용" value={`${teamLeaveDays}일`} />
+            <Stat Icon={Crown} label="팀장" value={dept?.leaderName ?? '미지정'} />
+            <Stat Icon={Users} label="인원" value={`${teamMembers.length}명`} />
+            <Stat Icon={CalendarDays} label="이번 달 사용(확정)" value={`${confirmedDays}일`} />
+            <Stat Icon={Clock3} label="이번 달 대기 중" value={`${pendingDays}일`} />
           </div>
         </div>
-      </section>
+      </Card>
 
       {/* 팀원 목록 */}
-      <Card
+      <TableCard
         title="팀원"
         right={<span className="text-[12px] font-medium text-ink-mute">{teamMembers.length}명</span>}
+        loading={teamMembersQuery.isLoading}
+        empty={!teamMembersQuery.isLoading && teamMembers.length === 0}
+        emptyLabel="팀원이 없습니다."
       >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse">
-            <thead>
-              <tr className="border-b border-white/6 text-[12px] font-medium text-ink-mute">
-                <th className="px-2 py-2.5 text-left">팀원</th>
-                <th className="px-2 py-2.5 text-left">직책</th>
-                <th className="px-2 py-2.5 text-left">역할</th>
-                <th className="px-2 py-2.5 text-right">잔여 / 기본</th>
-                <th className="px-2 py-2.5 text-right">입사일</th>
-              </tr>
-            </thead>
-            <tbody>
-              {teamMembers.map((m) => {
-                const isLeader = m.id === dept.leaderId;
-                return (
-                  <tr key={m.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-2 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={m.name} />
-                        <div className="flex items-center gap-2">
-                          <span className="text-[14px] font-semibold text-ink-hi">{m.name}</span>
-                          {isLeader && (
-                            <span className="inline-flex items-center gap-1 rounded-badge bg-accent/16 px-2 py-0.5 text-[11px] font-semibold text-accent-light">
-                              <Crown size={11} />팀장
-                            </span>
-                          )}
-                        </div>
+        <Table className="min-w-[640px]">
+          <THead>
+            <Th>팀원</Th>
+            <Th>직책</Th>
+            <Th>이메일</Th>
+            <Th right>역할</Th>
+          </THead>
+          <tbody>
+            {teamMembers.map((member) => {
+              const isLeader = dept != null && member.id === dept.leaderId;
+              const isMe = member.id === me?.id;
+              return (
+                <TR key={member.id}>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Avatar name={member.name} />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-semibold text-ink-hi">{member.name}</span>
+                        {isMe && <span className="text-[12px] text-accent-light">(나)</span>}
+                        {isLeader && (
+                          <span className="inline-flex items-center gap-1 rounded-badge bg-accent/16 px-2 py-0.5 text-[11px] font-semibold text-accent-light">
+                            <Crown size={11} />
+                            팀장
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-2 py-3 text-[13px] text-ink-body">{m.position}</td>
-                    <td className="px-2 py-3">
-                      <StatusBadge label={ROLE_LABEL[m.role]} tone={ROLE_TONE[m.role]} />
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <span className="text-[14px] font-semibold text-ink-hi">{m.remainingDays}</span>
-                      <span className="text-[13px] text-ink-mute"> / {m.baseDays}일</span>
-                    </td>
-                    <td className="px-2 py-3 text-right text-[13px] text-ink-body">{m.hireDate}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    </div>
+                  </Td>
+                  <Td className="text-ink-body">{member.position ?? '-'}</Td>
+                  <Td className="text-ink-mute">{member.email}</Td>
+                  <Td right>
+                    <StatusBadge label={ROLE_LABEL[member.role]} tone={ROLE_TONE[member.role]} />
+                  </Td>
+                </TR>
+              );
+            })}
+          </tbody>
+        </Table>
+      </TableCard>
     </div>
   );
 }

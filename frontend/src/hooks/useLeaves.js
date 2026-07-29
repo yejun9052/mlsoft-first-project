@@ -6,6 +6,7 @@ import {
   getMyLeaves,
   getMySummary,
   getPendingApprovals,
+  getTeamLeaves,
   processApproval,
   processCancelApproval,
 } from '../api/leaves.js';
@@ -16,6 +17,7 @@ const leaveKeys = {
   summary: ['leaves', 'summary'],
   me: (status, page) => ['leaves', 'me', status ?? 'ALL', page],
   calendar: (year, month) => ['leaves', 'calendar', year, month],
+  team: (from, to) => ['leaves', 'team', from ?? 'default', to ?? 'default'],
   pending: (page) => ['leaves', 'pending', page],
   allCount: (status) => ['leaves', 'all-count', status],
 };
@@ -38,6 +40,14 @@ export function useLeaveCalendar(year, month) {
   return useQuery({
     queryKey: leaveKeys.calendar(year, month),
     queryFn: () => getCalendar({ year, month }),
+  });
+}
+
+// 내 팀 연차 현황 — 기간 미지정 시 서버가 이번 달로 처리, 부서 미배정이면 빈 배열 (GET /api/leaves/team)
+export function useTeamLeaves({ from, to } = {}) {
+  return useQuery({
+    queryKey: leaveKeys.team(from, to),
+    queryFn: () => getTeamLeaves({ from, to }),
   });
 }
 
