@@ -56,4 +56,15 @@ public class LeavePolicy {
                 .description(description)
                 .build();
     }
+
+    /**
+     * 연차 일수·설명 수정 (PATCH /api/admin/leave-policies/{id}, SA).
+     * description은 미포함(null 또는 공백)이면 기존 값을 유지한다.
+     */
+    public void updateAnnualLeaveDays(BigDecimal annualLeaveDays, String description) {
+        this.annualLeaveDays = annualLeaveDays;
+        if (description != null && !description.isBlank()) {
+            this.description = description;
+        }
+    }
 }

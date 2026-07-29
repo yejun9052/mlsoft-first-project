@@ -3,6 +3,7 @@ package com.mlsoft.backend.domain.policy.repository;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -12,4 +13,7 @@ public interface LeavePolicyRepository extends JpaRepository<LeavePolicy, Long> 
 
     /** 근속년수로 정책 조회 (기산일 리셋·온보딩 연차 산정) */
     Optional<LeavePolicy> findByYearsOfService(int yearsOfService);
+
+    /** 근속년수 오름차순 전체 목록 (GET /api/admin/leave-policies, SA) */
+    List<LeavePolicy> findAllByOrderByYearsOfServiceAsc();
 }

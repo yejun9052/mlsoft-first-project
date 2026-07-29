@@ -37,6 +37,8 @@ public enum ErrorCode {
     LEAVE_REQUEST_NOT_FOUND(404, "연차 신청을 찾을 수 없습니다."),
     WELFARE_POLICY_NOT_FOUND(404, "복리후생 정책을 찾을 수 없습니다."),
     WELFARE_REQUEST_NOT_FOUND(404, "복리후생 신청을 찾을 수 없습니다."),
+    LEAVE_POLICY_NOT_FOUND(404, "연차 정책을 찾을 수 없습니다."),
+    LEAVE_POLICY_CONFIG_NOT_FOUND(404, "연차 시스템 설정을 찾을 수 없습니다."),
     RESOURCE_NOT_FOUND(404, "요청한 리소스를 찾을 수 없습니다."),
 
     // 405 Method Not Allowed

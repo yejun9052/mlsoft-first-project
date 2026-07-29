@@ -47,6 +47,13 @@ public final class ResponseMessage {
     public static final String DEPARTMENT_UPDATED = "부서 정보가 수정되었습니다.";
     public static final String DEPARTMENT_DEACTIVATED = "부서가 비활성화되었습니다.";
 
+    // 연차 정책 관리 (docs/03 시스템 설정)
+    public static final String LEAVE_POLICY_FETCHED = "연차 정책 목록을 조회했습니다.";
+    public static final String LEAVE_POLICY_UPDATED = "연차 정책이 수정되었습니다.";
+    public static final String LEAVE_POLICY_CONFIG_FETCHED = "연차 시스템 설정을 조회했습니다.";
+    public static final String LEAVE_POLICY_CONFIG_UPDATED = "연차 시스템 설정이 변경되었습니다.";
+    public static final String LEAVE_RESET_HISTORY_FETCHED = "기산일 리셋 이력을 조회했습니다.";
+
     private ResponseMessage() {
         // 인스턴스화 방지
     }
