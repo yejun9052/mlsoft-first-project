@@ -13,7 +13,9 @@ import TeamPage from './pages/TeamPage.jsx';
 import MyInfoPage from './pages/MyInfoPage.jsx';
 import ApprovalsPage from './pages/ApprovalsPage.jsx';
 import AdminMembersPage from './pages/AdminMembersPage.jsx';
+import AdminDepartmentsPage from './pages/AdminDepartmentsPage.jsx';
 import AdminPolicyPage from './pages/AdminPolicyPage.jsx';
+import AdminHistoryPage from './pages/AdminHistoryPage.jsx';
 
 // 결재 관리 접근 가능 역할 (팀장·총관리자)
 const APPROVER_ROLES = [ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN];
@@ -62,6 +64,8 @@ export default function App() {
         }
       >
         <Route path="/approvals" element={<ApprovalsPage />} />
+        {/* 처리 이력 — 관리자는 전사, 팀장은 내 부서 (스코프는 서버가 결정) */}
+        <Route path="/admin/history" element={<AdminHistoryPage />} />
       </Route>
 
       {/* 관리자 — 총관리자만 */}
@@ -73,6 +77,7 @@ export default function App() {
         }
       >
         <Route path="/admin" element={<AdminMembersPage />} />
+        <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
         <Route path="/admin/policy" element={<AdminPolicyPage />} />
       </Route>
 

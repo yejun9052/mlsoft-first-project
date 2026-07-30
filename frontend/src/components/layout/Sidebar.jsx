@@ -8,7 +8,9 @@ import {
   UserRound,
   ClipboardCheck,
   UsersRound,
+  Building2,
   Settings,
+  ScrollText,
   LogOut,
 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../../constants/roles.js';
@@ -25,7 +27,7 @@ const MENU_ITEMS = [
   { to: '/myinfo', label: '내 정보', Icon: UserRound },
 ];
 
-// 관리자 섹션 (역할별 노출 3개)
+// 관리자 섹션 (역할별 노출 5개) — 결재 → 조직(구성원·부서) → 정책 → 로그 순
 const ADMIN_ITEMS = [
   {
     to: '/approvals',
@@ -34,7 +36,14 @@ const ADMIN_ITEMS = [
     roles: [ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN],
   },
   { to: '/admin', label: '구성원 관리', Icon: UsersRound, roles: [ROLE.SYSTEM_ADMIN] },
+  { to: '/admin/departments', label: '부서 관리', Icon: Building2, roles: [ROLE.SYSTEM_ADMIN] },
   { to: '/admin/policy', label: '연차 정책', Icon: Settings, roles: [ROLE.SYSTEM_ADMIN] },
+  {
+    to: '/admin/history',
+    label: '처리 이력',
+    Icon: ScrollText,
+    roles: [ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN],
+  },
 ];
 
 // 사이드바 메뉴 한 줄 (활성: 파랑 틴트 배경 + accent-light 텍스트 + 좌측 도트)
