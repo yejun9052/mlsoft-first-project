@@ -190,7 +190,7 @@ export default function AdminDepartmentsPage() {
             ))}
           </tbody>
         </Table>
-        <p className="border-t border-white/6 px-5 py-3 text-[11px] text-ink-faint">
+        <p className="border-t border-white/[0.07] px-5 py-3 text-[11px] text-ink-faint">
           * 팀장이 공석이면 해당 부서원의 연차·복리후생 결재는 총관리자에게 넘어갑니다.
         </p>
       </TableCard>

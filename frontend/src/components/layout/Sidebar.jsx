@@ -16,6 +16,8 @@ import {
 import { ROLE, ROLE_LABEL } from '../../constants/roles.js';
 import { logout } from '../../api/auth.js';
 import { useAllLeavesCount, usePendingApprovals } from '../../hooks/useLeaves.js';
+import Avatar from '../ui/Avatar.jsx';
+import BrandMark from '../ui/BrandMark.jsx';
 
 // MENU 섹션 (전 직원 공통 6개)
 const MENU_ITEMS = [
@@ -46,31 +48,36 @@ const ADMIN_ITEMS = [
   },
 ];
 
-// 사이드바 메뉴 한 줄 (활성: 파랑 틴트 배경 + accent-light 텍스트 + 좌측 도트)
+// 섹션 라벨 — 자간을 넓혀 메뉴 항목과 위계를 벌린다
+const SECTION_LABEL_CLASS =
+  'px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-dim';
+
+// 사이드바 메뉴 한 줄
+// 활성: 코발트 틴트 + 시안 텍스트 + 좌측 그라데이션 바(기존 점 대신 — 세로 바가 스캔하기 쉽다)
 function SidebarLink({ to, label, Icon, badge }) {
   return (
     <NavLink
       to={to}
       end={to === '/admin'}
       className={({ isActive }) =>
-        `relative flex items-center gap-2.5 rounded-btn px-3 py-2.5 text-[13px] font-medium transition-colors ${
+        `relative flex items-center gap-2.5 rounded-btn px-3 py-2.5 text-[13px] font-medium transition-all ${
           isActive
-            ? 'bg-accent/15 text-accent-light'
-            : 'text-ink-mute hover:bg-white/5 hover:text-ink-body'
+            ? 'bg-accent/12 text-accent-light'
+            : 'text-ink-mute hover:bg-white/[0.045] hover:text-ink-body'
         }`
       }
     >
       {({ isActive }) => (
         <>
-          {/* 활성 표시 도트 */}
+          {/* 활성 표시 — 좌측 세로 그라데이션 바 */}
           {isActive && (
-            <span className="absolute left-0 h-1.5 w-1.5 rounded-full bg-accent" />
+            <span className="accent-gradient absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full" />
           )}
-          <Icon size={16} />
+          <Icon size={16} className={isActive ? 'text-accent-cyan' : undefined} />
           <span className="flex-1">{label}</span>
           {/* 대기 중인 결재 건수 — 0이면 숨김 */}
           {Boolean(badge) && (
-            <span className="rounded-badge bg-accent/16 px-1.5 py-0.5 text-[11px] font-semibold text-accent-light">
+            <span className="rounded-badge bg-accent-cyan/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent-cyan tabular-nums">
               {badge}
             </span>
           )}
@@ -118,17 +125,17 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex w-[236px] shrink-0 flex-col border-r border-white/6 bg-navy-app px-4 py-5">
-      {/* 로고 */}
-      <div className="flex items-center gap-2 px-2 pb-6">
-        <span className="flex h-8 w-8 items-center justify-center rounded-btn bg-accent text-sm font-extrabold text-white">
-          연
+    <aside className="glass-strong flex w-[236px] shrink-0 flex-col border-r border-white/[0.07] px-4 py-5">
+      {/* 로고 — 그라데이션 모노그램 + 그라데이션 워드마크 */}
+      <div className="flex items-center gap-2.5 px-2 pb-7">
+        <BrandMark size="sm" />
+        <span className="accent-gradient-text text-[17px] font-extrabold tracking-[-0.02em]">
+          연차ON
         </span>
-        <span className="text-[17px] font-bold tracking-[-0.02em] text-ink-hi">연차ON</span>
       </div>
 
       {/* MENU 섹션 */}
-      <p className="px-3 pb-2 text-[10px] font-semibold tracking-[0.08em] text-ink-dim">MENU</p>
+      <p className={SECTION_LABEL_CLASS}>Menu</p>
       <nav className="flex flex-col gap-1">
         {MENU_ITEMS.map((item) => (
           <SidebarLink key={item.to} {...item} />
@@ -138,9 +145,7 @@ export default function Sidebar() {
       {/* 관리자 섹션 (권한 있는 메뉴만 노출) */}
       {adminItems.length > 0 && (
         <>
-          <p className="px-3 pt-6 pb-2 text-[10px] font-semibold tracking-[0.08em] text-ink-dim">
-            관리자
-          </p>
+          <p className={`${SECTION_LABEL_CLASS} pt-7`}>관리자</p>
           <nav className="flex flex-col gap-1">
             {adminItems.map((item) => (
               <SidebarLink
@@ -153,11 +158,9 @@ export default function Sidebar() {
         </>
       )}
 
-      {/* 하단 유저 카드 */}
-      <div className="mt-auto flex items-center gap-3 rounded-card bg-navy-card p-3">
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy-avatar text-sm font-semibold text-accent-label">
-          {userInfo?.name?.charAt(0) ?? '?'}
-        </span>
+      {/* 하단 유저 카드 — 글래스 서피스 + 상단 하이라이트 */}
+      <div className="glass glass-edge mt-auto flex items-center gap-3 rounded-card border border-white/[0.07] p-3">
+        <Avatar name={userInfo?.name} size="md" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-ink-hi">
             {userInfo?.name ?? '이름 없음'}
@@ -172,7 +175,7 @@ export default function Sidebar() {
           onClick={handleLogout}
           title="로그아웃"
           aria-label="로그아웃"
-          className="shrink-0 rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-white/5 hover:text-danger"
+          className="shrink-0 rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-danger/10 hover:text-danger"
         >
           <LogOut size={16} />
         </button>

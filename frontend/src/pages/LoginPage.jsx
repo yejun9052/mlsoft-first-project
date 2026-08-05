@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import GlowShell from '../components/ui/GlowShell.jsx';
+import BrandMark from '../components/ui/BrandMark.jsx';
 
 // Google OAuth 진입 경로 (Spring Security 제공, vite proxy 경유)
 const GOOGLE_LOGIN_URL = '/oauth2/authorization/google';
@@ -35,7 +37,7 @@ function GoogleLogo() {
   );
 }
 
-// 로그인 — 다크 네이비 풀스크린 브랜드 화면, Google OAuth 전용 (docs/01 §2-1)
+// 로그인 — 미드나잇 풀스크린 브랜드 화면, Google OAuth 전용 (docs/01 §2-1)
 export default function LoginPage() {
   // OAuth 실패 리다이렉트 쿼리(?error=...) 처리 → toast 후 주소창에서 쿼리 제거
   useEffect(() => {
@@ -61,45 +63,41 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex h-screen flex-col items-center justify-center overflow-hidden bg-navy-app px-6">
-      {/* 배경 글로우 — 카드 뒤 은은한 블러 원 (다크 SaaS 로그인 화면에서 자주 쓰는 깊이감 장치) */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[560px] w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/18 blur-[110px]"
-      />
-
-      {/* 브랜드 — MLsoft 워드마크(eyebrow) + 사이드바와 동일한 '연' 모노그램 + 제품명 + 한 줄 소개 */}
-      <div className="relative mb-9 flex flex-col items-center gap-3">
+    <GlowShell>
+      {/* 브랜드 — MLsoft 워드마크(eyebrow) + '연' 모노그램 + 제품명 + 한 줄 소개 */}
+      <div className="mb-9 flex flex-col items-center gap-3.5">
         <span className="text-[12px] font-bold uppercase tracking-[0.32em] text-ink-mute">MLsoft</span>
-        <span className="flex h-14 w-14 items-center justify-center rounded-card bg-accent text-[22px] font-extrabold text-white shadow-btn">
-          연
-        </span>
-        <h1 className="text-[30px] font-extrabold tracking-[-0.03em] text-ink-hi">연차ON</h1>
+        <BrandMark size="lg" />
+        <h1 className="accent-gradient-text text-[34px] font-extrabold tracking-[-0.04em]">연차ON</h1>
         <p className="max-w-[300px] text-center text-[13px] leading-relaxed text-ink-mute">
           연차·경조사 신청부터 결재까지 한 곳에서 —<br />MLsoft 임직원을 위한 연차 관리 시스템
         </p>
       </div>
 
-      {/* 로그인 카드 */}
-      <div className="relative w-full max-w-[380px] rounded-card border border-white/6 bg-navy-card p-8 shadow-card">
+      {/* 로그인 카드 — 글래스 서피스 + 상단 하이라이트 */}
+      <div className="glass glass-edge w-full max-w-[380px] rounded-card border border-white/[0.09] p-8 shadow-card">
         <p className="mb-6 text-center text-[14px] font-semibold text-ink-hi">
           사내 계정으로 로그인하고 시작하세요
         </p>
+        {/* Google 버튼은 브랜드 가이드상 흰 배경을 유지 — 화면에서 유일한 밝은 면이라 시선이 자연히 모인다 */}
         <button
           type="button"
           onClick={handleGoogleLogin}
-          className="flex w-full items-center justify-center gap-3 rounded-btn bg-white px-4 py-3 text-[14px] font-semibold text-gray-800 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+          className="flex w-full items-center justify-center gap-3 rounded-btn bg-white px-4 py-3 text-[14px] font-semibold text-gray-800 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glow active:translate-y-0"
         >
           <GoogleLogo />
           Google 계정으로 로그인
         </button>
         <p className="mt-5 text-center text-[11px] leading-relaxed text-ink-faint">
-          <span className="font-semibold text-accent-light">@mlsoft.com</span> 회사 Google Workspace 계정만 사용할 수 있습니다.
+          <span className="font-semibold text-accent-cyan">@mlsoft.com</span> 회사 Google Workspace
+          계정만 사용할 수 있습니다.
           <br />첫 로그인 시 자동으로 가입됩니다.
         </p>
       </div>
 
-      <p className="relative mt-8 text-[11px] text-ink-dim">© {new Date().getFullYear()} MLsoft. All rights reserved.</p>
-    </div>
+      <p className="mt-8 text-[11px] text-ink-dim">
+        © {new Date().getFullYear()} MLsoft. All rights reserved.
+      </p>
+    </GlowShell>
   );
 }

@@ -139,11 +139,11 @@ export default function CalendarPage() {
           <Legend swatch="bg-accent/25 text-accent-light" label="내 연차" />
           <Legend swatch="bg-ok/18" label="동료 연차" />
           <Legend swatch="bg-danger/18" label="공휴일" />
-          <Legend swatch="border-2 border-accent bg-accent/12" label="신청 선택" Icon={Check} />
+          <Legend swatch="border-2 border-accent-cyan bg-accent-cyan/12" label="신청 선택" Icon={Check} />
         </div>
 
         {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-2 border-b border-white/6 pb-2">
+        <div className="grid grid-cols-7 gap-2 border-b border-white/[0.07] pb-2">
           {WEEKDAYS.map((weekday, i) => (
             <div
               key={weekday}
@@ -176,12 +176,12 @@ export default function CalendarPage() {
                 key={dateStr}
                 type="button"
                 onClick={() => handleDayClick(dateStr, Boolean(holiday) || isSunday || isSaturday)}
-                className={`flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-colors ${
+                className={`flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-all duration-150 ${
                   selected
-                    ? 'border-accent/70 bg-accent/12 hover:border-accent'
+                    ? 'border-accent-cyan/60 bg-accent-cyan/10 hover:border-accent-cyan'
                     : holiday
                       ? 'border-danger/25 bg-danger/8 hover:border-danger/40'
-                      : 'border-white/6 bg-navy-app/40 hover:border-accent/40 hover:bg-navy-app/60'
+                      : 'border-white/[0.06] bg-navy-app/35 hover:border-accent-cyan/35 hover:bg-navy-app/60'
                 }`}
               >
                 {/* 날짜 숫자 + 공휴일명 / 선택 표시 */}
@@ -189,7 +189,7 @@ export default function CalendarPage() {
                   <span
                     className={`text-[14px] font-semibold ${
                       isToday
-                        ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white'
+                        ? 'accent-gradient inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-btn'
                         : holiday || isSunday
                           ? 'text-danger/90'
                           : 'text-ink-body'

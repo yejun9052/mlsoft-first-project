@@ -113,7 +113,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
     <div
       role="dialog"
       aria-label="연차 신청 패널"
-      className="fixed z-50 w-[424px] rounded-card bg-navy-card shadow-card ring-1 ring-white/12"
+      className="glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.09] shadow-card"
       style={{ left: pos.x, top: pos.y }}
     >
       {/* 드래그 핸들 헤더 */}
@@ -122,7 +122,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
-        className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/8 bg-navy-app/50 px-4 py-3"
+        className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/[0.07] bg-navy-app/40 px-4 py-3"
       >
         <div className="flex items-center gap-2">
           <GripVertical size={15} className="text-ink-dim" />
@@ -144,7 +144,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         {/* 선택한 날짜 칩 — 캘린더 클릭으로 추가, ×로 제거 */}
         <Field label={`선택한 날짜 (${dates.length}일)`}>
           {dates.length === 0 ? (
-            <p className="rounded-btn border border-dashed border-white/12 px-3 py-3 text-[13px] text-ink-dim">
+            <p className="rounded-btn border border-dashed border-white/[0.12] px-3 py-3 text-[13px] text-ink-dim">
               캘린더에서 날짜를 클릭해 담으세요. 다시 클릭하면 빠집니다.
             </p>
           ) : (
@@ -152,13 +152,13 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
               {dates.map((d) => (
                 <span
                   key={d}
-                  className="flex items-center gap-1 rounded-badge bg-accent/16 py-1.5 pl-3 pr-2 text-[13px] font-medium text-accent-light"
+                  className="flex items-center gap-1 rounded-badge bg-accent-cyan/12 py-1.5 pl-3 pr-2 text-[13px] font-medium text-accent-cyan ring-1 ring-inset ring-accent-cyan/25"
                 >
                   {dayjs(d).format('M/D')} ({WEEKDAY_KO[dayjs(d).day()]})
                   <button
                     type="button"
                     onClick={() => onRemoveDate(d)}
-                    className="rounded p-0.5 hover:bg-white/10"
+                    className="rounded p-0.5 transition-colors hover:bg-white/[0.14]"
                     aria-label={`${d} 제거`}
                   >
                     <X size={12} />

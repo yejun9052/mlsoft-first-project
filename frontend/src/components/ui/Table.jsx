@@ -1,6 +1,5 @@
 // 테이블 프리미티브 — AdminMembers/AdminPolicy/Welfare/Team의 네이티브 table 마크업을 한 구현으로 수렴.
 // Table이 가로 스크롤 래퍼(overflow-x-auto)까지 함께 담당한다. min-w 등 표별 폭 지정은 className으로 전달.
-// (HistoryPage의 div-grid 커스텀 테이블도 2단계에서 이 구성으로 옮긴다.)
 export default function Table({ className = '', children }) {
   return (
     <div className="overflow-x-auto">
@@ -9,11 +8,11 @@ export default function Table({ className = '', children }) {
   );
 }
 
-// 헤더 행 — 보더 + navy-header 배경. children으로 <Th>들을 그대로 나열.
+// 헤더 행 — 글래스 카드 위에 얹히므로 불투명 배경 대신 살짝 어두운 반투명 띠로 처리한다.
 export function THead({ children }) {
   return (
     <thead>
-      <tr className="border-b border-white/6 bg-navy-header">{children}</tr>
+      <tr className="border-b border-white/[0.08] bg-navy-app/40">{children}</tr>
     </thead>
   );
 }
@@ -22,7 +21,7 @@ export function THead({ children }) {
 export function Th({ children, right = false, className = '' }) {
   return (
     <th
-      className={`whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-ink-faint ${
+      className={`whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint ${
         right ? 'text-right' : 'text-left'
       } ${className}`}
     >
@@ -35,7 +34,10 @@ export function Th({ children, right = false, className = '' }) {
 // (행 전체를 클릭 타깃으로 쓰는 테이블 — 예: WelfarePage 정책 목록 — 를 위함).
 export function TR({ children, className = '', ...rest }) {
   return (
-    <tr className={`border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.02] ${className}`} {...rest}>
+    <tr
+      className={`border-b border-white/[0.05] transition-colors last:border-0 hover:bg-accent-cyan/[0.04] ${className}`}
+      {...rest}
+    >
       {children}
     </tr>
   );

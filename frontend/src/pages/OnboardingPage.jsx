@@ -14,7 +14,7 @@ const TODAY = (() => {
 
 // date input 공통 스타일 (다크 테마 캘린더 아이콘 반전 포함)
 const DATE_INPUT_CLASS =
-  'w-full rounded-btn border border-white/8 bg-navy-btn2 px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-colors focus:border-accent [color-scheme:dark]';
+  'w-full rounded-btn border border-white/[0.09] bg-white/[0.04] px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-all placeholder:text-ink-dim focus:border-accent-cyan/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-accent-cyan/15 [color-scheme:dark]';
 
 // 온보딩 — 최초 로그인 시 생일·입사일만 입력, 연차는 서버가 자동 계산 (docs/01 §2-1)
 export default function OnboardingPage() {

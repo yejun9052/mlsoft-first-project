@@ -12,14 +12,15 @@ createRoot(document.getElementById('root')).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <App />
-        {/* 전역 toast — 다크 테마에 맞춘 기본 스타일 */}
+        {/* 전역 toast — 색을 리터럴로 박지 않고 @theme 토큰(index.css)을 참조해 팔레트 변경에 자동으로 따라오게 한다 */}
         <Toaster
           position="top-center"
           toastOptions={{
             style: {
-              background: '#141d2b',
-              color: '#e9f0fa',
-              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--color-navy-card)',
+              color: 'var(--color-ink-hi)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              boxShadow: 'var(--shadow-card)',
             },
           }}
         />

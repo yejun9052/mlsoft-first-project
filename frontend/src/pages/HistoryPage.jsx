@@ -42,7 +42,7 @@ function ReasonCell({ reason }) {
   return (
     <span className="group relative inline-block max-w-[220px] truncate align-bottom">
       {reason}
-      <span className="pointer-events-none absolute left-0 top-full z-10 mt-1.5 hidden w-max max-w-xs rounded-btn border border-white/10 bg-navy-header px-3 py-2 text-[12px] leading-relaxed text-ink-body opacity-0 shadow-card transition-opacity group-hover:block group-hover:opacity-100">
+      <span className="glass-strong pointer-events-none absolute left-0 top-full z-10 mt-1.5 hidden w-max max-w-xs rounded-btn border border-white/[0.12] px-3 py-2 text-[12px] leading-relaxed text-ink-body opacity-0 shadow-card transition-opacity group-hover:block group-hover:opacity-100">
         {reason}
       </span>
     </span>
@@ -128,7 +128,7 @@ export default function HistoryPage() {
       </div>
 
       {/* 통계 스트립 (박스 없음 — 세로 구분선으로 분리) */}
-      <StatStrip className="mb-6 border-b border-white/6 pb-6">
+      <StatStrip className="mb-6 border-b border-white/[0.07] pb-6">
         <Stat label="총 부여" value={grantedDays} unit="일" />
         <Stat
           label="사용"

@@ -1,48 +1,131 @@
 @import 'tailwindcss';
 
-/* 디자인 토큰 (docs/05-디자인-가이드.md) — Tailwind v4 @theme 등록 */
+/* 디자인 토큰 (docs/05-디자인-가이드.md) — Tailwind v4 @theme 등록
+ *
+ * 딥 코발트 글래스 개편: 미드나잇 서피스 + 코발트→시안 그라데이션 + 반투명 글래스 서피스.
+ * 토큰 "이름"(navy-* / accent-* / ink-* / radius-*)은 그대로 두고 "값"만 교체했다 —
+ * 페이지 14개에 흩어진 유틸리티 클래스 145곳이 수정 없이 새 팔레트를 따라오게 하기 위함.
+ */
 @theme {
   /* 폰트 */
   --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
 
-  /* 네이비 서피스 */
-  --color-navy-app: #0b121c;
-  --color-navy-content: #0f1722;
-  --color-navy-card: #141d2b;
-  --color-navy-header: #101926;
-  --color-navy-btn2: #172234;
-  --color-navy-avatar: #22304a;
+  /* 미드나잇 서피스 — 기존 네이비보다 한 단계 더 내려 글로우·글래스가 살아나는 바닥을 만든다.
+     navy-card는 글래스가 얹히는 베이스색(불투명 폴백)이라 완전한 검정으로 내리지 않는다. */
+  --color-navy-app: #050b18;
+  --color-navy-content: #070f1f;
+  --color-navy-card: #0d1728;
+  --color-navy-header: #0a1322;
+  --color-navy-btn2: #16233a;
+  --color-navy-avatar: #1c2f52;
 
-  /* Accent 파랑 */
-  --color-accent: #3b82f6;
+  /* 코발트 → 시안 액센트. accent-light를 시안 쪽으로 끌어올려 링크·활성 상태가
+     미드나잇 배경에서 확실히 떠 보이게 한다(대비 10:1 이상). */
+  --color-accent: #2563eb;
   --color-accent-dark: #1d4ed8;
-  --color-accent-light: #7eb0ff;
-  --color-accent-label: #9db8e8;
+  --color-accent-light: #7dd3fc;
+  --color-accent-label: #a8c9f0;
+  --color-accent-cyan: #22d3ee;
 
-  /* 텍스트 */
-  --color-ink-hi: #e9f0fa;
-  --color-ink-body: #cdd7e4;
-  --color-ink-mute: #8493a8;
-  --color-ink-faint: #6b7a90;
-  --color-ink-dim: #4a5870;
+  /* 텍스트 — 순백 대신 푸른 기가 도는 화이트로 통일 */
+  --color-ink-hi: #eaf3ff;
+  --color-ink-body: #c3d3e8;
+  --color-ink-mute: #7e93b0;
+  --color-ink-faint: #62789a;
+  --color-ink-dim: #435775;
 
-  /* 상태 색 */
-  --color-ok: #34d399;
+  /* 상태 색 — 코발트 세계에 맞춰 채도를 올린 값. 의미(승인/대기/반려)는 그대로. */
+  --color-ok: #2ee6a8;
   --color-warn: #fbbf24;
-  --color-danger: #f87171;
+  --color-danger: #fb7185;
 
-  /* 라디우스 */
-  --radius-window: 18px;
-  --radius-card: 16px;
-  --radius-btn: 10px;
-  --radius-badge: 20px;
+  /* 라디우스 — 글래스 서피스가 부드럽게 읽히도록 한 단계씩 키움 */
+  --radius-window: 20px;
+  --radius-card: 18px;
+  --radius-btn: 11px;
+  --radius-badge: 999px;
 
-  /* 섀도우 */
-  --shadow-card: 0 18px 50px rgba(40, 52, 67, 0.22);
-  --shadow-btn: 0 6px 16px rgba(59, 130, 246, 0.3);
+  /* 섀도우 — 미드나잇 위에서는 "떠 있는 그림자"보다 깊게 가라앉는 그림자가 자연스럽다 */
+  --shadow-card: 0 24px 64px -16px rgba(2, 6, 18, 0.9);
+  --shadow-btn: 0 8px 24px -8px rgba(37, 99, 235, 0.65);
+  --shadow-glow: 0 0 32px -6px rgba(34, 211, 238, 0.4);
+}
+
+/* ── 커스텀 유틸리티 (Tailwind v4 @utility) ─────────────────────────────── */
+
+/* 글래스 서피스 — 카드/패널 기본. 배경 글로우가 비쳐 보이도록 반투명 + 블러.
+   backdrop-filter 미지원 브라우저에서는 navy-card 불투명 배경으로 폴백된다. */
+@utility glass {
+  background-color: color-mix(in srgb, var(--color-navy-card) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+/* 글래스 강조 — 모달/사이드바처럼 뒤 콘텐츠를 확실히 가려야 하는 서피스 */
+@utility glass-strong {
+  background-color: color-mix(in srgb, var(--color-navy-card) 88%, transparent);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+/* 상단 하이라이트 — 유리 모서리에 빛이 걸리는 1px 선. 글래스 서피스의 핵심 디테일. */
+@utility glass-edge {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      to right,
+      transparent,
+      rgba(125, 211, 252, 0.35),
+      rgba(255, 255, 255, 0.14),
+      transparent
+    );
+    pointer-events: none;
+  }
+}
+
+/* 코발트→시안 그라데이션 면 — Primary 버튼, 게이지 채움, 브랜드 마크 */
+@utility accent-gradient {
+  background-image: linear-gradient(135deg, var(--color-accent-cyan) 0%, var(--color-accent) 55%, var(--color-accent-dark) 100%);
+}
+
+/* 같은 그라데이션을 글자에 클리핑 — 대시보드 잔여 연차처럼 1페이지 1회용 강조.
+   color를 먼저 깔고 -webkit-text-fill-color로 투명화하는 순서가 중요하다 — 곧바로
+   color:transparent를 주면 background-clip 미적용 환경에서 글자가 아예 사라진다(잔여 연차가 안 보임).
+   이 순서면 최악의 경우에도 accent-light 단색으로 폴백된다. */
+@utility accent-gradient-text {
+  background-image: linear-gradient(135deg, var(--color-accent-cyan) 0%, var(--color-accent-light) 45%, var(--color-accent) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: var(--color-accent-light);
+  -webkit-text-fill-color: transparent;
+}
+
+/* 앰비언트 배경 글로우 — 앱 셸/풀스크린 화면 바닥에 깔리는 코발트·시안 광원 두 개.
+   fixed라 스크롤과 무관하게 고정되고, 데이터 위로 올라오지 않도록 항상 -z-10. */
+@utility ambient-glow {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 40rem at 12% -8%, rgba(37, 99, 235, 0.22), transparent 60%),
+    radial-gradient(48rem 34rem at 92% 108%, rgba(34, 211, 238, 0.14), transparent 62%);
 }
 
 /* 기본 배경·글자색 (그 외 스타일은 전부 Tailwind 유틸리티로) */
 body {
   @apply bg-navy-app font-sans text-ink-body antialiased;
+}
+
+/* 스크롤바 — 미드나잇 서피스에 맞춘 얇은 다크 스크롤바 (기본 밝은 스크롤바가 글래스 톤을 깬다) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(125, 211, 252, 0.18) transparent;
 }

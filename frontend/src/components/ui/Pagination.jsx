@@ -12,7 +12,7 @@ export default function Pagination({ page, totalPages, totalElements, onChange, 
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 border-t border-white/6 px-5 py-3 ${className}`}
+      className={`flex items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-3 ${className}`}
     >
       <span className="text-[11px] text-ink-faint tabular-nums">
         {totalElements !== undefined && `총 ${totalElements}건`}
@@ -24,7 +24,8 @@ export default function Pagination({ page, totalPages, totalElements, onChange, 
           disabled={isFirst}
           onClick={() => onChange(page - 1)}
         />
-        <span className="text-[12px] text-ink-mute tabular-nums">
+        {/* 한 텍스트 노드로 유지 — 중간에 span을 끼우면 "3 / 13"이 쪼개져 스크린리더·테스트가 통째로 못 읽는다 */}
+        <span className="text-[12px] font-medium text-ink-body tabular-nums">
           {page + 1} / {totalPages}
         </span>
         <IconButton

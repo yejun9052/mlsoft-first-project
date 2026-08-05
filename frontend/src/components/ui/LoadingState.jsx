@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react';
 export default function LoadingState({ label = '불러오는 중…', className = '' }) {
   return (
     <div className={`flex items-center justify-center gap-2 py-12 text-ink-mute ${className}`}>
-      <Loader2 size={18} className="animate-spin" />
+      <Loader2 size={18} className="animate-spin text-accent-cyan" />
       <span className="text-[13px]">{label}</span>
     </div>
   );

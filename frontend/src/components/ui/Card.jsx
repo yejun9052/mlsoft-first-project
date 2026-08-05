@@ -1,5 +1,6 @@
-// 카드 서피스 — bg-navy-card + radius 16 + 얇은 보더 + card 섀도우 (docs/05 카드/서피스, 로그인 카드 톤 통일)
-// title 을 주면 상단에 카드 타이틀(600/14px), 우측 액션 슬롯(right) 노출.
+// 카드 서피스 — 글래스(반투명 + 블러) + 상단 하이라이트 + radius 18 (docs/05 카드/서피스)
+// 배경의 앰비언트 글로우가 카드 너머로 은은히 비쳐 보이는 것이 이 톤의 핵심이라, 불투명 배경 대신
+// glass 유틸리티(index.css)를 쓴다. title 을 주면 상단에 카드 타이틀(600/15px), 우측 액션 슬롯(right) 노출.
 
 // 본문 패딩 프리셋 — default(일반) / none(테이블 전용, TableCard가 사용) / tight(캘린더 등 여백 최소화)
 // scroll=true 인 경우 세로 패딩은 0으로(리스트 아이템 자체 패딩에 맡기고, 스크롤 영역 상하단에 이중 여백이
@@ -10,9 +11,10 @@ const PADDING_CLASS = {
   tight: { body: 'p-3', scroll: 'px-3 py-0' },
 };
 
-// 로그인에서 확정한 hover-lift 마이크로 인터랙션 — Button.jsx에도 동일한 값으로 내장(각자 독립된 leaf
-// 컴포넌트라 한 줄짜리 상수를 공유 유틸로 빼는 대신 그대로 복제).
-const HOVER_LIFT_CLASS = 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0';
+// hover-lift 마이크로 인터랙션 — 뜨는 동시에 보더가 시안으로 밝아진다(글래스 표면이 빛을 받는 느낌).
+// Button.jsx에도 동일한 값으로 내장(각자 독립된 leaf 컴포넌트라 공유 유틸로 빼는 대신 그대로 복제).
+const HOVER_LIFT_CLASS =
+  'cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-accent-cyan/25 hover:shadow-glow';
 
 export default function Card({
   title,
@@ -38,14 +40,16 @@ export default function Card({
   return (
     <As
       type={As === 'button' ? 'button' : undefined}
-      className={`rounded-card border border-white/6 bg-navy-card text-left shadow-card ${
+      className={`glass glass-edge overflow-hidden rounded-card border border-white/[0.07] text-left shadow-card ${
         fill ? 'flex min-h-0 flex-1 flex-col' : ''
       } ${hover ? HOVER_LIFT_CLASS : ''} ${className}`}
       {...rest}
     >
       {(title || right) && (
-        <header className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-4">
-          {title && <h2 className="text-[15px] font-semibold text-ink-hi">{title}</h2>}
+        <header className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+          {title && (
+            <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink-hi">{title}</h2>
+          )}
           {right}
         </header>
       )}

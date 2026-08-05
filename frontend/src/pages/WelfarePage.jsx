@@ -27,7 +27,7 @@ function PolicyRow({ policy, showCategory, groupBoundary, onApply }) {
 
   return (
     <TR
-      className={`cursor-pointer ${groupBoundary ? 'border-t-2 border-t-white/10' : ''}`}
+      className={`cursor-pointer ${groupBoundary ? 'border-t-2 border-t-white/[0.12]' : ''}`}
       onClick={() => onApply(policy)}
     >
       <Td>
