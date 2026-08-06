@@ -64,7 +64,11 @@ public class LeaveRequest extends BaseTimeEntity {
     @Column(nullable = false, precision = 4, scale = 1)
     private BigDecimal days;
 
-    /** 당겨쓰기 충당분 스냅샷 — 반려·취소 시 advance_days 복구 근거 (검증 B2, User.restoreLeave와 짝) */
+    /**
+     * 당겨쓰기 충당분 스냅샷 — <b>감사 기록 전용</b>이다. 이 신청이 잔여를 얼마나 초과했는지를 남긴다.
+     * 한때 반려·취소 시 advance_days 복구의 근거였지만(검증 B2), advance_days가 파생값으로
+     * 재계산되면서(User.syncAdvanceDays, 리뷰 I-1) 복구가 이 값에 의존하지 않게 됐다.
+     */
     @Column(nullable = false, precision = 4, scale = 1)
     @Builder.Default
     private BigDecimal advanceUsedDays = BigDecimal.ZERO;
@@ -123,8 +127,8 @@ public class LeaveRequest extends BaseTimeEntity {
     }
 
     /**
-     * 선차감 시 당겨쓰기로 충당된 일수 기록 (User.deductLeave 반환값).
-     * 반려·소급취소 승인 시 User.restoreLeave에 이 값을 넘겨 advance_days까지 원복한다 (검증 B2).
+     * 선차감 시 당겨쓰기로 충당된 일수 기록 (User.deductLeave 반환값) — 감사·조회 목적.
+     * 복구 계산에는 쓰이지 않는다 (User.restoreLeave가 use_days만 되돌리고 advance는 재계산).
      */
     public void recordAdvanceUsage(BigDecimal advanceUsedDays) {
         this.advanceUsedDays = advanceUsedDays;

@@ -47,8 +47,12 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 ### 연차 잔액 모델
 `잔여 = base_days + bonus_days - use_days`. 핵심 규칙:
 - **신청(PENDING) 시점에 `use_days` 선차감**, 반려·취소 시 복구
-- 잔여 부족 + 당겨쓰기 허용이면 부족분을 `advance_days`에 누적 → 다음 기산일에 새 `base_days`에서 차감
-- 복구 시 `use_days`뿐 아니라 그 신청이 쓴 `advance_days`도 되돌려야 한다 (`LeaveRequest.advanceUsedDays` 스냅샷 사용)
+- 잔여 부족 + 당겨쓰기 허용이면 부족분이 `advance_days`에 잡힘 → 다음 기산일에 새 `base_days`에서 차감
+- **`advance_days`는 파생값이다** — `advance_days = max(0, use_days − base_days − bonus_days)`.
+  `User.syncAdvanceDays()` 하나만 이 필드에 쓰고, 잔액 3필드(base/bonus/use)를 바꾸는 도메인 메서드 6개가
+  마지막에 이걸 호출한다 — **`resetAnnualLeave`까지 예외 없이**. 이 필드에 단독 대입하는 코드를 새로 만들지 말 것
+  (그게 리뷰 I-1·I-2·I-8의 원인이었다). `LeaveRequest.advanceUsedDays`는 감사 기록 전용이고 복구 계산에 쓰지 않는다.
+  리셋도 재계산해야 하는 이유(빼면 빚이 면제된다)는 docs/09 §5 정정 블록에 검산이 있다.
 - `User`에 `@Version` 낙관적 락 — 동시 신청 초과 방지
 - 상태 전이는 전부 `User`·`LeaveRequest`의 도메인 메서드 안에 있다 (`deductLeave`, `restoreLeave`, `resetAnnualLeave`). Setter 없음.
 
@@ -116,6 +120,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | `docs/08-운영-검증-리포트.md` | 실사용 검증 이슈 (코드 주석의 `검증 R-5`, `Y-2` 등 참조처) |
 | `docs/09-스케줄러-설계.md` | 스케줄러 3개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감 |
 | `docs/10-코드리뷰-리포트.md` | 코드 리뷰 결과 (코드 주석의 `리뷰 I-1`, `F-3` 등 참조처) |
+| `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청이 흐르는 길·연차 잔액 상태 전이·기능별 구현 상태. 처음 볼 문서 |
 | `docs/구현-현황/` | 백엔드·프론트엔드·실행환경별 진행 상황 |
 
 코드 주석의 `(검증 Y-2)`, `(갭분석 A-3)` 같은 표기는 각각 docs/08, docs/07의 항목 번호를 가리킨다 — 해당 로직을 수정할 땐 그 항목을 먼저 읽을 것.

@@ -216,7 +216,7 @@ public class LeaveService {
 
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
         if (!approved) {
-            fresh.getUser().restoreLeave(fresh.getDays(), fresh.getAdvanceUsedDays());
+            fresh.getUser().restoreLeave(fresh.getDays());
         }
         saveHistory(fresh, findUserOrThrow(actorId),
                 approved ? RequestAction.APPROVED : RequestAction.REJECTED, request.comment());
@@ -289,7 +289,7 @@ public class LeaveService {
 
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
         if (approved) {
-            fresh.getUser().restoreLeave(fresh.getDays(), fresh.getAdvanceUsedDays());
+            fresh.getUser().restoreLeave(fresh.getDays());
         }
         saveHistory(fresh, findUserOrThrow(actorId),
                 approved ? RequestAction.CANCEL_APPROVED : RequestAction.CANCEL_REJECTED, request.comment());
@@ -311,7 +311,7 @@ public class LeaveService {
     /** 조건부 전이 후 재조회해 선차감 복구 + 이력 기록 (즉시 취소 경로) */
     private void restoreAndRecord(Long leaveId, RequestAction action, String reason) {
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
-        fresh.getUser().restoreLeave(fresh.getDays(), fresh.getAdvanceUsedDays());
+        fresh.getUser().restoreLeave(fresh.getDays());
         saveHistory(fresh, fresh.getUser(), action, reason);
     }
 

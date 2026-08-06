@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -209,7 +210,7 @@ class LeaveServiceTest {
     }
 
     @Test
-    @DisplayName("반려 — 조건부 갱신 성공, use_days + advance_days 복구")
+    @DisplayName("반려 — 조건부 갱신 성공, use_days 복구 후 당겨쓰기 재계산")
     void reject_restoresBalance() {
         User applicant = userWithBalance(1L, "1.0", "2.0", "1.0"); // 1일 당겨쓴 상태
         User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
@@ -223,7 +224,7 @@ class LeaveServiceTest {
         leaveService.processApproval(100L, 9L, new ApprovalRequest(false, "반려"));
 
         assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));    // 2 - 2
-        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays())); // 1 - 1
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays())); // max(0, 0 - 1) = 0
         verify(leaveActionHistoryRepository).save(historyWith(RequestAction.REJECTED));
     }
 
@@ -329,6 +330,67 @@ class LeaveServiceTest {
                 () -> leaveService.cancel(100L, 2L, new CancelRequest("남의 것")));
 
         assertEquals(ErrorCode.ACCESS_DENIED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("취소 — 신청 2건 중 먼저 신청한 건을 먼저 취소하면 당겨쓰기가 정산된다 (리뷰 I-1)")
+    void cancel_firstOfTwoApplied_settlesAdvanceDays() {
+        User applicant = user(1L, Role.EMPLOYEE, "10.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        List<LocalDate> dates = futureWeekdays(13);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
+                .willReturn(Optional.of(admin));
+        givenAdvanceEnabled(true);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        leaveService.apply(1L, request(dates.subList(0, 8), null));  // A 8일
+        leaveService.apply(1L, request(dates.subList(8, 13), null)); // B 5일 — 3일 당겨쓰기
+
+        ArgumentCaptor<LeaveRequest> captor = ArgumentCaptor.forClass(LeaveRequest.class);
+        verify(leaveRequestRepository, times(2)).save(captor.capture());
+        LeaveRequest leaveA = captor.getAllValues().get(0);
+        assertEquals(0, new BigDecimal("13.0").compareTo(applicant.getUseDays()));
+        assertEquals(0, new BigDecimal("3.0").compareTo(applicant.getAdvanceDays()));
+
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leaveA));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                100L, RequestStatus.PENDING, RequestStatus.CANCELLED, "A 취소")).willReturn(1);
+
+        leaveService.cancel(100L, 1L, new CancelRequest("A 취소"));
+
+        // 남은 B 5일은 잔여 10으로 전부 충당된다 — 당겨쓰기가 남으면 다음 기산일에 3일이 증발한다
+        assertEquals(0, new BigDecimal("5.0").compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("취소 — 나중에 신청한 건을 먼저 취소해도 최종 잔액이 같다 (순서 무관)")
+    void cancel_lastOfTwoApplied_reachesSameBalance() {
+        User applicant = user(1L, Role.EMPLOYEE, "10.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        List<LocalDate> dates = futureWeekdays(13);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
+                .willReturn(Optional.of(admin));
+        givenAdvanceEnabled(true);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        leaveService.apply(1L, request(dates.subList(0, 8), null));
+        leaveService.apply(1L, request(dates.subList(8, 13), null));
+
+        ArgumentCaptor<LeaveRequest> captor = ArgumentCaptor.forClass(LeaveRequest.class);
+        verify(leaveRequestRepository, times(2)).save(captor.capture());
+        LeaveRequest leaveB = captor.getAllValues().get(1);
+
+        given(leaveRequestRepository.findById(200L)).willReturn(Optional.of(leaveB));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                200L, RequestStatus.PENDING, RequestStatus.CANCELLED, "B 취소")).willReturn(1);
+
+        leaveService.cancel(200L, 1L, new CancelRequest("B 취소"));
+
+        assertEquals(0, new BigDecimal("8.0").compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
     }
 
     // ==================== 소급취소 승인/반려 ====================

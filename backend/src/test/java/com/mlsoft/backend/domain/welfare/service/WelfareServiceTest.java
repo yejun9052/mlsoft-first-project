@@ -135,6 +135,25 @@ class WelfareServiceTest {
     }
 
     @Test
+    @DisplayName("승인 — 당겨쓴 사원은 가산분으로 당겨쓰기가 정산된다 (리뷰 I-2)")
+    void approve_applicantWithAdvance_settlesAdvanceDays() {
+        User applicant = userWithAdvance(1L, "10.0", "13.0", "3.0");
+        User approver = user(9L, Role.SYSTEM_ADMIN);
+        WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
+        WelfareRequest welfare = pendingWelfare(policy, applicant, 9L, null);
+        given(welfareRequestRepository.findById(200L)).willReturn(Optional.of(welfare));
+        given(userRepository.findById(9L)).willReturn(Optional.of(approver));
+        given(welfareRequestRepository.updateStatusIfCurrent(200L, RequestStatus.PENDING, RequestStatus.APPROVED))
+                .willReturn(1);
+
+        welfareService.processApproval(200L, 9L, new WelfareApprovalRequest(true, "확인"));
+
+        // 사용 13 ≤ base 10 + bonus 7 이므로 당겨쓴 3일은 가산분으로 전부 충당된다
+        assertEquals(0, new BigDecimal("7.0").compareTo(applicant.getBonusDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
+    }
+
+    @Test
     @DisplayName("반려 — bonus_days 가산 없음")
     void reject_doesNotAddBonusDays() {
         User applicant = user(1L, Role.EMPLOYEE);
@@ -266,6 +285,21 @@ class WelfareServiceTest {
                 .useDays(BigDecimal.ZERO)
                 .bonusDays(BigDecimal.ZERO)
                 .advanceDays(BigDecimal.ZERO)
+                .isActive(true)
+                .build();
+    }
+
+    /** 당겨쓰기가 걸린 사원 — 잔액 불변식 검증용 */
+    private User userWithAdvance(Long id, String baseDays, String useDays, String advanceDays) {
+        return User.builder()
+                .id(id)
+                .name("user" + id)
+                .email("user" + id + "@mlsoft.com")
+                .role(Role.EMPLOYEE)
+                .baseDays(new BigDecimal(baseDays))
+                .useDays(new BigDecimal(useDays))
+                .bonusDays(BigDecimal.ZERO)
+                .advanceDays(new BigDecimal(advanceDays))
                 .isActive(true)
                 .build();
     }

@@ -148,62 +148,100 @@ public class User extends BaseTimeEntity {
     }
 
     /**
+     * 당겨쓴 연차 재계산 — advance_days는 <b>파생값</b>이므로 이 메서드만 이 필드에 쓴다
+     * (리뷰 I-1·I-2·I-8을 한 원인으로 묶어 해소).
+     *
+     * <pre>advance_days = max(0, use_days − base_days − bonus_days)</pre>
+     *
+     * 이전에는 deductLeave가 부족분을 더하고 restoreLeave가 신청별 스냅샷만큼 빼는 식으로
+     * 여러 경로가 각자 이 필드를 조작했다. 그래서 신청 2건을 역순이 아닌 순서로 취소하면
+     * (A·B 신청 후 A 취소) B가 잔여로 충당되는데도 advance가 남아, 다음 기산일에 쓰지 않은
+     * 연차가 차감됐다(I-1). 보너스 가산(I-2)·관리자 연차 직접 설정(I-8)·월차 적립도 같은 이유로
+     * 정산이 누락됐다. 따라서 잔액 3필드(base/bonus/use)를 바꾸는 도메인 메서드는
+     * <b>마지막에 반드시 이 메서드를 호출</b>한다. {@link #resetAnnualLeave}도 예외가 아니다 —
+     * 사유는 그쪽 주석 참고.
+     */
+    private void syncAdvanceDays() {
+        // getRemainingDays() = base + bonus − use 이므로 negate() = use − base − bonus
+        this.advanceDays = getRemainingDays().negate().max(BigDecimal.ZERO);
+    }
+
+    /**
      * 연차 차감 (신청 시 선차감).
      * - 잔여 부족 시: 당겨쓰기 비허용이면 INSUFFICIENT_LEAVE_BALANCE,
-     *   허용(advance_leave_enabled=true)이면 부족분을 advance_days에 누적 (갭분석 A-3)
+     *   허용(advance_leave_enabled=true)이면 부족분이 advance_days에 잡힌다 (갭분석 A-3)
      *
-     * @return 이번 차감에서 당겨쓰기로 충당된 일수 — LeaveRequest.recordAdvanceUsage로 스냅샷해
-     *         반려·취소 복구의 근거로 쓴다 (검증 B2)
+     * @return 이번 차감으로 늘어난 당겨쓰기 일수 — LeaveRequest.recordAdvanceUsage로 스냅샷해
+     *         <b>감사 기록</b>으로 남긴다. 복구는 이 값에 의존하지 않는다 (syncAdvanceDays 참고)
      */
     public BigDecimal deductLeave(BigDecimal days, boolean advanceLeaveEnabled) {
-        BigDecimal remaining = getRemainingDays();
-        BigDecimal advanceUsed = BigDecimal.ZERO;
-        if (remaining.compareTo(days) < 0) {
-            if (!advanceLeaveEnabled) {
-                throw new BusinessException(ErrorCode.INSUFFICIENT_LEAVE_BALANCE);
-            }
-            // 부족분만 당겨쓰기로 누적 — 다음 기산일에 정산
-            advanceUsed = days.subtract(remaining.max(BigDecimal.ZERO));
-            this.advanceDays = this.advanceDays.add(advanceUsed);
+        if (getRemainingDays().compareTo(days) < 0 && !advanceLeaveEnabled) {
+            throw new BusinessException(ErrorCode.INSUFFICIENT_LEAVE_BALANCE);
         }
+        BigDecimal advanceBefore = this.advanceDays;
         this.useDays = this.useDays.add(days);
-        return advanceUsed;
+        syncAdvanceDays();
+        return this.advanceDays.subtract(advanceBefore).max(BigDecimal.ZERO);
     }
 
     /**
      * 연차 복구 (반려·취소 시 선차감 원복).
-     * use_days와 함께 해당 신청이 당겨쓰기로 충당했던 일수(advance_days)도 되돌린다 (검증 B2 —
-     * 미복구 시 다음 기산일에 쓰지 않은 연차가 차감되는 결함).
-     *
-     * @param advanceUsedDays 해당 신청의 당겨쓰기 충당분 (LeaveRequest.advanceUsedDays 스냅샷)
+     * use_days를 되돌리면 advance_days는 재계산으로 따라온다 — 신청별 당겨쓰기 스냅샷을
+     * 빼는 방식이 아니다(리뷰 I-1). 덕분에 취소 순서에 결과가 달라지지 않고,
+     * 리셋 후 잔존 신청이 반려돼도 advance_days가 음수로 내려가지 않는다(리뷰 I-4).
      */
-    public void restoreLeave(BigDecimal days, BigDecimal advanceUsedDays) {
+    public void restoreLeave(BigDecimal days) {
         this.useDays = this.useDays.subtract(days);
-        this.advanceDays = this.advanceDays.subtract(advanceUsedDays);
+        syncAdvanceDays();
     }
 
-    /** 보너스 연차 가산 (복리후생 승인) */
+    /** 보너스 연차 가산 (복리후생 승인) — 가산분으로 충당되는 만큼 당겨쓰기가 정산된다 (리뷰 I-2) */
     public void addBonusDays(BigDecimal days) {
         BigDecimal bonus = bonusDays != null ? bonusDays : BigDecimal.ZERO;
         this.bonusDays = bonus.add(days);
+        syncAdvanceDays();
     }
 
     /**
      * 기산일 리셋 (기산일 스케줄러 — docs/01 2-7).
      * - 미사용 연차는 이월 없이 소멸 (호출 전 leave_reset_history 기록은 서비스 책임)
-     * - 당겨쓴 연차(advance_days)는 새 base_days에서 차감 후 초기화
+     * - 당겨쓴 연차(advance_days)는 새 base_days에서 차감 후 재계산
+     *
+     * <b>여기서도 syncAdvanceDays를 호출한다.</b> 빚이 새 정책 연차보다 크면 base_days가 음수로
+     * 남는데(newBase 15, advance 20 → base −5), 다음 리셋은 base를 <i>가감이 아니라 덮어쓰기</i>
+     * 하므로(위 첫 줄) 그 음수는 버려진다. 즉 남은 빚을 advance_days로 옮겨 담지 않으면
+     * 다음 기산일에 <b>빚이 면제된다.</b> 재계산하면 다음 리셋의 `newBase − advance`가 그 빚을
+     * 정확히 한 번 이어받는다.
+     *
+     * 재계산을 빼면 "리셋 후 다른 잔액 변경이 있었는지"에 따라 결과가 갈린다 — 활동이 없으면
+     * 빚이 사라지고, 월차가 1일이라도 적립되면 재계산이 걸려 빚이 살아난다. 리뷰 I-1과 같은
+     * 종류의 상태 의존 결함이다. 다년 검산(Σ부여 − Σ사용)으로 확인했다:
+     * <pre>
+     * Y1 부여 15 · 사용 35 → advance 20
+     * 리셋 → base −5, advance 5     (재계산 제외 시 advance 0)
+     * Y2 활동 없음
+     * 리셋 → base 15 − 5 = 10       (재계산 제외 시 15 − 0 = 15)
+     * 정답: 부여 45 − 사용 35 = 10  → 제외 시 5일 과다
+     * </pre>
+     *
+     * advance는 매 리셋마다 새 정책 연차만큼 줄어들어(50 → 35 → 20 → 5 → 0) 반드시 종료한다.
+     * docs/09 §5의 "advance를 다시 쌓으면 정산이 재귀적으로 이어진다"는 서술은 이 검산과
+     * 어긋나므로 docs/09에서 정정했다.
      */
     public void resetAnnualLeave(BigDecimal newBaseDays, LocalDate resetDate) {
-        this.baseDays = newBaseDays.subtract(this.advanceDays);
+        this.baseDays = newBaseDays.subtract(this.advanceDays); // 기존 빚을 먼저 읽어 차감
         this.useDays = BigDecimal.ZERO;
         this.bonusDays = BigDecimal.ZERO;
-        this.advanceDays = BigDecimal.ZERO;
         this.lastResetDate = resetDate;
+        // advance_days는 여기서 0으로 대입하지 않는다 — 파생값의 writer는 syncAdvanceDays 하나뿐이다.
+        // base가 음수면 남은 빚이 그대로 advance로 이어받아진다 (위 검산).
+        syncAdvanceDays();
     }
 
     /** 1년 미만 신입 월차 적립 — 매월 1일씩, 최대 11일 (갭분석 B-1). 상한 검증은 서비스에서. */
     public void addMonthlyLeave() {
         this.baseDays = this.baseDays.add(BigDecimal.ONE);
+        syncAdvanceDays();
     }
 
     /** 퇴직 처리 (SYSTEM_ADMIN 전용) — 소프트 삭제, 데이터 3년 보존 */
@@ -228,8 +266,12 @@ public class User extends BaseTimeEntity {
         this.birthDay = birthDay;
     }
 
-    /** 연차 직접 설정 (관리자 조작, PATCH /api/users/{id}/base-days) — 음수 검증은 서비스 책임 */
+    /**
+     * 연차 직접 설정 (관리자 조작, PATCH /api/users/{id}/base-days) — 음수 검증은 서비스 책임.
+     * 연차를 늘리면 당겨쓴 분이 그만큼 정산되고, 줄이면 초과분이 당겨쓰기로 잡힌다 (리뷰 I-8).
+     */
     public void updateBaseDays(BigDecimal baseDays) {
         this.baseDays = baseDays;
+        syncAdvanceDays();
     }
 }

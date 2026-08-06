@@ -35,6 +35,9 @@ SESSION.md
 # ── 개발 서버 로그 (/dev 커맨드가 Start-Process로 리다이렉트) ──
 .dev-logs/
 
+# ── Codex 서브 에이전트 실행 산출물 (역할 지시서 .codex/agents/는 추적) ──
+.codex/out/
+
 # ── OS ──
 Thumbs.db
 .DS_Store

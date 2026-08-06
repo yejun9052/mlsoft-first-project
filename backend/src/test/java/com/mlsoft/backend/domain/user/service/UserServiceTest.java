@@ -281,6 +281,18 @@ class UserServiceTest {
         assertEquals(0, new BigDecimal("20.0").compareTo(target.getBaseDays()));
     }
 
+    @Test
+    @DisplayName("연차 직접 설정 — 당겨쓴 사원의 연차를 늘리면 당겨쓰기가 정산된다 (리뷰 I-8)")
+    void updateBaseDays_existingAdvance_settlesAdvanceDays() {
+        User target = userWithAdvance(1L, "10.0", "13.0", "3.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")));
+
+        assertEquals(0, new BigDecimal("20.0").compareTo(target.getBaseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(target.getAdvanceDays()));
+    }
+
     // ============================ 헬퍼 ============================
 
     private void givenNoReassignTargets(User target) {
@@ -304,6 +316,21 @@ class UserServiceTest {
                 .useDays(BigDecimal.ZERO)
                 .bonusDays(BigDecimal.ZERO)
                 .advanceDays(BigDecimal.ZERO)
+                .isActive(true)
+                .build();
+    }
+
+    /** 당겨쓰기가 걸린 사원 — 잔액 불변식 검증용 */
+    private User userWithAdvance(Long id, String baseDays, String useDays, String advanceDays) {
+        return User.builder()
+                .id(id)
+                .name("user" + id)
+                .email("user" + id + "@mlsoft.com")
+                .role(Role.EMPLOYEE)
+                .baseDays(new BigDecimal(baseDays))
+                .useDays(new BigDecimal(useDays))
+                .bonusDays(BigDecimal.ZERO)
+                .advanceDays(new BigDecimal(advanceDays))
                 .isActive(true)
                 .build();
     }
