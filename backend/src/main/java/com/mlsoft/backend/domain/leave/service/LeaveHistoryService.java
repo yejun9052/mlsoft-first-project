@@ -55,6 +55,22 @@ public class LeaveHistoryService {
         return histories.map(LeaveHistoryLogResponse::of);
     }
 
+    /**
+     * 내가 처리한 로그 (GET /api/leave-histories/my-actions) — actor가 요청자인 이력만.
+     *
+     * <p>결재 화면의 "승인·반려 완료" 목록이 필요한 것이 이것이다. 팀 로그(my-team)는 <b>신청자 부서</b>
+     * 기준이라 남이 처리한 건도 섞이고, 전사 로그는 범위가 너무 넓다.
+     * actor를 토큰에서 가져오므로 부서 스코프 논쟁(리뷰 S-6)과도 무관하다 — 본인이 한 일만 보인다.
+     */
+    @Transactional(readOnly = true)
+    public Page<LeaveHistoryLogResponse> getMyActionHistories(Long actorId, RequestAction action,
+                                                              Pageable pageable) {
+        Page<LeaveActionHistory> histories = action == null
+                ? leaveActionHistoryRepository.findByActorId(actorId, pageable)
+                : leaveActionHistoryRepository.findByActorIdAndAction(actorId, action, pageable);
+        return histories.map(LeaveHistoryLogResponse::of);
+    }
+
     private User findUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));

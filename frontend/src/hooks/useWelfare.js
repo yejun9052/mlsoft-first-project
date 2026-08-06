@@ -10,11 +10,23 @@ import {
 
 // 쿼리 키 규칙: ['welfare', 서브리소스, ...파라미터]. 접두사(['welfare'])로 invalidate하면
 // policies/me/pending 등 복리후생 관련 쿼리가 한 번에 무효화된다 (useLeaves.js와 동일한 전략).
+// size도 키에 넣는다 — 서버 응답을 바꾸는 파라미터가 키에 없으면 크기가 다른 호출이 같은 캐시를
+// 공유해 먼저 캐시된 응답이 재사용된다 (리뷰 F-1).
 const welfareKeys = {
   policiesAll: ['welfare', 'policies', 'all'],
-  me: (page) => ['welfare', 'me', page],
-  pending: (page) => ['welfare', 'pending', page],
+  me: (page, size) => ['welfare', 'me', page, size],
+  pending: (page, size) => ['welfare', 'pending', page, size],
 };
+
+// 복리후생 승인은 User.addBonusDays로 **연차 잔액을 바꾼다** — ['welfare']만 무효화하면
+// 대시보드·내 정보의 잔여 연차가 낡은 값으로 남는다 (리뷰 F-5). 처리 이력 로그도 함께 낡는다.
+function invalidateWelfareAndRelated(queryClient, { touchesLeaveBalance = false } = {}) {
+  queryClient.invalidateQueries({ queryKey: ['welfare'] });
+  queryClient.invalidateQueries({ queryKey: ['histories', 'welfare'] });
+  if (touchesLeaveBalance) {
+    queryClient.invalidateQueries({ queryKey: ['leaves'] });
+  }
+}
 
 // 활성 정책 전체 — 신청 폼·카테고리 카드 그리드 공용 (GET /api/welfare-policies/all)
 export function useWelfarePoliciesAll() {
@@ -24,7 +36,7 @@ export function useWelfarePoliciesAll() {
 // 내 신청 내역 (GET /api/welfare-requests/me)
 export function useMyWelfareRequests({ page = 0, size = 20 } = {}) {
   return useQuery({
-    queryKey: welfareKeys.me(page),
+    queryKey: welfareKeys.me(page, size),
     queryFn: () => getMyWelfareRequests({ page, size }),
   });
 }
@@ -33,7 +45,7 @@ export function useMyWelfareRequests({ page = 0, size = 20 } = {}) {
 // enabled로 막지 않으면 EMPLOYEE가 마운트된 화면에서 403 에러 toast가 뜬다.
 export function usePendingWelfareApprovals({ page = 0, size = 50, enabled = true } = {}) {
   return useQuery({
-    queryKey: welfareKeys.pending(page),
+    queryKey: welfareKeys.pending(page, size),
     queryFn: () => getPendingWelfareApprovals({ page, size }),
     enabled,
   });
@@ -44,16 +56,17 @@ export function useApplyWelfare() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: applyWelfare,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['welfare'] }),
+    onSuccess: () => invalidateWelfareAndRelated(queryClient),
   });
 }
 
 // 승인/반려 뮤테이션 (POST /api/welfare-requests/{id}/approval)
+// 승인은 신청자의 bonus_days를 가산하므로 연차 잔액 쿼리까지 무효화한다 (리뷰 F-5).
 export function useProcessWelfareApproval() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, approved, comment }) => processWelfareApproval(id, { approved, comment }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['welfare'] }),
+    onSuccess: () => invalidateWelfareAndRelated(queryClient, { touchesLeaveBalance: true }),
   });
 }
 
@@ -62,6 +75,6 @@ export function useCancelWelfareRequest() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: cancelWelfareRequest,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['welfare'] }),
+    onSuccess: () => invalidateWelfareAndRelated(queryClient),
   });
 }

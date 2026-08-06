@@ -97,6 +97,9 @@ export default function TeamPage() {
         title="팀원"
         right={<span className="text-[12px] font-medium text-ink-mute">{teamMembers.length}명</span>}
         loading={teamMembersQuery.isLoading}
+        error={teamMembersQuery.isError}
+        errorLabel="팀원 목록을 불러오지 못했습니다."
+        onRetry={teamMembersQuery.refetch}
         empty={!teamMembersQuery.isLoading && teamMembers.length === 0}
         emptyLabel="팀원이 없습니다."
       >

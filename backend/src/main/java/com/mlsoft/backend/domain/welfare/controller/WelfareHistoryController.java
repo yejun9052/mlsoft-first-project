@@ -53,4 +53,19 @@ public class WelfareHistoryController {
                 welfareHistoryService.getMyTeamHistories(authUser.id(), action, pageable);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.WELFARE_HISTORY_FETCHED, response));
     }
+
+    /**
+     * 내가 처리한 복리후생 결재 로그 (페이징, 최신순, action 필터).
+     * 결재 화면의 "승인·반려 완료" 탭이 연차 로그와 함께 병합해 쓴다 (LeaveHistoryController와 동일 규칙).
+     */
+    @GetMapping("/my-actions")
+    public ResponseEntity<CommonResponse<Page<WelfareHistoryLogResponse>>> getMyActionHistories(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) RequestAction action,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<WelfareHistoryLogResponse> response =
+                welfareHistoryService.getMyActionHistories(authUser.id(), action, pageable);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.WELFARE_HISTORY_FETCHED, response));
+    }
 }

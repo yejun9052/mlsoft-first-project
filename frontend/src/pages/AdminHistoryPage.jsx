@@ -97,6 +97,9 @@ export default function AdminHistoryPage() {
 
       <TableCard
         loading={query.isLoading}
+        error={query.isError}
+        errorLabel="처리 이력을 불러오지 못했습니다."
+        onRetry={query.refetch}
         empty={!query.isLoading && rows.length === 0}
         emptyLabel="처리 이력이 없습니다."
       >

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   applyLeave,
+  cancelLeave,
   getAllLeaves,
   getCalendar,
   getMyLeaves,
@@ -13,14 +14,25 @@ import {
 
 // 쿼리 키 규칙: ['leaves', 서브리소스, ...파라미터]. 접두사(['leaves'])로 invalidate하면
 // summary/me/calendar/pending 등 연차 관련 쿼리가 한 번에 무효화된다 (아래 useApplyLeave 등 참고).
+//
+// **서버 응답을 바꾸는 파라미터는 전부 키에 넣는다** (리뷰 F-1). size가 빠져 있어서
+// 사이드바의 usePendingApprovals({size:1})와 결재 화면의 size=50이 같은 키를 공유했고,
+// 먼저 캐시된 응답이 재사용되어 결재 목록이 1건만 보일 수 있었다.
 const leaveKeys = {
   summary: ['leaves', 'summary'],
-  me: (status, page) => ['leaves', 'me', status ?? 'ALL', page],
+  me: (status, page, size) => ['leaves', 'me', status ?? 'ALL', page, size],
   calendar: (year, month) => ['leaves', 'calendar', year, month],
   team: (from, to) => ['leaves', 'team', from ?? 'default', to ?? 'default'],
-  pending: (page) => ['leaves', 'pending', page],
+  pending: (page, size) => ['leaves', 'pending', page, size],
   allCount: (status) => ['leaves', 'all-count', status],
 };
+
+// 연차 상태가 바뀌면 처리 이력 로그(['histories','leave'])도 함께 낡는다 — 관리자 이력 화면이나
+// 결재 완료 탭이 열려 있으면 이전 목록이 그대로 남는다 (리뷰 F-5).
+function invalidateLeaveAndHistories(queryClient) {
+  queryClient.invalidateQueries({ queryKey: ['leaves'] });
+  queryClient.invalidateQueries({ queryKey: ['histories', 'leave'] });
+}
 
 // 잔여 연차 요약 (GET /api/leaves/me/summary)
 export function useLeaveSummary() {
@@ -30,7 +42,7 @@ export function useLeaveSummary() {
 // 내 신청 내역 (GET /api/leaves/me)
 export function useMyLeaves({ status, page = 0, size = 100 } = {}) {
   return useQuery({
-    queryKey: leaveKeys.me(status, page),
+    queryKey: leaveKeys.me(status, page, size),
     queryFn: () => getMyLeaves({ status, page, size }),
   });
 }
@@ -55,7 +67,7 @@ export function useTeamLeaves({ from, to } = {}) {
 // enabled로 막지 않으면 EMPLOYEE가 마운트된 컴포넌트(사이드바 등)에서 403 에러 toast가 뜬다.
 export function usePendingApprovals({ page = 0, size = 50, enabled = true } = {}) {
   return useQuery({
-    queryKey: leaveKeys.pending(page),
+    queryKey: leaveKeys.pending(page, size),
     queryFn: () => getPendingApprovals({ page, size }),
     enabled,
   });
@@ -79,7 +91,7 @@ export function useApplyLeave() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: applyLeave,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leaves'] }),
+    onSuccess: () => invalidateLeaveAndHistories(queryClient),
   });
 }
 
@@ -88,7 +100,7 @@ export function useProcessApproval() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, approved, comment }) => processApproval(id, { approved, comment }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leaves'] }),
+    onSuccess: () => invalidateLeaveAndHistories(queryClient),
   });
 }
 
@@ -97,6 +109,17 @@ export function useProcessCancelApproval() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, approved, comment }) => processCancelApproval(id, { approved, comment }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leaves'] }),
+    onSuccess: () => invalidateLeaveAndHistories(queryClient),
+  });
+}
+
+// 연차 취소 뮤테이션 (POST /api/leaves/{id}/cancel) — 본인만.
+// 서버가 결과 상태를 돌려준다: 미래 날짜만이면 CANCELLED(즉시 취소), 과거가 섞여 있으면
+// CANCEL_PENDING(승인자 승인 대기). 호출부는 이 값으로 안내 문구를 갈라야 한다 (리뷰 F-3).
+export function useCancelLeave() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }) => cancelLeave(id, { reason }),
+    onSuccess: () => invalidateLeaveAndHistories(queryClient),
   });
 }

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Check, X } from 'lucide-react';
-import { processedApprovals } from '../mocks/data.js'; // TODO(backend): "내가 처리한 결재" 조회 API 없어 처리완료 탭은 아직 mock
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import {
@@ -11,6 +10,7 @@ import {
   useProcessApproval,
   useProcessCancelApproval,
 } from '../hooks/useLeaves.js';
+import { useLeaveHistories, useWelfareHistories } from '../hooks/useHistories.js';
 import { usePendingWelfareApprovals, useProcessWelfareApproval } from '../hooks/useWelfare.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -63,6 +63,38 @@ function mapPendingWelfareItem(item) {
   };
 }
 
+// 처리 이력 로그(LeaveHistoryLogResponse) → 테이블 행.
+// 이력에는 신청 사유가 없고 결재 의견(comment)이 있다 — 처리 결과를 보는 화면에서는 그게 더 필요한 정보다.
+function mapProcessedLeaveItem(log) {
+  return {
+    id: log.id,
+    kind: 'LEAVE',
+    applicantName: log.userName,
+    applicantDept: log.departmentName ?? '미배정',
+    type: log.leaveType,
+    dates: log.dates,
+    days: log.days,
+    reason: log.comment,
+    status: log.action,
+    processedAt: log.createdAt,
+  };
+}
+
+// 복리후생 처리 이력 로그(WelfareHistoryLogResponse) → 테이블 행
+function mapProcessedWelfareItem(log) {
+  return {
+    id: log.id,
+    kind: 'WELFARE',
+    applicantName: log.userName,
+    applicantDept: log.departmentName ?? '미배정',
+    days: log.addDays,
+    reason: log.comment,
+    status: log.action,
+    processedAt: log.createdAt,
+    appliedAt: log.createdAt,
+  };
+}
+
 // 신청 종류 라벨 (취소는 별도 표기, 복리는 공용 라벨, 그 외는 휴가 종류 매핑)
 function typeText(item) {
   if (item.kind === 'CANCEL') return '취소';
@@ -75,6 +107,7 @@ function typeText(item) {
 function periodText(item) {
   if (item.kind === 'WELFARE') return dayjs(item.appliedAt).format('YYYY.MM.DD');
   const { dates } = item;
+  if (!dates || dates.length === 0) return '-';
   const start = dayjs(dates[0]).format('YYYY.MM.DD');
   if (dates.length <= 1) return start;
   return `${start} ~ ${dayjs(dates[dates.length - 1]).format('MM.DD')}`;
@@ -148,7 +181,9 @@ function ApprovalRow({ item, mode, onOpenConfirm, actionDisabled }) {
         ) : (
           <div className="flex flex-col items-end gap-1">
             <StatusBadge status={item.status} />
-            <span className="text-[11px] text-ink-faint">{item.processedAt} 처리</span>
+            <span className="text-[11px] text-ink-faint">
+              {dayjs(item.processedAt).format('YYYY.MM.DD HH:mm')} 처리
+            </span>
           </div>
         )}
       </Td>
@@ -186,6 +221,23 @@ export default function ApprovalsPage() {
   // 승인/반려 확인 다이얼로그 — 클릭한 건 하나만 담는다(여러 건이 대기 중이어도 다이얼로그는 1개).
   const [confirmTarget, setConfirmTarget] = useState(null); // { item, action: 'approve' | 'reject' } | null
   const [comment, setComment] = useState('');
+
+  // 처리 완료(승인/반려) 탭 — 내가 처리한 결재 이력 (GET /api/leave-histories/my-actions).
+  // actor가 본인인 이력만 오므로 "내가 처리한 것"과 정확히 일치한다. 팀 로그(my-team)는 신청자 부서
+  // 기준이라 남이 처리한 건도 섞이므로 이 화면에는 맞지 않는다.
+  const isProcessedTab = activeTab !== 'PENDING';
+  const processedLeaveQuery = useLeaveHistories({
+    scope: 'my-actions',
+    action: activeTab,
+    size: 50,
+    enabled: isProcessedTab,
+  });
+  const processedWelfareQuery = useWelfareHistories({
+    scope: 'my-actions',
+    action: activeTab,
+    size: 50,
+    enabled: isProcessedTab,
+  });
 
   // 연차(신규·취소) 대기 + 복리후생 대기를 한 탭에 병합. id는 테이블이 서로 달라 겹칠 수 있어
   // 렌더링 key는 kind까지 포함해서 만든다.
@@ -229,13 +281,34 @@ export default function ApprovalsPage() {
     closeConfirm();
   }
 
-  // 처리 완료(승인/반려) 탭 — "내가 처리한 결재" 목록을 주는 API가 아직 없어 mock 유지.
-  // (SA는 GET /api/leaves?status=로 회사 전체 조회가 가능하지만, 이 화면이 원하는 "내가 처리한 것"과는
-  //  범위가 다름 — TEAM_LEADER 기준 처리 이력 API가 필요, 다음 백엔드 라운드에서 결정)
-  const list =
-    activeTab === 'PENDING' ? pendingList : processedApprovals.filter((p) => p.status === activeTab);
-  const mode = activeTab === 'PENDING' ? 'pending' : 'processed';
+  // 처리 완료 목록 — 연차·복리후생 이력을 병합해 처리 시각 최신순으로 정렬한다.
+  const processedList = [
+    ...(processedLeaveQuery.data?.content ?? []).map(mapProcessedLeaveItem),
+    ...(processedWelfareQuery.data?.content ?? []).map(mapProcessedWelfareItem),
+  ].sort((a, b) => dayjs(b.processedAt).valueOf() - dayjs(a.processedAt).valueOf());
+
+  const list = isProcessedTab ? processedList : pendingList;
+  const mode = isProcessedTab ? 'processed' : 'pending';
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? '';
+
+  // 로딩·실패는 탭에 따라 보는 쿼리가 다르다. 실패를 빈 상태로 보여주면 "결재할 게 없다"고
+  // 오해해 대기 건을 놓친다 (리뷰 F-6) — TableCard가 error를 empty보다 먼저 처리한다.
+  const listLoading = isProcessedTab
+    ? processedLeaveQuery.isLoading || processedWelfareQuery.isLoading
+    : pendingLoading;
+  const listError = isProcessedTab
+    ? processedLeaveQuery.isError || processedWelfareQuery.isError
+    : pendingQuery.isError || pendingWelfareQuery.isError;
+
+  function retryList() {
+    if (isProcessedTab) {
+      processedLeaveQuery.refetch();
+      processedWelfareQuery.refetch();
+    } else {
+      pendingQuery.refetch();
+      pendingWelfareQuery.refetch();
+    }
+  }
 
   const tabItems = TABS.map((tab) => ({
     value: tab.key,
@@ -258,7 +331,10 @@ export default function ApprovalsPage() {
 
       {/* 결재 테이블 */}
       <TableCard
-        loading={activeTab === 'PENDING' && pendingLoading}
+        loading={listLoading}
+        error={listError}
+        errorLabel={`${activeLabel} 결재 목록을 불러오지 못했습니다.`}
+        onRetry={retryList}
         empty={list.length === 0}
         emptyLabel={`${activeLabel} 결재 건이 없습니다.`}
       >

@@ -76,6 +76,9 @@ export default function AdminMembersPage() {
 
   const rows = tab === TAB_ACTIVE ? (activeQuery.data?.content ?? []) : (retiredQuery.data?.content ?? []);
   const loading = tab === TAB_ACTIVE ? activeQuery.isLoading : retiredQuery.isLoading;
+  // 조회 실패를 "조회된 구성원이 없습니다"로 보여주면 관리자가 계정이 사라졌다고 오해한다 (리뷰 F-6)
+  const listError = tab === TAB_ACTIVE ? activeQuery.isError : retiredQuery.isError;
+  const retryList = tab === TAB_ACTIVE ? activeQuery.refetch : retiredQuery.refetch;
   const activeDepartments = (departmentsQuery.data ?? []).filter((d) => d.active);
 
   function openRoleModal(user) {
@@ -161,7 +164,14 @@ export default function AdminMembersPage() {
       )}
 
       {/* 테이블 카드 */}
-      <TableCard loading={loading} empty={!loading && rows.length === 0} emptyLabel="조회된 구성원이 없습니다.">
+      <TableCard
+        loading={loading}
+        error={listError}
+        errorLabel="구성원 목록을 불러오지 못했습니다."
+        onRetry={retryList}
+        empty={!loading && rows.length === 0}
+        emptyLabel="조회된 구성원이 없습니다."
+      >
         <Table className="min-w-[920px]">
           <THead>
             <Th>구성원</Th>

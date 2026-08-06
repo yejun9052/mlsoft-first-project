@@ -11,6 +11,7 @@ import Select from '../components/ui/Select.jsx';
 import Toggle from '../components/ui/Toggle.jsx';
 import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
 import {
   useLeavePolicies,
   useLeavePolicyConfigs,
@@ -154,6 +155,9 @@ export default function AdminPolicyPage() {
           title="근속년수별 연차 정책"
           right={<span className="text-[11px] text-ink-faint">근로기준법 §60 기준</span>}
           loading={policiesQuery.isLoading}
+          error={policiesQuery.isError}
+          errorLabel="연차 정책을 불러오지 못했습니다."
+          onRetry={policiesQuery.refetch}
           empty={!policiesQuery.isLoading && policies.length === 0}
           emptyLabel="등록된 정책이 없습니다."
         >
@@ -222,7 +226,10 @@ export default function AdminPolicyPage() {
 
         {/* ② 연차 시스템 설정 */}
         <Card title="연차 시스템 설정">
-          {configValues === null ? (
+          {/* configValues === null만 보면 조회 실패 시 스피너가 영원히 돈다 (리뷰 F-6) */}
+          {configsQuery.isError ? (
+            <ErrorState label="시스템 설정을 불러오지 못했습니다." onRetry={configsQuery.refetch} />
+          ) : configValues === null ? (
             <LoadingState />
           ) : (
             <>
@@ -282,6 +289,9 @@ export default function AdminPolicyPage() {
         title="기산일 리셋 · 소멸 이력"
         className="mt-5"
         loading={historiesQuery.isLoading}
+        error={historiesQuery.isError}
+        errorLabel="리셋 이력을 불러오지 못했습니다."
+        onRetry={historiesQuery.refetch}
         empty={!historiesQuery.isLoading && histories.length === 0}
         emptyLabel="리셋 이력이 없습니다."
       >

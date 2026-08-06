@@ -32,4 +32,12 @@ public interface WelfareActionHistoryRepository extends JpaRepository<WelfareAct
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
     Page<WelfareActionHistory> findByUserDepartmentIdAndAction(Long departmentId, RequestAction action,
                                                                Pageable pageable);
+
+    /** 내가 처리한 로그 (GET /api/welfare-histories/my-actions) — actor 기준 */
+    @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
+    Page<WelfareActionHistory> findByActorId(Long actorId, Pageable pageable);
+
+    /** 내가 처리한 로그 — action 필터 */
+    @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
+    Page<WelfareActionHistory> findByActorIdAndAction(Long actorId, RequestAction action, Pageable pageable);
 }

@@ -53,4 +53,21 @@ public class LeaveHistoryController {
                 leaveHistoryService.getMyTeamHistories(authUser.id(), action, pageable);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_HISTORY_FETCHED, response));
     }
+
+    /**
+     * 내가 처리한 연차 결재 로그 (페이징, 최신순, action 필터).
+     * 결재 화면의 "승인·반려 완료" 탭이 쓰는 목록 — actor가 본인인 이력만 나온다.
+     * 역할 게이트를 두지 않는 이유: 본인이 처리한 이력만 보이므로 권한 노출 위험이 없고,
+     * 일반 사원도 자기 신청을 취소한 이력을 갖는다.
+     */
+    @GetMapping("/my-actions")
+    public ResponseEntity<CommonResponse<Page<LeaveHistoryLogResponse>>> getMyActionHistories(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam(required = false) RequestAction action,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<LeaveHistoryLogResponse> response =
+                leaveHistoryService.getMyActionHistories(authUser.id(), action, pageable);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_HISTORY_FETCHED, response));
+    }
 }

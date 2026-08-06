@@ -73,6 +73,9 @@ export default function WelfarePage() {
       <TableCard
         title="복리후생 안내"
         loading={policiesQuery.isLoading}
+        error={policiesQuery.isError}
+        errorLabel="복리후생 정책을 불러오지 못했습니다."
+        onRetry={policiesQuery.refetch}
         empty={policies.length === 0}
         emptyLabel="등록된 복리후생 정책이 없습니다."
       >
@@ -103,6 +106,9 @@ export default function WelfarePage() {
         <TableCard
           title="내 신청 내역"
           loading={myRequestsQuery.isLoading}
+          error={myRequestsQuery.isError}
+          errorLabel="신청 내역을 불러오지 못했습니다."
+          onRetry={myRequestsQuery.refetch}
           empty={myRequests.length === 0}
           emptyLabel="신청 내역이 없습니다."
         >

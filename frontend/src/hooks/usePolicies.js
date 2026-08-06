@@ -9,10 +9,12 @@ import {
 
 // 쿼리 키 규칙: ['policies', 서브리소스, ...파라미터]. 접두사(['policies'])로 invalidate하면
 // leave-policies/configs/reset-histories가 한 번에 무효화된다 (users/welfare와 동일한 전략).
+// size도 키에 넣는다 — 서버 응답을 바꾸는 파라미터가 키에 없으면 크기가 다른 호출이 같은 캐시를
+// 공유해 먼저 캐시된 응답이 재사용된다 (리뷰 F-1).
 const policyKeys = {
   leavePolicies: ['policies', 'leave-policies'],
   configs: ['policies', 'configs'],
-  resetHistories: (page) => ['policies', 'reset-histories', page],
+  resetHistories: (page, size) => ['policies', 'reset-histories', page, size],
 };
 
 // 근속년수별 연차 정책 목록 (GET /api/admin/leave-policies, SYSTEM_ADMIN 전용)
@@ -47,7 +49,7 @@ export function useUpdateLeavePolicyConfig() {
 // 기산일 리셋·소멸 이력 (GET /api/admin/reset-histories, SYSTEM_ADMIN 전용)
 export function useResetHistories({ page = 0, size = 50 } = {}) {
   return useQuery({
-    queryKey: policyKeys.resetHistories(page),
+    queryKey: policyKeys.resetHistories(page, size),
     queryFn: () => getResetHistories({ page, size }),
   });
 }

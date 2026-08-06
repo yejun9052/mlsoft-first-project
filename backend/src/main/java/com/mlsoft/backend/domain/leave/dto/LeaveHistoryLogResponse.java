@@ -6,7 +6,9 @@ import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.user.entity.User;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 연차 처리 로그 응답 (GET /api/leave-histories — docs/03 처리 이력).
@@ -24,6 +26,8 @@ public record LeaveHistoryLogResponse(
         String departmentName,
         String leaveType,
         BigDecimal days,
+        /** 신청 날짜 목록 — 결재 화면이 기간을 표시한다. LeaveRequest.dates는 @BatchSize로 묶여 조회된다 */
+        List<LocalDate> dates,
         String comment,
         LocalDateTime createdAt
 ) {
@@ -41,6 +45,7 @@ public record LeaveHistoryLogResponse(
                 department != null ? department.getName() : null,
                 request.getLeaveType().name(),
                 request.getDays(),
+                List.copyOf(request.getDates()),
                 history.getComment(),
                 history.getCreatedAt()
         );

@@ -25,6 +25,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -105,6 +106,9 @@ public class LeaveRequest extends BaseTimeEntity {
     @OrderBy // 기본(값) 오름차순 — 시작일·종료일 판정이 순서에 의존하므로 명시 (검증 B5)
     @Column(name = "day", nullable = false)
     @Builder.Default
+    // 목록 조회에서 신청 N건의 날짜를 개별 쿼리로 읽지 않게 배치로 묶는다 (리뷰 D-2 N+1).
+    // 컬렉션이라 @EntityGraph로 함께 적재하면 페이징이 메모리에서 처리되므로 배치 fetch를 쓴다.
+    @BatchSize(size = 50)
     private List<LocalDate> dates = new ArrayList<>();
 
     /**

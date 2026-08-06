@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
-import { Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Loader2, X } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import Stat from '../components/ui/Stat.jsx';
@@ -9,8 +10,17 @@ import Chip from '../components/ui/Chip.jsx';
 import FilterGroup from '../components/ui/FilterGroup.jsx';
 import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
+import Button from '../components/ui/Button.jsx';
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
+import Field from '../components/ui/Field.jsx';
+import Textarea from '../components/ui/Textarea.jsx';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
-import { useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import { useCancelLeave, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+
+// 취소할 수 있는 상태 — 대기 중이거나 승인된 건만 (반려·취소·취소대기는 대상 아님).
+// 과거 날짜가 포함된 승인 건은 서버가 소급 취소(CANCEL_PENDING)로 돌려 승인자 승인을 받는다.
+const CANCELLABLE_STATUSES = ['PENDING', 'APPROVED'];
 
 // 종류 필터 — 반차는 오전·오후를 하나로, 경조복리는 WELFARE 로 묶음
 const TYPE_FILTERS = [
@@ -52,9 +62,50 @@ function ReasonCell({ reason }) {
 // 사용 내역 — 내 연차·복리후생 신청 이력 필터·조회 (docs/05 §④)
 // WELFARE 항목은 복리후생 API가 아직 없어 이 목록엔 나타나지 않는다 (종류 필터의 '경조/복리'는 항상 빈 결과).
 export default function HistoryPage() {
-  const { data: page, isLoading } = useMyLeaves();
-  const { data: summary } = useLeaveSummary();
+  const leavesQuery = useMyLeaves();
+  const summaryQuery = useLeaveSummary();
+  const cancelMutation = useCancelLeave();
+  const { data: page, isLoading } = leavesQuery;
+  const { data: summary } = summaryQuery;
   const myLeaveRequests = useMemo(() => page?.content ?? [], [page]);
+
+  // 취소 확인 다이얼로그 — 클릭한 건 하나만 담는다
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+
+  function openCancel(request) {
+    setCancelTarget(request);
+    setCancelReason('');
+  }
+
+  function closeCancel() {
+    setCancelTarget(null);
+    setCancelReason('');
+  }
+
+  function handleCancel() {
+    if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (reason === '') {
+      toast.error('취소 사유를 입력해주세요.');
+      return;
+    }
+    cancelMutation.mutate(
+      { id: cancelTarget.id, reason },
+      {
+        // 서버가 결과 상태를 정한다 — 미래 날짜만이면 즉시 취소, 과거가 섞였으면 승인 대기.
+        // 즉시 취소된 것처럼 안내하면 사용자가 연차가 복구됐다고 오해한다.
+        onSuccess: (status) => {
+          if (status === 'CANCEL_PENDING') {
+            toast.success('지난 날짜가 포함되어 결재자 승인 후 취소됩니다.');
+          } else {
+            toast.success('연차 신청을 취소했습니다.');
+          }
+          closeCancel();
+        },
+      },
+    );
+  }
 
   // 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선)
   const yearOptions = useMemo(
@@ -76,6 +127,19 @@ export default function HistoryPage() {
       return true;
     });
   }, [myLeaveRequests, activeYear, typeFilter, statusFilter]);
+
+  // 실패를 로딩과 구분한다 — !summary만 보면 조회 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
+  if (leavesQuery.isError || summaryQuery.isError) {
+    return (
+      <ErrorState
+        label="사용 내역을 불러오지 못했습니다."
+        onRetry={() => {
+          leavesQuery.refetch();
+          summaryQuery.refetch();
+        }}
+      />
+    );
+  }
 
   if (isLoading || !summary) {
     return (
@@ -155,6 +219,7 @@ export default function HistoryPage() {
             <Th right>일수</Th>
             <Th>사유</Th>
             <Th>상태</Th>
+            <Th right>취소</Th>
           </THead>
           <tbody>
             {filtered.map((req) => (
@@ -171,11 +236,57 @@ export default function HistoryPage() {
                 <Td>
                   <StatusBadge status={req.status} />
                 </Td>
+                <Td right>
+                  {CANCELLABLE_STATUSES.includes(req.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      Icon={X}
+                      onClick={() => openCancel(req)}
+                      disabled={cancelMutation.isPending}
+                    >
+                      취소
+                    </Button>
+                  )}
+                </Td>
               </TR>
             ))}
           </tbody>
         </Table>
       </TableCard>
+
+      {/* 취소 확인 — 사유는 필수다(서버 CancelRequest도 필수). 승인된 건은 지난 날짜가 섞였는지에 따라
+          즉시 취소 / 결재자 승인 대기로 갈리므로 그 사실을 미리 알린다. */}
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        title="연차 신청 취소"
+        message={
+          cancelTarget &&
+          `${formatPeriod(cancelTarget.dates)} ${LEAVE_TYPE_LABEL[cancelTarget.leaveType]} ${cancelTarget.days}일 신청을 취소하시겠습니까?`
+        }
+        tone="danger"
+        confirmLabel="취소 신청"
+        onConfirm={handleCancel}
+        onCancel={closeCancel}
+        loading={cancelMutation.isPending}
+      >
+        <Field
+          label="취소 사유"
+          hint={
+            cancelTarget?.status === 'APPROVED'
+              ? '지난 날짜가 포함된 승인 건은 결재자 승인 후 취소됩니다.'
+              : '결재 이력에 남습니다.'
+          }
+          className="mt-3"
+        >
+          <Textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            rows={2}
+            placeholder="취소 사유를 입력하세요"
+          />
+        </Field>
+      </ConfirmDialog>
     </div>
   );
 }

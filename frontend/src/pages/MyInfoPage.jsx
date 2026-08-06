@@ -10,6 +10,7 @@ import Field from '../components/ui/Field.jsx';
 import TextInput from '../components/ui/TextInput.jsx';
 import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
 import { ROLE_LABEL } from '../constants/roles.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveSummary } from '../hooks/useLeaves.js';
@@ -51,13 +52,28 @@ function SummaryRow({ label, value, unit = '일', tone, hero }) {
 // UserMeResponse(GET /api/auth/me)에는 직책·전화번호 필드가 없어(관리자용 UserResponse와 달리 경량 응답)
 // 해당 항목은 화면에서 노출하지 않는다 — 없는 데이터를 다른 API로 우회 보강하지 않는다.
 export default function MyInfoPage() {
-  const { data: me } = useCurrentUser();
-  const { data: summary } = useLeaveSummary();
+  const meQuery = useCurrentUser();
+  const summaryQuery = useLeaveSummary();
+  const { data: me } = meQuery;
+  const { data: summary } = summaryQuery;
   const updateProfileMutation = useUpdateMyProfile();
 
   // 수정 폼 — useCurrentUser는 localStorage initialData 덕에 첫 렌더부터 값이 채워져 있다.
   const [name, setName] = useState(me?.name ?? '');
   const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
+
+  // 실패를 로딩과 구분한다 — !summary 가드만 있으면 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
+  if (meQuery.isError || summaryQuery.isError) {
+    return (
+      <ErrorState
+        label="내 정보를 불러오지 못했습니다."
+        onRetry={() => {
+          meQuery.refetch();
+          summaryQuery.refetch();
+        }}
+      />
+    );
+  }
 
   if (!me || !summary) {
     return <LoadingState className="h-full" />;

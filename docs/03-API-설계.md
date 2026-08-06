@@ -136,6 +136,20 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
+> **처리 이력 — 스코프 3종 (2026-08-06)**
+>
+> | URL | 스코프 | 권한 |
+> |---|---|---|
+> | `GET /api/leave-histories` · `/api/welfare-histories` | 전사 | SA |
+> | `.../my-team` | **신청자 소속 부서** — 남이 처리한 건도 포함 | TL·SA |
+> | `.../my-actions` | **actor가 본인인 이력만** | 로그인 전체 |
+>
+> `my-actions`는 결재 화면의 "승인·반려 완료" 탭용이다. `my-team`은 부서 기준이라 "내가 처리한 것"과
+> 다르고, 전사는 너무 넓다. actor를 토큰에서 가져오므로 부서 스코프 논쟁(리뷰 S-6)과 무관하고
+> 역할 게이트가 없다 — 본인이 한 일만 보인다.
+>
+> 연차 로그 응답에는 `dates`(신청 날짜 목록)가 포함된다 — 결재 화면이 기간을 표시한다.
+
 | GET | `/api/admin/configs` | 설정 전체 조회 (값 + 메타데이터) | SA |
 | PUT | `/api/admin/configs` | 설정 변경 `{name, value}` | SA |
 | GET | `/api/admin/leave-policies` | 근속년수별 정책 목록 | SA |

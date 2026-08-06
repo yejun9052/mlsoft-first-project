@@ -49,6 +49,16 @@ public class WelfareHistoryService {
         return histories.map(WelfareHistoryLogResponse::of);
     }
 
+    /** 내가 처리한 로그 (GET /api/welfare-histories/my-actions) — 결재 화면 "완료" 탭용. LeaveHistoryService와 동일 규칙 */
+    @Transactional(readOnly = true)
+    public Page<WelfareHistoryLogResponse> getMyActionHistories(Long actorId, RequestAction action,
+                                                                Pageable pageable) {
+        Page<WelfareActionHistory> histories = action == null
+                ? welfareActionHistoryRepository.findByActorId(actorId, pageable)
+                : welfareActionHistoryRepository.findByActorIdAndAction(actorId, action, pageable);
+        return histories.map(WelfareHistoryLogResponse::of);
+    }
+
     private User findUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));

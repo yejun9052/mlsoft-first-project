@@ -101,6 +101,8 @@ Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토�
 
 로컬은 MySQL 서비스 `MySQL96`(3306)의 `mlsoft_leave` DB를 쓴다. 테스트는 H2 인메모리(MySQL 호환 모드, `year/day/value`를 `NON_KEYWORDS`로 허용).
 
+`DemoDataInitializer`가 **`local` 프로필에서만** 시연 데이터를 만든다 — 사원 8·부서 3·연차 신청 8(모든 상태)·복리후생 2·처리 이력. 화면을 mock 없이 실 API로 채우기 위한 것이다(리뷰 F-2). 잔액은 반드시 도메인 메서드(`deductLeave`/`restoreLeave`)로 만들어 불변식을 지킨다 — 행을 직접 짜 넣지 말 것. **`@Profile("local")`을 지우거나 넓히지 말 것**: 시연 계정이 운영 DB에 들어가면 실제 사원과 구분할 방법이 없다. 재기동은 안전하다(멱등).
+
 `ADMIN_EMAILS`(`app.admin-emails`)는 **최초 자동 가입 시에만** SYSTEM_ADMIN을 부여한다. 이미 가입된 계정을 승격하려면 DB `UPDATE users SET role='SYSTEM_ADMIN'` + 재로그인이 함께 필요하다.
 
 `jpa.hibernate.ddl-auto: update` — 아직 마이그레이션 도구 없음. 운영 전환 시 validate + Flyway로 바꿔야 한다 (docs/08 Y-6).

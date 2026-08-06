@@ -39,4 +39,12 @@ public interface LeaveActionHistoryRepository extends JpaRepository<LeaveActionH
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
     Page<LeaveActionHistory> findByUserDepartmentIdAndAction(Long departmentId, RequestAction action,
                                                              Pageable pageable);
+
+    /** 내가 처리한 로그 (GET /api/leave-histories/my-actions) — actor 기준이라 부서 스코프와 무관하다 */
+    @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
+    Page<LeaveActionHistory> findByActorId(Long actorId, Pageable pageable);
+
+    /** 내가 처리한 로그 — action 필터 (GET /api/leave-histories/my-actions?action=) */
+    @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
+    Page<LeaveActionHistory> findByActorIdAndAction(Long actorId, RequestAction action, Pageable pageable);
 }

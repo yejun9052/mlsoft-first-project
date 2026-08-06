@@ -8,6 +8,7 @@ import Button from '../components/ui/Button.jsx';
 import Stat from '../components/ui/Stat.jsx';
 import StatStrip from '../components/ui/StatStrip.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
+import ErrorState from '../components/ui/ErrorState.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
 import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holidays 생기면 이 mock 제거
@@ -24,7 +25,8 @@ function formatDates(dates) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { data: me } = useCurrentUser();
+  const meQuery = useCurrentUser();
+  const { data: me } = meQuery;
   const summaryQuery = useLeaveSummary();
   const myLeavesQuery = useMyLeaves();
   // 이번 달 캘린더만 조회 — 월 경계 근처(말일)에는 다음 달 일정이 "다가오는 일정"에서 누락될 수 있음
@@ -60,6 +62,20 @@ export default function DashboardPage() {
   // TODO(welfare API): 복리후생 신청까지 합산하려면 그쪽 API가 생긴 뒤 더해야 함.
   const isAwaitingApproval = (r) => r.status === 'PENDING' || r.status === 'CANCEL_PENDING';
   const myPendingCount = myLeaves.filter(isAwaitingApproval).length;
+
+  // 실패를 로딩과 구분한다 — 아래 !summary 가드만 있으면 조회가 실패해도 계속 "불러오는 중"이
+  // 표시돼 스피너가 영원히 돈다 (리뷰 F-6).
+  if (summaryQuery.isError || meQuery.isError) {
+    return (
+      <ErrorState
+        label="대시보드를 불러오지 못했습니다."
+        onRetry={() => {
+          summaryQuery.refetch();
+          meQuery.refetch();
+        }}
+      />
+    );
+  }
 
   // 로딩 — 통계 계산에 필요한 요약·현재유저 데이터가 없으면 진행 중 표시
   if (!summary || !me) {

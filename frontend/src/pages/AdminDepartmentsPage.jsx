@@ -148,6 +148,9 @@ export default function AdminDepartmentsPage() {
           </Button>
         }
         loading={departmentsQuery.isLoading}
+        error={departmentsQuery.isError}
+        errorLabel="부서 목록을 불러오지 못했습니다."
+        onRetry={departmentsQuery.refetch}
         empty={!departmentsQuery.isLoading && orderedRows.length === 0}
         emptyLabel="등록된 부서가 없습니다. 부서를 추가해주세요."
       >
