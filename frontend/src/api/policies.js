@@ -12,13 +12,16 @@ export async function updateLeavePolicy(id, { annualLeaveDays, description }) {
   return res.data.data;
 }
 
-// 연차 시스템 설정 전체 조회 — value는 항상 문자열이며 타입·라벨 메타데이터는 없다 (GET /api/admin/configs)
+// 연차 시스템 설정 전체 조회 (GET /api/admin/configs).
+// value는 항상 문자열이고, 렌더에 필요한 메타데이터가 함께 온다 —
+// type(BOOLEAN/INTEGER/DECIMAL/ENUM) · min · max · unit · options · label · description · defaultValue ·
+// status(ACTIVE|PENDING_FEATURE). 서버 카탈로그 순서대로 오며, 프론트가 키 이름을 알 필요가 없다.
 export async function getLeavePolicyConfigs() {
   const res = await api.get('/admin/configs');
   return res.data.data; // LeavePolicyConfigResponse[]
 }
 
-// 설정 변경 — name 기준 단건 갱신, 새 키 생성은 지원하지 않는다 (PUT /api/admin/configs)
+// 설정 변경 — name 기준 단건 갱신. 카탈로그에 없는 키는 404, 타입·범위 위반은 400 (PUT /api/admin/configs)
 export async function updateLeavePolicyConfig({ name, value }) {
   const res = await api.put('/admin/configs', { name, value });
   return res.data.data;

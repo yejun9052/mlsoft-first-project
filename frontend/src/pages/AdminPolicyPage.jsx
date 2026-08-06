@@ -19,26 +19,29 @@ import {
   useUpdateLeavePolicyConfig,
 } from '../hooks/usePolicies.js';
 
-// 설정 항목(config.name) → 화면 표시 메타 — 실 API(GET /api/admin/configs)는 {id,name,value} 문자열만
-// 내려주고 라벨·타입·설명 메타데이터가 없다. 3개 고정 키에 한해 프론트에서 하드코딩해 보강한다.
-const CONFIG_META = {
-  advance_leave_enabled: {
-    label: '연차 당겨쓰기 허용',
-    type: 'boolean',
-    description: '잔여가 부족해도 당겨쓰기로 접수 (다음 기산일 정산)',
-  },
-  reminder_list_days: {
-    label: '소진 안내 기준일',
-    type: 'number',
-    description: '기산일 N일 전부터 소진 안내 대상에 표시',
-  },
-  reminder_auto_cycle: {
-    label: '자동 발송 주기',
-    type: 'select',
-    options: ['NONE', 'D30', 'D60', 'D90', 'QUARTER'],
-    description: '기산일 임박 사원에게 자동 메일 발송 주기',
-  },
-};
+// 설정 항목의 라벨·타입·범위·설명은 전부 서버가 내려준다 (GET /api/admin/configs).
+// 한때 이 파일에 CONFIG_META로 하드코딩돼 있었는데, 그러면 서버에 설정을 추가할 때마다 여기도
+// 고쳐야 하고 빼먹으면 그 설정이 화면에서 조용히 사라졌다. 지금은 프론트가 키 이름을 모른다.
+
+// 서버 값 검증 — 저장 전에 범위를 확인해 즉시 안내한다 (서버도 같은 검증을 하지만 왕복을 아낀다)
+function validateConfigValue(config, value) {
+  if (config.type === 'BOOLEAN' || config.type === 'ENUM') return null;
+  const trimmed = String(value).trim();
+  if (trimmed === '' || Number.isNaN(Number(trimmed))) {
+    return `${config.label}: 숫자를 입력해주세요.`;
+  }
+  const num = Number(trimmed);
+  if (config.type === 'INTEGER' && !Number.isInteger(num)) {
+    return `${config.label}: 정수를 입력해주세요.`;
+  }
+  if (config.min !== null && num < Number(config.min)) {
+    return `${config.label}: ${Number(config.min)} 이상이어야 합니다.`;
+  }
+  if (config.max !== null && num > Number(config.max)) {
+    return `${config.label}: ${Number(config.max)} 이하여야 합니다.`;
+  }
+  return null;
+}
 
 // 연차 정책 — 근속년수별 정책(인라인 수정) / 시스템 설정(일괄 저장) / 리셋·소멸 이력 (docs/03, SYSTEM_ADMIN 전용)
 export default function AdminPolicyPage() {
@@ -81,30 +84,58 @@ export default function AdminPolicyPage() {
     );
   }
 
-  // ② 시스템 설정 — name→value 로컬 편집 상태. 서버 응답이 처음 도착했을 때 한 번만 초기화하고,
-  // 이후에는 사용자가 편집 중인 값을 그대로 유지한다(재조회로 덮어쓰지 않음).
+  // ② 시스템 설정 — name→value 로컬 편집 상태.
+  // 재조회 때 편집 중인 값은 유지하고 **로컬에 없는 키만** 서버 값으로 채운다.
+  // 처음 한 번만 초기화하면 서버 카탈로그에 설정이 추가됐을 때 그 키가 로컬 상태에 영원히 없어서,
+  // 저장 시 value=undefined가 전송되고 다른 정상 변경까지 400으로 막힌다.
   const [configValues, setConfigValues] = useState(null);
   const [savingConfigs, setSavingConfigs] = useState(false);
 
   useEffect(() => {
-    if (configsQuery.data && configValues === null) {
-      setConfigValues(Object.fromEntries(configsQuery.data.map((c) => [c.name, c.value])));
-    }
-  }, [configsQuery.data, configValues]);
+    if (!configsQuery.data) return;
+    setConfigValues((prev) => {
+      const next = { ...(prev ?? {}) };
+      configsQuery.data.forEach((c) => {
+        if (!(c.name in next)) next[c.name] = c.value;
+      });
+      return next;
+    });
+  }, [configsQuery.data]);
 
   function updateConfigValue(name, value) {
     setConfigValues((prev) => ({ ...prev, [name]: value }));
   }
 
-  // 저장 — PUT이 name 단건 갱신뿐이라 항목 수(3개)만큼 병렬 호출하고, 결과는 토스트 하나로 안내한다.
+  // 표시·비교·전송이 항상 같은 값을 쓰게 한다 (한쪽만 fallback하면 위 버그가 재발한다)
+  function currentValue(config) {
+    return configValues?.[config.name] ?? config.value;
+  }
+
+  // 저장 — PUT이 name 단건 갱신뿐이라 항목마다 호출한다. 단 서버 값과 다른 항목만 보낸다
+  // (설정이 늘어날수록 전체 재전송은 낭비이고, 로그에도 바꾸지 않은 설정 변경이 남는다).
   async function handleSaveConfigs() {
     if (!configValues) return;
+
+    const changed = (configsQuery.data ?? []).filter((c) => currentValue(c) !== c.value);
+    if (changed.length === 0) {
+      toast.success('변경된 설정이 없습니다.');
+      return;
+    }
+
+    const firstError = changed
+      .map((c) => validateConfigValue(c, currentValue(c)))
+      .find((message) => message !== null);
+    if (firstError) {
+      toast.error(firstError);
+      return;
+    }
+
     setSavingConfigs(true);
     try {
       await Promise.all(
-        Object.entries(configValues).map(([name, value]) => updateConfigMutation.mutateAsync({ name, value })),
+        changed.map((c) => updateConfigMutation.mutateAsync({ name: c.name, value: currentValue(c) })),
       );
-      toast.success('설정이 저장되었습니다.');
+      toast.success(`설정 ${changed.length}건을 저장했습니다.`);
     } catch {
       // 실패는 api 인터셉터가 토스트로 일괄 처리
     } finally {
@@ -196,29 +227,45 @@ export default function AdminPolicyPage() {
           ) : (
             <>
               <div className="flex flex-col">
-                {configsQuery.data
-                  .filter((c) => CONFIG_META[c.name])
-                  .map((c) => {
-                    const meta = CONFIG_META[c.name];
-                    return (
-                      <div
-                        key={c.name}
-                        className="flex items-center justify-between gap-4 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0"
-                      >
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-medium text-ink-hi">{meta.label}</div>
-                          <div className="mt-0.5 text-[12px] text-ink-mute">{meta.description}</div>
-                        </div>
-                        <div className="shrink-0">
-                          <ConfigControl
-                            meta={meta}
-                            value={configValues[c.name]}
-                            onChange={(v) => updateConfigValue(c.name, v)}
-                          />
-                        </div>
+                {configsQuery.data.map((c) => (
+                  <div
+                    key={c.name}
+                    className="flex items-start justify-between gap-4 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-medium text-ink-hi">{c.label}</span>
+                        {c.status === 'PENDING_FEATURE' && (
+                          <span
+                            className="rounded-badge border border-warn/30 bg-warn/10 px-2 py-0.5 text-[10px] font-semibold text-warn"
+                            title="값은 저장되지만 이 값을 읽는 기능이 아직 구현되지 않았습니다."
+                          >
+                            미동작
+                          </span>
+                        )}
                       </div>
-                    );
-                  })}
+                      <div className="mt-0.5 text-[12px] text-ink-mute">{c.description}</div>
+                      {(c.min !== null || c.max !== null) && (
+                        <div className="mt-1 text-[11px] text-ink-faint tabular-nums">
+                          허용 범위 {Number(c.min)}
+                          {c.unit ?? ''} ~ {Number(c.max)}
+                          {c.unit ?? ''} · 기본값 {c.defaultValue}
+                          {c.unit ?? ''}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                      <ConfigControl
+                        config={c}
+                        value={currentValue(c)}
+                        onChange={(v) => updateConfigValue(c.name, v)}
+                      />
+                      {c.unit && c.type !== 'BOOLEAN' && (
+                        <span className="text-[12px] text-ink-mute">{c.unit}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="mt-5 flex justify-end">
                 <Button Icon={Save} onClick={handleSaveConfigs} loading={savingConfigs}>
@@ -271,16 +318,17 @@ export default function AdminPolicyPage() {
   );
 }
 
-// 설정 항목 컨트롤 — boolean=토글 / number=숫자입력 / select=드롭다운 (CONFIG_META.type 기준)
-function ConfigControl({ meta, value, onChange }) {
-  if (meta.type === 'boolean') {
-    return <Toggle checked={value === 'true'} onChange={(v) => onChange(v ? 'true' : 'false')} label={meta.label} />;
+// 설정 항목 컨트롤 — 서버가 내려준 type으로 결정한다 (키 이름을 보지 않는다).
+// BOOLEAN=토글 / ENUM=드롭다운 / INTEGER·DECIMAL=숫자입력(범위·증분은 서버 메타에서)
+function ConfigControl({ config, value, onChange }) {
+  if (config.type === 'BOOLEAN') {
+    return <Toggle checked={value === 'true'} onChange={(v) => onChange(v ? 'true' : 'false')} label={config.label} />;
   }
 
-  if (meta.type === 'select') {
+  if (config.type === 'ENUM') {
     return (
-      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={meta.label} className="w-32">
-        {meta.options.map((o) => (
+      <Select value={value} onChange={(e) => onChange(e.target.value)} aria-label={config.label} className="w-32">
+        {config.options.map((o) => (
           <option key={o} value={o}>
             {o}
           </option>
@@ -289,14 +337,16 @@ function ConfigControl({ meta, value, onChange }) {
     );
   }
 
-  // number
+  // INTEGER · DECIMAL — DECIMAL은 연차 일수 도메인이라 0.5일 단위를 허용한다
   return (
     <TextInput
       type="number"
-      min="0"
+      min={config.min !== null ? Number(config.min) : undefined}
+      max={config.max !== null ? Number(config.max) : undefined}
+      step={config.type === 'DECIMAL' ? '0.5' : '1'}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      aria-label={meta.label}
+      aria-label={config.label}
       className="w-24 text-right tabular-nums"
     />
   );

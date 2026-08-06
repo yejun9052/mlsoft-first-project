@@ -13,9 +13,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 연차 시스템 설정 key-value (docs/02 3-11 leave_policy_config).
- * 초기 키: advance_leave_enabled / reminder_list_days / reminder_auto_cycle
- * 값은 문자열로 저장하고 서비스에서 파싱한다.
+ * 연차 시스템 설정 key-value 행 (docs/02 3-11 leave_policy_config).
+ *
+ * <p>이 엔티티는 <b>값만</b> 들고 있다. 어떤 키가 존재하고 그 타입·기본값·허용 범위가 무엇인지는
+ * {@link PolicyConfigKey} 카탈로그가 정의한다 — 값 검증도 그쪽 책임이다.
+ * 값이 문자열인 것은 타입이 여러 가지이기 때문이고, 아무 문자열이나 들어와도 된다는 뜻이 아니다.
  */
 @Entity
 @Table(name = "leave_policy_config")

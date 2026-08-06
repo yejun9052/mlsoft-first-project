@@ -1,5 +1,7 @@
 package com.mlsoft.backend.domain.user.entity;
 
+import com.mlsoft.backend.global.exception.BusinessException;
+import com.mlsoft.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -7,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * User 도메인의 잔액 불변식 테스트 (리뷰 I-1·I-2·I-8).
@@ -22,6 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class UserTest {
 
+    /** 당겨쓰기 상한 — 상한 자체를 검증하지 않는 테스트에서는 충분히 큰 값을 쓴다 */
+    private static final BigDecimal NO_ADVANCE_LIMIT = new BigDecimal("999.0");
+
     // ==================== I-1 복구 순서 의존 ====================
 
     @Test
@@ -30,9 +36,9 @@ class UserTest {
         User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
 
         // A 8일: 잔여 10으로 충당 → 당겨쓰기 없음
-        assertEquals(0, BigDecimal.ZERO.compareTo(user.deductLeave(new BigDecimal("8.0"), true)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(deduct(user, "8.0")));
         // B 5일: 잔여 2뿐이라 3일이 당겨쓰기
-        assertEquals(0, new BigDecimal("3.0").compareTo(user.deductLeave(new BigDecimal("5.0"), true)));
+        assertEquals(0, new BigDecimal("3.0").compareTo(deduct(user, "5.0")));
         assertEquals(0, new BigDecimal("13.0").compareTo(user.getUseDays()));
         assertEquals(0, new BigDecimal("3.0").compareTo(user.getAdvanceDays()));
 
@@ -51,8 +57,8 @@ class UserTest {
     @DisplayName("복구 — 나중에 신청한 건을 먼저 취소해도 같은 잔액에 도달한다 (순서 무관)")
     void restoreLeave_lastAppliedFirstCancelled_reachesSameBalance() {
         User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
-        user.deductLeave(new BigDecimal("8.0"), true);
-        user.deductLeave(new BigDecimal("5.0"), true);
+        deduct(user, "8.0");
+        deduct(user, "5.0");
 
         user.restoreLeave(new BigDecimal("5.0")); // B 먼저 취소
 
@@ -70,11 +76,78 @@ class UserTest {
     void deductLeave_alreadyNegativeRemaining_returnsOnlyIncrement() {
         User user = userWithBalance("10.0", "13.0", "0.0", "3.0"); // 이미 3일 당겨쓴 상태
 
-        BigDecimal advanceUsed = user.deductLeave(new BigDecimal("2.0"), true);
+        BigDecimal advanceUsed = deduct(user, "2.0");
 
         assertEquals(0, new BigDecimal("2.0").compareTo(advanceUsed)); // 누적 5가 아니라 증가분 2
         assertEquals(0, new BigDecimal("15.0").compareTo(user.getUseDays()));
         assertEquals(0, new BigDecimal("5.0").compareTo(user.getAdvanceDays()));
+    }
+
+    // ==================== I-3 당겨쓰기 상한 ====================
+
+    @Test
+    @DisplayName("차감 — 당겨쓰기 상한 이내면 통과한다 (경계값 포함)")
+    void deductLeave_advanceWithinLimit_succeeds() {
+        User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
+
+        // 15일 신청 → 당겨쓰기 5일. 상한이 정확히 5면 허용돼야 한다
+        BigDecimal advanceUsed = user.deductLeave(new BigDecimal("15.0"), true, new BigDecimal("5.0"));
+
+        assertEquals(0, new BigDecimal("5.0").compareTo(advanceUsed));
+        assertEquals(0, new BigDecimal("5.0").compareTo(user.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("차감 — 당겨쓰기 상한을 1일이라도 넘으면 ADVANCE_LIMIT_EXCEEDED (리뷰 I-3)")
+    void deductLeave_advanceOverLimit_throws() {
+        User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> user.deductLeave(new BigDecimal("16.0"), true, new BigDecimal("5.0")));
+
+        assertEquals(ErrorCode.ADVANCE_LIMIT_EXCEEDED, ex.getErrorCode());
+        // 예외 전에 상태를 바꾸지 않는다 — 롤백에 의존하지 않기 위함
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("차감 — 상한은 이번 신청분이 아니라 누적 당겨쓰기에 걸린다")
+    void deductLeave_advanceAccumulates_limitAppliesToTotal() {
+        User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
+        BigDecimal limit = new BigDecimal("5.0");
+
+        user.deductLeave(new BigDecimal("13.0"), true, limit); // 누적 3일
+        assertEquals(0, new BigDecimal("3.0").compareTo(user.getAdvanceDays()));
+
+        // 이번 신청분은 3일뿐이지만 누적이 6이 되므로 상한 5를 넘는다
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> user.deductLeave(new BigDecimal("3.0"), true, limit));
+
+        assertEquals(ErrorCode.ADVANCE_LIMIT_EXCEEDED, ex.getErrorCode());
+        assertEquals(0, new BigDecimal("13.0").compareTo(user.getUseDays()));
+    }
+
+    @Test
+    @DisplayName("차감 — 잔여로 충당되면 상한이 0이어도 통과한다 (당겨쓰기가 아니므로)")
+    void deductLeave_withinBalance_ignoresLimit() {
+        User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
+
+        BigDecimal advanceUsed = user.deductLeave(new BigDecimal("10.0"), true, BigDecimal.ZERO);
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(advanceUsed));
+        assertEquals(0, new BigDecimal("10.0").compareTo(user.getUseDays()));
+    }
+
+    @Test
+    @DisplayName("차감 — 당겨쓰기 비허용이면 상한과 무관하게 INSUFFICIENT_LEAVE_BALANCE")
+    void deductLeave_advanceDisabled_throwsInsufficient() {
+        User user = userWithBalance("10.0", "0.0", "0.0", "0.0");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> user.deductLeave(new BigDecimal("11.0"), false, new BigDecimal("99.0")));
+
+        assertEquals(ErrorCode.INSUFFICIENT_LEAVE_BALANCE, ex.getErrorCode());
     }
 
     // ==================== I-2 보너스 가산 ====================
@@ -242,6 +315,11 @@ class UserTest {
     }
 
     // ============================ 헬퍼 ============================
+
+    /** 당겨쓰기 허용 + 상한 무제한 차감 — 상한을 검증하지 않는 테스트용 */
+    private BigDecimal deduct(User user, String days) {
+        return user.deductLeave(new BigDecimal(days), true, NO_ADVANCE_LIMIT);
+    }
 
     private User userWithBalance(String baseDays, String useDays, String bonusDays, String advanceDays) {
         return User.builder()

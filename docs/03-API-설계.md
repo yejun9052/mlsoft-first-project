@@ -29,6 +29,10 @@
 | USER_NOT_FOUND | 404 | 사용자를 찾을 수 없습니다 |
 | ACCESS_DENIED | 403 | 접근 권한이 없습니다 |
 | INSUFFICIENT_LEAVE_BALANCE | 400 | 잔여 연차가 부족합니다 |
+| ADVANCE_LIMIT_EXCEEDED | 400 | 당겨쓸 수 있는 연차 상한을 초과했습니다 (설정 `advance_max_days`) |
+| TOO_MANY_LEAVE_DATES | 400 | 한 번에 신청할 수 있는 날짜 수를 초과했습니다 (설정 `leave_max_dates_per_request`) |
+| INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
+| CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
 | OVERLAPPING_LEAVE_REQUEST | 409 | 이미 신청된 기간과 중복됩니다 |
 | ALREADY_PROCESSED | 400 | 이미 처리된 신청입니다 |
 | UNAUTHORIZED_DOMAIN | 401 | 허용되지 않은 도메인입니다 |
@@ -132,11 +136,57 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
-| GET | `/api/admin/configs` | 설정 전체 조회 | SA |
+| GET | `/api/admin/configs` | 설정 전체 조회 (값 + 메타데이터) | SA |
 | PUT | `/api/admin/configs` | 설정 변경 `{name, value}` | SA |
 | GET | `/api/admin/leave-policies` | 근속년수별 정책 목록 | SA |
 | PATCH | `/api/admin/leave-policies/{id}` | 정책 일수 수정 | SA |
 | GET | `/api/admin/reset-histories` | 기산일 리셋·소멸 이력 (페이징) | SA |
+
+### GET /api/admin/configs — 값과 메타데이터를 함께 준다 (2026-08-06)
+
+응답 항목마다 렌더에 필요한 정보가 모두 들어 있어, **프론트가 설정 키 이름을 알 필요가 없다.**
+목록·순서는 서버 카탈로그(`PolicyConfigKey`)가 정한다. 아직 시딩되지 않은 키도 `id: null` +
+기본값으로 함께 내려온다.
+
+```json
+{
+  "id": 2,
+  "name": "advance_max_days",
+  "value": "5.0",
+  "type": "DECIMAL",
+  "defaultValue": "5.0",
+  "min": 0,
+  "max": 25.0,
+  "unit": "일",
+  "options": [],
+  "label": "당겨쓰기 상한",
+  "description": "한 사원이 당겨쓸 수 있는 최대 일수. 초과하는 신청은 거부된다. ...",
+  "status": "ACTIVE"
+}
+```
+
+| 필드 | 의미 |
+|---|---|
+| `type` | `BOOLEAN` \| `INTEGER` \| `DECIMAL` \| `ENUM` — 화면 컨트롤을 이걸로 고른다 |
+| `min` / `max` | 숫자 타입의 허용 범위(포함). 그 외 타입은 `null` |
+| `unit` | 값 뒤에 붙일 단위 (없으면 `null`) |
+| `options` | `ENUM` 선택지. 그 외 타입은 빈 배열 |
+| `status` | `ACTIVE`면 지금 동작하는 설정, `PENDING_FEATURE`면 값만 저장되고 읽는 기능이 아직 없다 |
+
+### PUT /api/admin/configs — 저장 시점에 검증한다
+
+| 상황 | 응답 |
+|---|---|
+| 카탈로그에 없는 키 | 404 `LEAVE_POLICY_CONFIG_NOT_FOUND` |
+| 타입 불일치 (BOOLEAN에 `"ture"`, 숫자에 `"abc"`, INTEGER에 `"10.5"`, ENUM 선택지 외) | 400 `INVALID_CONFIG_VALUE` |
+| 범위 초과 | 400 `CONFIG_VALUE_OUT_OF_RANGE` |
+
+값은 정규화해 저장한다 — 공백 제거, BOOLEAN은 소문자(`"TRUE"` → `"true"`).
+정수 설정의 `"30.0"`은 허용한다 (숫자 입력이 소수점을 붙여 보낼 수 있다).
+
+**왜 저장 시점인가** — 읽는 시점에 검사하면 잘못 넣은 관리자가 아니라 **사원이 피해를 본다.**
+`advance_leave_enabled`에 오타가 들어가면 당겨쓰기가 조용히 꺼지고, 사원은 몇 시간 뒤
+이유 모를 잔여 부족 거부를 받는다. 읽기 쪽은 2차 방어선으로 기본값 fallback + WARN 로그만 남긴다.
 
 ## 구현 순서 (백엔드)
 

@@ -58,6 +58,15 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 `RequestStatus`(PENDING/APPROVED/REJECTED/CANCELLED/CANCEL_PENDING)는 연차·복리후생이 공유하며, 취소 승인/거부의 세부 결과는 status가 아니라 `action_history`의 `RequestAction`으로 기록한다.
 
+### 시스템 설정 (관리자 조정 가능한 정책값)
+
+`leave_policy_config` 테이블은 **값만** 들고 있고, 카탈로그는 `PolicyConfigKey` enum(`domain/policy/entity/`)이 정의한다 — 키·타입·기본값·허용 범위·라벨·설명·동작여부. **설정을 추가할 땐 이 enum에 상수 한 줄만 넣으면** 시딩(`DataInitializer`)·저장 검증·관리자 화면 렌더가 모두 따라온다. 프론트에 키 이름을 하드코딩하지 말 것 (`GET /api/admin/configs`가 메타데이터를 함께 내려준다).
+
+- 값 검증은 **저장 시점**에 한다 (`PolicyConfigKey.validate`). 읽는 시점에 터지면 잘못 넣은 관리자가 아니라 **사원의 연차 신청이 실패**한다
+- 읽기는 `PolicyConfigReader`의 타입별 접근자로만. **읽을 때도 같은 검증을 다시** 통과시키고 어긋나면 기본값 + WARN — 옛 값이 상한을 무력화하는 것을 막는다
+- 그 값을 읽는 기능이 아직 없으면 반드시 `PENDING_FEATURE`로 둔다 (관리자 화면에 "미동작" 배지)
+- 현재 ACTIVE: `advance_leave_enabled`, `advance_max_days`(당겨쓰기 누적 상한), `leave_max_dates_per_request`
+
 ### 프론트엔드 데이터 흐름
 `api/*.js`(엔드포인트 1:1 함수, `res.data.data` 언랩) → `hooks/use*.js`(React Query 래퍼) → 페이지. 쿼리 키는 `['leaves', 서브리소스, ...파라미터]` 규칙이라 접두사로 일괄 invalidate 할 수 있다.
 

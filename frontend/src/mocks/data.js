@@ -176,11 +176,9 @@ export const leavePolicies = Array.from({ length: 21 }, (_, i) => {
 });
 
 // ── 관리자: 연차 시스템 설정 ─────────────────────────────────────────────────
-export const adminConfigs = [
-  { name: 'advance_leave_enabled', label: '연차 당겨쓰기 허용', value: 'false', type: 'boolean', description: '잔여가 부족해도 당겨쓰기로 접수 (다음 기산일 정산)' },
-  { name: 'reminder_list_days', label: '소진 안내 기준일', value: '30', type: 'number', description: '기산일 N일 전부터 소진 안내 대상에 표시' },
-  { name: 'reminder_auto_cycle', label: '자동 발송 주기', value: 'NONE', type: 'select', options: ['NONE', 'D30', 'D60', 'D90', 'QUARTER'], description: '기산일 임박 사원에게 자동 메일 발송 주기' },
-];
+// mock 없음. 설정 카탈로그는 서버(PolicyConfigKey enum)가 정의하고 라벨·타입·허용 범위까지
+// GET /api/admin/configs가 함께 내려준다 — 프론트에 목록을 복제해두면 서버가 설정을 추가할 때
+// 갈라진다. AdminPolicyPage는 실 API만 쓴다.
 
 // ── 관리자: 기산일 리셋·소멸 이력 ────────────────────────────────────────────
 export const resetHistories = [

@@ -12,8 +12,8 @@ import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
-import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
-import com.mlsoft.backend.domain.policy.repository.LeavePolicyConfigRepository;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -52,7 +52,8 @@ import static org.mockito.Mockito.verify;
 class LeaveServiceTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final String CONFIG_ADVANCE = "advance_leave_enabled";
+    /** 상한을 검증하지 않는 테스트에서 쓰는 넉넉한 당겨쓰기 상한 */
+    private static final BigDecimal NO_ADVANCE_LIMIT = new BigDecimal("999.0");
 
     @Mock
     private LeaveRequestRepository leaveRequestRepository;
@@ -61,7 +62,7 @@ class LeaveServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private LeavePolicyConfigRepository leavePolicyConfigRepository;
+    private PolicyConfigReader policyConfigReader;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -130,10 +131,61 @@ class LeaveServiceTest {
     }
 
     @Test
+    @DisplayName("신청 — 당겨쓰기 상한 초과: ADVANCE_LIMIT_EXCEEDED, 저장 안 함 (리뷰 I-3)")
+    void apply_advanceOverLimit_throws() {
+        User applicant = user(1L, Role.EMPLOYEE, "1.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
+                .willReturn(Optional.of(admin));
+        givenMaxDatesPerRequest(366);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ADVANCE_LEAVE_ENABLED)).willReturn(true);
+        given(policyConfigReader.getDecimal(PolicyConfigKey.ADVANCE_MAX_DAYS)).willReturn(new BigDecimal("2.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        // 잔여 1일에 5일 신청 → 당겨쓰기 4일 필요, 상한 2일 초과
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(futureWeekdays(5), null)));
+
+        assertEquals(ErrorCode.ADVANCE_LIMIT_EXCEEDED, ex.getErrorCode());
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays())); // 선차감도 없어야 한다
+        verify(leaveRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신청 — 날짜 개수가 설정 상한 초과: TOO_MANY_LEAVE_DATES, 사용자 조회 외 아무것도 안 함 (리뷰 I-3)")
+    void apply_tooManyDates_throws() {
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenMaxDatesPerRequest(3);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(futureWeekdays(4), null)));
+
+        assertEquals(ErrorCode.TOO_MANY_LEAVE_DATES, ex.getErrorCode());
+        verify(leaveRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신청 — 날짜 개수 상한은 중복 제거 전 원본 개수로 판정한다")
+    void apply_duplicateDatesCountTowardLimit_throws() {
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenMaxDatesPerRequest(2);
+
+        LocalDate sameDay = futureWeekdays(1).get(0);
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(List.of(sameDay, sameDay, sameDay), null)));
+
+        assertEquals(ErrorCode.TOO_MANY_LEAVE_DATES, ex.getErrorCode());
+    }
+
+    @Test
     @DisplayName("신청 — 주말 포함: WEEKEND_NOT_ALLOWED (400)")
     void apply_weekend_throws() {
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenMaxDatesPerRequest(366);
 
         List<LocalDate> dates = List.of(nextSaturday());
         BusinessException ex = assertThrows(BusinessException.class,
@@ -147,6 +199,7 @@ class LeaveServiceTest {
     void apply_pastDate_throws() {
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenMaxDatesPerRequest(366);
 
         List<LocalDate> dates = List.of(pastWeekday());
         BusinessException ex = assertThrows(BusinessException.class,
@@ -163,6 +216,7 @@ class LeaveServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(admin));
+        givenMaxDatesPerRequest(366);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
                 .willReturn(List.of(mockPending(applicant, admin)));
 
@@ -183,6 +237,7 @@ class LeaveServiceTest {
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(admin));
         given(userRepository.findById(5L)).willReturn(Optional.of(employeeSub));
+        givenMaxDatesPerRequest(366);
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> leaveService.apply(1L, request(futureWeekdays(2), 5L)));
@@ -501,9 +556,15 @@ class LeaveServiceTest {
         return pendingLeave(applicant, approver, futureWeekdays(2));
     }
 
+    /** 당겨쓰기 허용 여부 + 상한 무제한. 날짜 개수 상한도 함께 열어둔다 */
     private void givenAdvanceEnabled(boolean enabled) {
-        given(leavePolicyConfigRepository.findByName(CONFIG_ADVANCE))
-                .willReturn(Optional.of(LeavePolicyConfig.create(CONFIG_ADVANCE, String.valueOf(enabled))));
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ADVANCE_LEAVE_ENABLED)).willReturn(enabled);
+        given(policyConfigReader.getDecimal(PolicyConfigKey.ADVANCE_MAX_DAYS)).willReturn(NO_ADVANCE_LIMIT);
+        givenMaxDatesPerRequest(366);
+    }
+
+    private void givenMaxDatesPerRequest(int max) {
+        given(policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)).willReturn(max);
     }
 
     private LeaveActionHistory historyWith(RequestAction action) {

@@ -4,6 +4,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -17,7 +18,13 @@ public record LeaveCreateRequest(
         @NotNull(message = "연차 종류를 선택해주세요.")
         LeaveType leaveType,
 
+        /**
+         * 신청 날짜 목록. {@code @Size} 상한은 <b>페이로드 절대 가드</b>다 —
+         * 실제 정책 상한은 설정 {@code leave_max_dates_per_request}(기본 30일)이고 서비스에서 검사한다.
+         * 여기서 1년치를 넘는 요청을 먼저 잘라 DB 조회·사용자 로딩까지 가지 않게 한다 (리뷰 I-3).
+         */
         @NotEmpty(message = "신청 날짜를 선택해주세요.")
+        @Size(max = 366, message = "신청 날짜가 너무 많습니다.")
         List<LocalDate> dates,
 
         @NotBlank(message = "신청 사유를 입력해주세요.")

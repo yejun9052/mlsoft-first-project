@@ -1,0 +1,203 @@
+package com.mlsoft.backend.domain.policy.entity;
+
+import com.mlsoft.backend.global.exception.BusinessException;
+import com.mlsoft.backend.global.exception.ErrorCode;
+import lombok.Getter;
+
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 연차 시스템 설정 카탈로그 — 키·타입·기본값·허용 범위·화면 메타데이터의 <b>단일 정의처</b>
+ * (docs/02 3-11 leave_policy_config, docs/03 시스템 설정).
+ *
+ * <p>이전에는 정의가 세 곳에 흩어져 있었다 — 키 문자열과 기본값은 {@code DataInitializer}, 읽는 쪽의
+ * 키 상수는 각 서비스, 라벨·타입·설명은 프론트의 {@code CONFIG_META}. 그래서 설정을 하나 추가하면
+ * 세 곳을 같이 고쳐야 했고, 프론트를 빼먹으면 {@code AdminPolicyPage}의 필터가 그 설정을
+ * <b>조용히 숨겼다</b>(관리자 화면에 아예 안 보임).
+ *
+ * <p>여기에 모으면 설정 추가는 이 enum에 상수 한 줄을 넣는 것으로 끝난다 —
+ * 시딩({@code DataInitializer})·검증(저장 시점)·화면 렌더(메타데이터 응답)가 모두 여기서 파생된다.
+ *
+ * <p><b>새 설정을 추가할 때</b>: 그 값을 읽어 동작하는 코드가 없으면 반드시
+ * {@link PolicyConfigStatus#PENDING_FEATURE}로 두어라. 관리자 화면이 "미동작"으로 구분해 보여준다.
+ */
+@Getter
+public enum PolicyConfigKey {
+
+    // ── 당겨쓰기 (갭분석 A-3, docs/02 메모 11, 리뷰 I-3) ──────────────────────
+
+    ADVANCE_LEAVE_ENABLED(
+            "advance_leave_enabled", "false",
+            "연차 당겨쓰기 허용",
+            "잔여가 부족해도 신청을 접수하고, 부족분을 다음 기산일의 새 연차에서 차감한다.",
+            PolicyConfigStatus.ACTIVE),
+
+    ADVANCE_MAX_DAYS(
+            "advance_max_days", ConfigValueType.DECIMAL, "5.0",
+            BigDecimal.ZERO, new BigDecimal("25.0"), "일",
+            "당겨쓰기 상한",
+            "한 사원이 당겨쓸 수 있는 최대 일수. 초과하는 신청은 거부된다. "
+                    + "상한이 없으면 다음 기산일에 연차가 음수가 되어 관리자가 직접 고치기 전까지 신청이 불가능해진다.",
+            PolicyConfigStatus.ACTIVE),
+
+    // ── 신청 입력 경계 (리뷰 I-3) ────────────────────────────────────────────
+
+    LEAVE_MAX_DATES_PER_REQUEST(
+            "leave_max_dates_per_request", ConfigValueType.INTEGER, "30",
+            BigDecimal.ONE, new BigDecimal("366"), "일",
+            "신청 1건당 최대 날짜 수",
+            "연차 신청 한 건에 담을 수 있는 날짜 개수. 실수·악의로 대량 신청이 접수되는 것을 막는다.",
+            PolicyConfigStatus.ACTIVE),
+
+    // ── 기산일 리셋 (docs/09 — 스케줄러 구현 시 ACTIVE로 전환) ────────────────
+
+    BONUS_CARRY_OVER_ENABLED(
+            "bonus_carry_over_enabled", "false",
+            "보너스 연차 이월",
+            "기산일 리셋 때 남은 복리후생 가산분을 다음 연도로 이월한다. (docs/02 메모 10)",
+            PolicyConfigStatus.PENDING_FEATURE),
+
+    MONTHLY_LEAVE_MAX_DAYS(
+            "monthly_leave_max_days", ConfigValueType.INTEGER, "11",
+            BigDecimal.ZERO, new BigDecimal("12"), "일",
+            "1년 미만 월차 적립 상한",
+            "입사 1년이 안 된 사원에게 매월 1일씩 적립할 최대 일수. 근로기준법 기준은 11일이다. (갭분석 B-1)",
+            PolicyConfigStatus.PENDING_FEATURE),
+
+    // ── 소진 안내 메일 (docs/01 2-8 — 이메일 발송 구현 시 ACTIVE로 전환) ──────
+
+    REMINDER_LIST_DAYS(
+            "reminder_list_days", ConfigValueType.INTEGER, "30",
+            BigDecimal.ZERO, new BigDecimal("365"), "일",
+            "소진 안내 기준일",
+            "기산일 N일 전부터 연차 소진 안내 대상 목록에 표시한다.",
+            PolicyConfigStatus.PENDING_FEATURE),
+
+    REMINDER_AUTO_CYCLE(
+            "reminder_auto_cycle", "NONE",
+            List.of("NONE", "D30", "D60", "D90", "QUARTER"),
+            "자동 발송 주기",
+            "기산일이 임박한 사원에게 안내 메일을 자동 발송하는 주기. NONE이면 발송하지 않는다.",
+            PolicyConfigStatus.PENDING_FEATURE);
+
+    /** DB `leave_policy_config.name`에 저장되는 키 */
+    private final String key;
+    private final ConfigValueType type;
+    /** 시딩 기본값 — 값 파싱에 실패했을 때의 fallback으로도 쓰인다 */
+    private final String defaultValue;
+    /** INTEGER·DECIMAL 하한 (포함). 그 외 타입은 null */
+    private final BigDecimal min;
+    /** INTEGER·DECIMAL 상한 (포함). 그 외 타입은 null */
+    private final BigDecimal max;
+    /** 화면에 값과 함께 표시할 단위 (없으면 null) */
+    private final String unit;
+    /** ENUM 선택지. 그 외 타입은 빈 리스트 */
+    private final List<String> options;
+    private final String label;
+    private final String description;
+    private final PolicyConfigStatus status;
+
+    /** BOOLEAN 설정 */
+    PolicyConfigKey(String key, String defaultValue, String label, String description, PolicyConfigStatus status) {
+        this(key, ConfigValueType.BOOLEAN, defaultValue, null, null, null, List.of(), label, description, status);
+    }
+
+    /** ENUM 설정 */
+    PolicyConfigKey(String key, String defaultValue, List<String> options,
+                    String label, String description, PolicyConfigStatus status) {
+        this(key, ConfigValueType.ENUM, defaultValue, null, null, null, options, label, description, status);
+    }
+
+    /** INTEGER·DECIMAL 설정 */
+    PolicyConfigKey(String key, ConfigValueType type, String defaultValue,
+                    BigDecimal min, BigDecimal max, String unit,
+                    String label, String description, PolicyConfigStatus status) {
+        this(key, type, defaultValue, min, max, unit, List.of(), label, description, status);
+    }
+
+    PolicyConfigKey(String key, ConfigValueType type, String defaultValue,
+                    BigDecimal min, BigDecimal max, String unit, List<String> options,
+                    String label, String description, PolicyConfigStatus status) {
+        this.key = key;
+        this.type = type;
+        this.defaultValue = defaultValue;
+        this.min = min;
+        this.max = max;
+        this.unit = unit;
+        this.options = options;
+        this.label = label;
+        this.description = description;
+        this.status = status;
+    }
+
+    /** 키 문자열 → 카탈로그 항목. 카탈로그에 없는 키는 갱신 대상이 아니다(404) */
+    public static PolicyConfigKey from(String key) {
+        return findByKey(key).orElseThrow(() -> new BusinessException(ErrorCode.LEAVE_POLICY_CONFIG_NOT_FOUND));
+    }
+
+    /**
+     * 키 문자열 → 카탈로그 항목 (없으면 empty).
+     * 카탈로그에서 제거된 키의 DB 행이 남아 있어도 목록 조회가 실패하지 않도록 Optional로 준다.
+     */
+    public static Optional<PolicyConfigKey> findByKey(String key) {
+        return Arrays.stream(values()).filter(candidate -> candidate.key.equals(key)).findFirst();
+    }
+
+    /**
+     * 저장 전 값 검증 — 타입·범위·선택지를 모두 본다.
+     *
+     * <p>여기서 막지 못한 값은 나중에 <b>값을 읽는 쪽에서</b> 터진다. 그 시점의 피해자는 설정을
+     * 잘못 넣은 관리자가 아니라 연차를 신청하려는 사원이다(500). 그래서 저장 시점 검증이 필수다.
+     *
+     * @throws BusinessException 형식이 틀리면 INVALID_CONFIG_VALUE, 범위를 벗어나면 CONFIG_VALUE_OUT_OF_RANGE
+     */
+    public void validate(String value) {
+        switch (type) {
+            case BOOLEAN -> {
+                if (!"true".equalsIgnoreCase(value) && !"false".equalsIgnoreCase(value)) {
+                    throw new BusinessException(ErrorCode.INVALID_CONFIG_VALUE);
+                }
+            }
+            case ENUM -> {
+                if (!options.contains(value)) {
+                    throw new BusinessException(ErrorCode.INVALID_CONFIG_VALUE);
+                }
+            }
+            case INTEGER -> validateRange(parseNumber(value, 0));
+            case DECIMAL -> validateRange(parseNumber(value, 1));
+        }
+    }
+
+    /**
+     * 저장 형태로 정규화 — 공백 제거, BOOLEAN은 소문자로 통일.
+     * 프론트가 {@code value === 'true'}로 비교하므로 "TRUE"가 저장되면 토글이 꺼진 것처럼 보인다.
+     */
+    public String normalize(String value) {
+        String trimmed = value.trim();
+        return (type == ConfigValueType.BOOLEAN) ? trimmed.toLowerCase() : trimmed;
+    }
+
+    /** 숫자 파싱 — 허용 소수 자릿수(maxScale)를 넘으면 형식 오류로 본다 */
+    private BigDecimal parseNumber(String value, int maxScale) {
+        BigDecimal parsed;
+        try {
+            parsed = new BigDecimal(value.trim());
+        } catch (NumberFormatException e) {
+            throw new BusinessException(ErrorCode.INVALID_CONFIG_VALUE);
+        }
+        // "5.0"은 정수 설정에도 허용한다 — 프론트 숫자 입력이 소수점을 붙여 보낼 수 있다
+        if (parsed.stripTrailingZeros().scale() > maxScale) {
+            throw new BusinessException(ErrorCode.INVALID_CONFIG_VALUE);
+        }
+        return parsed;
+    }
+
+    private void validateRange(BigDecimal parsed) {
+        if ((min != null && parsed.compareTo(min) < 0) || (max != null && parsed.compareTo(max) > 0)) {
+            throw new BusinessException(ErrorCode.CONFIG_VALUE_OUT_OF_RANGE);
+        }
+    }
+}

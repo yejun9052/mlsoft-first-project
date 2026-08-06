@@ -168,15 +168,35 @@ public class User extends BaseTimeEntity {
 
     /**
      * 연차 차감 (신청 시 선차감).
-     * - 잔여 부족 시: 당겨쓰기 비허용이면 INSUFFICIENT_LEAVE_BALANCE,
-     *   허용(advance_leave_enabled=true)이면 부족분이 advance_days에 잡힌다 (갭분석 A-3)
+     * <ul>
+     *   <li>잔여로 충당되면 그대로 차감</li>
+     *   <li>부족한데 당겨쓰기 비허용이면 INSUFFICIENT_LEAVE_BALANCE</li>
+     *   <li>부족하고 당겨쓰기 허용이면 부족분이 advance_days에 잡힌다 (갭분석 A-3).
+     *       단 누적 당겨쓰기가 상한을 넘으면 ADVANCE_LIMIT_EXCEEDED (리뷰 I-3)</li>
+     * </ul>
      *
+     * <p>상한은 <b>이번 신청의 부족분이 아니라 누적 당겨쓰기 총량</b>에 걸린다. 신청 건마다 조금씩
+     * 당겨쓰면 얼마든지 누적되던 것이 I-3의 실제 결함이었다 — 평일 100일을 신청하면 advance가 85가 되고,
+     * 다음 기산일에 base가 −70이 되어 그 계정은 관리자가 DB를 고치기 전까지 연차를 쓸 수 없었다.
+     *
+     * <p>상한을 넘는지는 <b>차감 전에</b> 판정한다. 도메인 메서드가 예외를 던지기 전에 상태를 바꾸면
+     * 호출부가 롤백에 의존하게 된다.
+     *
+     * @param advanceMaxDays 누적 당겨쓰기 상한 (설정 advance_max_days). 이미 상한에 도달한 사원의
+     *                       추가 신청도 여기서 막힌다 — 상한을 낮춘 직후에도 더 깊어지지 않는다
      * @return 이번 차감으로 늘어난 당겨쓰기 일수 — LeaveRequest.recordAdvanceUsage로 스냅샷해
      *         <b>감사 기록</b>으로 남긴다. 복구는 이 값에 의존하지 않는다 (syncAdvanceDays 참고)
      */
-    public BigDecimal deductLeave(BigDecimal days, boolean advanceLeaveEnabled) {
-        if (getRemainingDays().compareTo(days) < 0 && !advanceLeaveEnabled) {
-            throw new BusinessException(ErrorCode.INSUFFICIENT_LEAVE_BALANCE);
+    public BigDecimal deductLeave(BigDecimal days, boolean advanceLeaveEnabled, BigDecimal advanceMaxDays) {
+        // 차감 후의 초과 사용량 = 이번 신청으로 확정될 advance_days (syncAdvanceDays와 같은 식)
+        BigDecimal advanceAfter = getRemainingDays().subtract(days).negate().max(BigDecimal.ZERO);
+        if (advanceAfter.signum() > 0) {
+            if (!advanceLeaveEnabled) {
+                throw new BusinessException(ErrorCode.INSUFFICIENT_LEAVE_BALANCE);
+            }
+            if (advanceAfter.compareTo(advanceMaxDays) > 0) {
+                throw new BusinessException(ErrorCode.ADVANCE_LIMIT_EXCEEDED);
+            }
         }
         BigDecimal advanceBefore = this.advanceDays;
         this.useDays = this.useDays.add(days);

@@ -4,6 +4,7 @@ import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicy;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.repository.LeavePolicyConfigRepository;
 import com.mlsoft.backend.domain.policy.repository.LeavePolicyRepository;
 import com.mlsoft.backend.domain.welfare.entity.WelfarePolicy;
@@ -22,7 +23,7 @@ import java.util.List;
 /**
  * 초기 데이터 적재 — 이미 데이터가 있으면 스킵 (재기동 안전).
  * 1) 연차 정책 1~21년차: MIN(15 + (년차-1)/2, 25) (근로기준법 §60)
- * 2) 연차 시스템 설정 3키 (docs/02 3-11)
+ * 2) 연차 시스템 설정 — PolicyConfigKey 카탈로그 전체 (docs/02 3-11)
  * 3) 복리후생 초기 정책 (docs/02 3-6 주석)
  * 4) 미배정 부서 (신규 가입 기본 소속)
  */
@@ -33,11 +34,6 @@ public class DataInitializer implements ApplicationRunner {
 
     /** 미배정 부서명 */
     public static final String UNASSIGNED_DEPARTMENT_NAME = "미배정";
-
-    // 연차 시스템 설정 키
-    public static final String CONFIG_ADVANCE_LEAVE_ENABLED = "advance_leave_enabled";
-    public static final String CONFIG_REMINDER_LIST_DAYS = "reminder_list_days";
-    public static final String CONFIG_REMINDER_AUTO_CYCLE = "reminder_auto_cycle";
 
     private final LeavePolicyRepository leavePolicyRepository;
     private final LeavePolicyConfigRepository leavePolicyConfigRepository;
@@ -73,18 +69,16 @@ public class DataInitializer implements ApplicationRunner {
     }
 
     /**
-     * 연차 시스템 설정 초기화 — 키 단위로 존재 여부 확인 후 없는 것만 추가.
+     * 연차 시스템 설정 초기화 — 카탈로그({@link PolicyConfigKey})의 모든 키를 순회해 없는 것만 추가한다.
+     * 키·기본값을 여기에 다시 적지 않는 이유: 정의가 두 곳에 있으면 갈라진다.
+     * 설정을 추가할 땐 카탈로그 enum에만 상수를 넣으면 다음 기동에서 자동 시딩된다.
      */
     private void initLeavePolicyConfigs() {
-        insertConfigIfAbsent(CONFIG_ADVANCE_LEAVE_ENABLED, "false"); // 당겨쓰기 허용 여부
-        insertConfigIfAbsent(CONFIG_REMINDER_LIST_DAYS, "30");       // 소진 안내 리스트 표시 기준일
-        insertConfigIfAbsent(CONFIG_REMINDER_AUTO_CYCLE, "NONE");    // 자동 발송 주기 (NONE/D30/D60/D90/QUARTER)
-    }
-
-    private void insertConfigIfAbsent(String name, String value) {
-        if (leavePolicyConfigRepository.findByName(name).isEmpty()) {
-            leavePolicyConfigRepository.save(LeavePolicyConfig.create(name, value));
-            log.info("[DataInitializer] 설정 초기화: {} = {}", name, value);
+        for (PolicyConfigKey key : PolicyConfigKey.values()) {
+            if (leavePolicyConfigRepository.findByName(key.getKey()).isEmpty()) {
+                leavePolicyConfigRepository.save(LeavePolicyConfig.create(key.getKey(), key.getDefaultValue()));
+                log.info("[DataInitializer] 설정 초기화: {} = {}", key.getKey(), key.getDefaultValue());
+            }
         }
     }
 

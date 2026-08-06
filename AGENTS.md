@@ -44,6 +44,19 @@ advance_days = max(0, use_days − base_days − bonus_days)   ← 파생값. �
   `resetAnnualLeave`도 호출한다(빚이 새 정책 연차보다 크면 음수 `base_days`가 남는데, 다음 리셋이
   base를 덮어쓰므로 advance로 이어받지 않으면 빚이 면제된다 — docs/09 §5 정정 참고).
 - 이 필드에 **단독 대입하는 코드를 새로 만들지 말 것.** 그게 리뷰 I-1·I-2·I-8의 원인이었다.
+- 당겨쓰기 누적 상한은 설정 `advance_max_days`(기본 5.0)다. `User.deductLeave`가 차감 **전에** 판정한다
+
+## 시스템 설정 (관리자 조정 가능한 정책값)
+
+`leave_policy_config` 테이블은 값만 들고 있다. 카탈로그는 `PolicyConfigKey` enum이 정의한다 —
+키·타입·기본값·허용 범위·라벨·설명·동작여부. **설정 추가는 이 enum에 상수 한 줄**이면 되고
+시딩·저장 검증·관리자 화면 렌더가 따라온다.
+
+- 값은 문자열로 저장되지만 **아무 문자열이나 되는 게 아니다.** 검증은 `PolicyConfigKey.validate`
+- 읽기는 `PolicyConfigReader`의 타입별 접근자로만. 키 문자열이나 `Boolean.parseBoolean`을 직접 쓰지 말 것
+  (그 메서드는 `"ture"` 오타를 예외 없이 false로 만들어 설정을 조용히 뒤집는다)
+- 값을 읽는 기능이 아직 없는 설정은 `PENDING_FEATURE`로 둔다 — 화면에 "미동작"으로 표시된다
+- 프론트에 설정 목록·라벨·타입을 복제하지 말 것. `GET /api/admin/configs`가 메타데이터를 함께 준다
 - `User`에 `@Version` 낙관적 락 — 동시 신청 초과 방지
 
 ## 테스트

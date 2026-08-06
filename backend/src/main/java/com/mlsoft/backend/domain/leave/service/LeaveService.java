@@ -17,7 +17,8 @@ import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
-import com.mlsoft.backend.domain.policy.repository.LeavePolicyConfigRepository;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -53,9 +54,6 @@ public class LeaveService {
     // 연차 날짜 기준일은 한국 시간 고정 (서버 TZ 무관, DB도 Asia/Seoul) — AuthService와 동일 정책
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    // LeavePolicyConfig 키 — DataInitializer가 시딩하는 당겨쓰기 허용 플래그 (docs/02 3-11)
-    private static final String CONFIG_ADVANCE_LEAVE_ENABLED = "advance_leave_enabled";
-
     // 중복 검사 대상 — 잔여를 점유 중인(선차감·승인·소급취소대기) 상태
     private static final List<RequestStatus> ACTIVE_STATUSES =
             List.of(RequestStatus.PENDING, RequestStatus.APPROVED, RequestStatus.CANCEL_PENDING);
@@ -72,7 +70,8 @@ public class LeaveService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveActionHistoryRepository leaveActionHistoryRepository;
     private final UserRepository userRepository;
-    private final LeavePolicyConfigRepository leavePolicyConfigRepository;
+    /** 정책 설정 읽기 — 키 상수·파싱을 각 서비스에 흩지 않는다 (docs/02 3-11) */
+    private final PolicyConfigReader policyConfigReader;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -96,8 +95,12 @@ public class LeaveService {
 
         LeaveRequest leave = LeaveRequest.create(
                 applicant, request.leaveType(), request.dates(), request.reason(), primaryApprover, subApprover);
-        // 선차감 — 잔여 부족 + 당겨쓰기 off면 INSUFFICIENT_LEAVE_BALANCE, on이면 부족분 advance_days 누적
-        BigDecimal advanceUsed = applicant.deductLeave(leave.getDays(), isAdvanceLeaveEnabled());
+        // 선차감 — 잔여 부족 + 당겨쓰기 off면 INSUFFICIENT_LEAVE_BALANCE,
+        // on이면 부족분이 advance_days에 잡히되 상한(advance_max_days)을 넘으면 ADVANCE_LIMIT_EXCEEDED
+        BigDecimal advanceUsed = applicant.deductLeave(
+                leave.getDays(),
+                policyConfigReader.getBoolean(PolicyConfigKey.ADVANCE_LEAVE_ENABLED),
+                policyConfigReader.getDecimal(PolicyConfigKey.ADVANCE_MAX_DAYS));
         leave.recordAdvanceUsage(advanceUsed);
         leaveRequestRepository.save(leave);
 
@@ -315,15 +318,16 @@ public class LeaveService {
         saveHistory(fresh, fresh.getUser(), action, reason);
     }
 
-    /** 당겨쓰기 허용 여부 (leave_policy_config.advance_leave_enabled, 미설정 시 false) */
-    private boolean isAdvanceLeaveEnabled() {
-        return leavePolicyConfigRepository.findByName(CONFIG_ADVANCE_LEAVE_ENABLED)
-                .map(config -> Boolean.parseBoolean(config.getValue()))
-                .orElse(false);
-    }
-
-    /** 신청 날짜 검증 — 주말·과거 거부 (공휴일 검증은 holidays API 마일스톤에서) */
+    /**
+     * 신청 날짜 검증 — 개수 상한·주말·과거 거부 (공휴일 검증은 holidays API 마일스톤에서).
+     *
+     * <p>개수 상한을 <b>중복 제거 전 원본 개수</b>로 본다 — 같은 날짜를 수백 개 담은 요청도
+     * 여기서 막아야 한다 (중복 제거는 LeaveRequest.create가 한다).
+     */
     private void validateDates(List<LocalDate> dates) {
+        if (dates.size() > policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)) {
+            throw new BusinessException(ErrorCode.TOO_MANY_LEAVE_DATES);
+        }
         LocalDate today = LocalDate.now(KST);
         for (LocalDate date : dates) {
             DayOfWeek dayOfWeek = date.getDayOfWeek();
