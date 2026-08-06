@@ -184,7 +184,7 @@ export default function AdminPolicyPage() {
               </tbody>
             </Table>
           </div>
-          <p className="border-t border-white/[0.07] px-5 py-3 text-[11px] text-ink-faint">
+          <p className="border-t border-white/[0.12] px-5 py-3 text-[11px] text-ink-faint">
             * 21년차 25일이 법정 상한이며, 이후 근속에도 연차는 25일로 고정됩니다.
           </p>
         </TableCard>
@@ -203,7 +203,7 @@ export default function AdminPolicyPage() {
                     return (
                       <div
                         key={c.name}
-                        className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-3.5 first:pt-0 last:border-0 last:pb-0"
+                        className="flex items-center justify-between gap-4 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0"
                       >
                         <div className="min-w-0">
                           <div className="text-[13px] font-medium text-ink-hi">{meta.label}</div>

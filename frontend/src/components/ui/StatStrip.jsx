@@ -3,7 +3,7 @@
 export default function StatStrip({ children, className = '' }) {
   return (
     <div
-      className={`flex flex-wrap items-end gap-y-4 [&>*+*]:border-l [&>*+*]:border-white/[0.09] [&>*+*]:pl-8 ${className}`}
+      className={`flex flex-wrap items-end gap-y-4 [&>*+*]:border-l [&>*+*]:border-white/[0.15] [&>*+*]:pl-8 ${className}`}
     >
       {children}
     </div>

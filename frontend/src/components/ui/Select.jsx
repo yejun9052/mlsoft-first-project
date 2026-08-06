@@ -4,7 +4,7 @@ export default function Select({ invalid = false, className = '', children, ...r
   return (
     <select
       className={`w-full rounded-btn border bg-white/[0.04] px-2.5 py-2.5 text-[14px] text-ink-hi outline-none transition-all focus:border-accent-cyan/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-accent-cyan/15 disabled:cursor-not-allowed disabled:opacity-50 [color-scheme:dark] ${
-        invalid ? 'border-danger/55' : 'border-white/[0.09]'
+        invalid ? 'border-danger/55' : 'border-white/[0.15]'
       } ${className}`}
       {...rest}
     >

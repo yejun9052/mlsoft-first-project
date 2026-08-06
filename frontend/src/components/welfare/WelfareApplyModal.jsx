@@ -150,7 +150,7 @@ export default function WelfareApplyModal({ initialCategory, initialPolicyId, on
             <PreviewRow label="증빙서류 안내" column>
               {selectedPolicy.defaultEvidence}
             </PreviewRow>
-            <p className="text-[11px] text-ink-dim">※ 위 서류는 인사 담당자에게 직접 제출해주세요.</p>
+            <p className="text-[11px] text-ink-faint">※ 위 서류는 인사 담당자에게 직접 제출해주세요.</p>
           </div>
         )}
 

@@ -4,7 +4,7 @@
 export default function SegmentedControl({ options, value, onChange, className = '' }) {
   return (
     <div
-      className={`grid gap-1 rounded-btn border border-white/[0.06] bg-navy-app/60 p-1 ${className}`}
+      className={`grid gap-1 rounded-btn border border-white/[0.10] bg-navy-app/60 p-1 ${className}`}
       style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
     >
       {options.map((option) => (
@@ -14,7 +14,7 @@ export default function SegmentedControl({ options, value, onChange, className =
           onClick={() => onChange(option.value)}
           className={`rounded-btn px-2 py-2 text-[13px] font-semibold transition-all duration-150 ${
             option.value === value
-              ? 'accent-gradient text-white shadow-btn'
+              ? 'bg-accent text-navy-app shadow-btn'
               : 'text-ink-mute hover:bg-white/[0.05] hover:text-ink-body'
           }`}
         >

@@ -24,19 +24,19 @@ export default function Modal({ title, onClose, children, footer, maxWidth = 440
       onClick={onClose}
     >
       <div
-        className={`glass-strong glass-edge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-card border border-white/[0.09] shadow-card ${className}`}
+        className={`glass-strong glass-edge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-card border border-white/[0.15] shadow-card ${className}`}
         style={{ maxWidth }}
         onClick={(e) => e.stopPropagation()}
       >
         {title && (
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+          <div className="flex items-center justify-between border-b border-white/[0.12] px-5 py-4">
             <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-ink-hi">{title}</h2>
             <IconButton Icon={X} label="닫기" onClick={onClose} />
           </div>
         )}
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-white/[0.07] px-5 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-white/[0.12] px-5 py-4">
             {footer}
           </div>
         )}

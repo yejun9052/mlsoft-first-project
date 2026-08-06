@@ -143,12 +143,12 @@ export default function CalendarPage() {
         </div>
 
         {/* 요일 헤더 */}
-        <div className="grid grid-cols-7 gap-2 border-b border-white/[0.07] pb-2">
+        <div className="grid grid-cols-7 gap-2 border-b border-white/[0.12] pb-2">
           {WEEKDAYS.map((weekday, i) => (
             <div
               key={weekday}
               className={`text-center text-[13px] font-semibold ${
-                i === 0 ? 'text-danger/80' : 'text-ink-dim'
+                i === 0 ? 'text-danger/80' : 'text-ink-faint'
               }`}
             >
               {weekday}
@@ -181,7 +181,7 @@ export default function CalendarPage() {
                     ? 'border-accent-cyan/60 bg-accent-cyan/10 hover:border-accent-cyan'
                     : holiday
                       ? 'border-danger/25 bg-danger/8 hover:border-danger/40'
-                      : 'border-white/[0.06] bg-navy-app/35 hover:border-accent-cyan/35 hover:bg-navy-app/60'
+                      : 'border-white/[0.10] bg-navy-app/35 hover:border-accent-cyan/35 hover:bg-navy-app/60'
                 }`}
               >
                 {/* 날짜 숫자 + 공휴일명 / 선택 표시 */}
@@ -189,7 +189,7 @@ export default function CalendarPage() {
                   <span
                     className={`text-[14px] font-semibold ${
                       isToday
-                        ? 'accent-gradient inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-btn'
+                        ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-accent text-navy-app shadow-btn'
                         : holiday || isSunday
                           ? 'text-danger/90'
                           : 'text-ink-body'
@@ -216,7 +216,7 @@ export default function CalendarPage() {
                       <span className="shrink-0 opacity-75">{LEAVE_TYPE_LABEL[leave.type]}</span>
                     </span>
                   ))}
-                  {overflow > 0 && <span className="text-[12px] text-ink-dim">+{overflow}건 더</span>}
+                  {overflow > 0 && <span className="text-[12px] text-ink-faint">+{overflow}건 더</span>}
                 </div>
               </button>
             );

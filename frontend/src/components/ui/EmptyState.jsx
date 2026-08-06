@@ -5,7 +5,7 @@ import { Inbox } from 'lucide-react';
 export default function EmptyState({ label = '데이터가 없습니다.', Icon = Inbox, className = '' }) {
   return (
     <div className={`flex flex-col items-center justify-center gap-3 py-12 text-center ${className}`}>
-      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.07] bg-white/[0.03] text-ink-dim">
+      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.03] text-ink-dim">
         <Icon size={22} />
       </span>
       <p className="text-[13px] text-ink-mute">{label}</p>

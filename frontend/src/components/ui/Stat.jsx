@@ -15,7 +15,7 @@ export default function Stat({ label, value, unit, size = 'lg', tone, caption, I
     return (
       <div className={`flex items-center gap-2.5 ${className}`}>
         {Icon ? (
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn border border-white/[0.07] bg-white/[0.04] text-accent-light">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-btn border border-white/[0.12] bg-white/[0.04] text-accent-light">
             <Icon size={16} />
           </span>
         ) : (

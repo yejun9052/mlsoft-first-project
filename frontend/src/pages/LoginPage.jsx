@@ -68,14 +68,14 @@ export default function LoginPage() {
       <div className="mb-9 flex flex-col items-center gap-3.5">
         <span className="text-[12px] font-bold uppercase tracking-[0.32em] text-ink-mute">MLsoft</span>
         <BrandMark size="lg" />
-        <h1 className="accent-gradient-text text-[34px] font-extrabold tracking-[-0.04em]">연차ON</h1>
+        <h1 className="text-[34px] font-extrabold tracking-[-0.04em] text-ink-hi">연차ON</h1>
         <p className="max-w-[300px] text-center text-[13px] leading-relaxed text-ink-mute">
           연차·경조사 신청부터 결재까지 한 곳에서 —<br />MLsoft 임직원을 위한 연차 관리 시스템
         </p>
       </div>
 
       {/* 로그인 카드 — 글래스 서피스 + 상단 하이라이트 */}
-      <div className="glass glass-edge w-full max-w-[380px] rounded-card border border-white/[0.09] p-8 shadow-card">
+      <div className="glass glass-edge w-full max-w-[380px] rounded-card border border-white/[0.15] p-8 shadow-card">
         <p className="mb-6 text-center text-[14px] font-semibold text-ink-hi">
           사내 계정으로 로그인하고 시작하세요
         </p>
@@ -95,7 +95,7 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <p className="mt-8 text-[11px] text-ink-dim">
+      <p className="mt-8 text-[11px] text-ink-faint">
         © {new Date().getFullYear()} MLsoft. All rights reserved.
       </p>
     </GlowShell>

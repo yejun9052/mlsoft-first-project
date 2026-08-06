@@ -128,7 +128,7 @@ export default function HistoryPage() {
       </div>
 
       {/* 통계 스트립 (박스 없음 — 세로 구분선으로 분리) */}
-      <StatStrip className="mb-6 border-b border-white/[0.07] pb-6">
+      <StatStrip className="mb-6 border-b border-white/[0.12] pb-6">
         <Stat label="총 부여" value={grantedDays} unit="일" />
         <Stat
           label="사용"

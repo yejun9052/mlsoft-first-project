@@ -10,8 +10,8 @@ export default function Toggle({ checked, onChange, label, disabled = false, cla
       onClick={() => onChange(!checked)}
       className={`relative h-6 w-11 shrink-0 rounded-full transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
         checked
-          ? 'accent-gradient shadow-btn'
-          : 'border border-white/[0.08] bg-navy-app/70'
+          ? 'bg-accent shadow-btn'
+          : 'border border-white/[0.15] bg-navy-app/70'
       } ${className}`}
     >
       <span

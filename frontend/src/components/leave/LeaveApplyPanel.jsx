@@ -113,7 +113,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
     <div
       role="dialog"
       aria-label="연차 신청 패널"
-      className="glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.09] shadow-card"
+      className="glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.15] shadow-card"
       style={{ left: pos.x, top: pos.y }}
     >
       {/* 드래그 핸들 헤더 */}
@@ -122,12 +122,12 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
-        className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/[0.07] bg-navy-app/40 px-4 py-3"
+        className="flex cursor-move touch-none select-none items-center justify-between gap-2 rounded-t-card border-b border-white/[0.12] bg-navy-app/40 px-4 py-3"
       >
         <div className="flex items-center gap-2">
           <GripVertical size={15} className="text-ink-dim" />
           <span className="text-[15px] font-semibold text-ink-hi">연차 신청</span>
-          <span className="text-[12px] text-ink-dim">끌어서 이동</span>
+          <span className="text-[12px] text-ink-faint">끌어서 이동</span>
         </div>
         <IconButton
           Icon={X}
@@ -144,7 +144,7 @@ export default function LeaveApplyPanel({ dates, remainingDays, approvers, onRem
         {/* 선택한 날짜 칩 — 캘린더 클릭으로 추가, ×로 제거 */}
         <Field label={`선택한 날짜 (${dates.length}일)`}>
           {dates.length === 0 ? (
-            <p className="rounded-btn border border-dashed border-white/[0.12] px-3 py-3 text-[13px] text-ink-dim">
+            <p className="rounded-btn border border-dashed border-white/[0.12] px-3 py-3 text-[13px] text-ink-faint">
               캘린더에서 날짜를 클릭해 담으세요. 다시 클릭하면 빠집니다.
             </p>
           ) : (

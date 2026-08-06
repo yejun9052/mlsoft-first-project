@@ -96,7 +96,7 @@ export default function DashboardPage() {
 
       {/* 통계 스트립 + 빠른 신청 — 퀵액션은 실제 신청 플로우가 있는 페이지로 이동
           (연차·반차는 캘린더의 신청 패널, 경조사는 복리후생 페이지) */}
-      <div className="mb-5 flex items-end justify-between gap-6 border-b border-white/[0.07] pb-6">
+      <div className="mb-5 flex items-end justify-between gap-6 border-b border-white/[0.12] pb-6">
         <StatStrip>
           <Stat label="잔여 연차" value={summary.remainingDays} unit="일" size="hero" />
           <Stat label="소멸 예정" value={expiringDays} unit="일" tone="text-warn" />
@@ -135,9 +135,9 @@ export default function DashboardPage() {
           }
         >
           {myLeaves.length === 0 ? (
-            <p className="py-4 text-[12px] text-ink-dim">신청 내역이 없습니다.</p>
+            <p className="py-4 text-[12px] text-ink-faint">신청 내역이 없습니다.</p>
           ) : (
-            <ul className="divide-y divide-white/[0.06]">
+            <ul className="divide-y divide-white/[0.10]">
               {myLeaves.map((r) => (
                 <li key={r.id} className="flex items-center justify-between gap-3 py-4">
                   <div className="min-w-0">
@@ -152,7 +152,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-[12px] text-ink-dim tabular-nums">
+                    <span className="text-[12px] text-ink-faint tabular-nums">
                       신청 {dayjs(r.createdAt).format('M/D')}
                     </span>
                     <StatusBadge status={r.status} />
@@ -168,16 +168,16 @@ export default function DashboardPage() {
           {/* 연차 소진 현황 */}
           <Card title="연차 소진 현황">
             {/* 게이지 — 사용(코발트 그라데이션) / 대기 선차감(주황) / 잔여(빈 트랙) */}
-            <div className="flex h-3.5 overflow-hidden rounded-full border border-white/[0.06] bg-navy-app/60">
-              <div className="accent-gradient" style={{ width: `${usedPct}%` }} />
+            <div className="flex h-3.5 overflow-hidden rounded-full border border-white/[0.10] bg-navy-app/60">
+              <div className="bg-accent" style={{ width: `${usedPct}%` }} />
               <div className="bg-warn/80" style={{ width: `${pendingPct}%` }} />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <Stat swatch="accent-gradient" label="사용" value={confirmedUsed} unit="일" />
+              <Stat swatch="bg-accent" label="사용" value={confirmedUsed} unit="일" />
               <Stat swatch="bg-warn/80" label="대기 차감" value={summary.pendingDays} unit="일" />
               <Stat swatch="bg-white/20" label="잔여" value={summary.remainingDays} unit="일" />
             </div>
-            <p className="mt-4 border-t border-white/[0.07] pt-3.5 text-center text-[12px] text-ink-mute">
+            <p className="mt-4 border-t border-white/[0.12] pt-3.5 text-center text-[12px] text-ink-mute">
               미사용분은 이월 없이 소멸됩니다.
             </p>
           </Card>
@@ -185,9 +185,9 @@ export default function DashboardPage() {
           {/* 다가오는 부재 일정 */}
           <Card title="다가오는 부재 일정" fill scroll>
             {upcomingEvents.length === 0 ? (
-              <p className="py-4 text-[12px] text-ink-dim">예정된 일정이 없습니다.</p>
+              <p className="py-4 text-[12px] text-ink-faint">예정된 일정이 없습니다.</p>
             ) : (
-              <ul className="divide-y divide-white/[0.06]">
+              <ul className="divide-y divide-white/[0.10]">
                 {upcomingEvents.map((ev) => {
                   const dday = dayjs(ev.date).diff(dayjs(TODAY), 'day');
                   return (
@@ -202,11 +202,11 @@ export default function DashboardPage() {
                           {ev.label}
                           {ev.mine && <span className="ml-1 text-[12px] text-accent-light">(나)</span>}
                         </span>
-                        <span className="shrink-0 text-[12px] text-ink-dim">{ev.sub}</span>
+                        <span className="shrink-0 text-[12px] text-ink-faint">{ev.sub}</span>
                       </div>
                       <span className="shrink-0 text-[13px] text-ink-mute tabular-nums">
                         {dayjs(ev.date).format('M/D')}
-                        <span className="ml-1.5 text-[12px] text-ink-dim">
+                        <span className="ml-1.5 text-[12px] text-ink-faint">
                           {dday === 0 ? '오늘' : `D-${dday}`}
                         </span>
                       </span>

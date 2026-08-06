@@ -40,13 +40,13 @@ export default function Card({
   return (
     <As
       type={As === 'button' ? 'button' : undefined}
-      className={`glass glass-edge overflow-hidden rounded-card border border-white/[0.07] text-left shadow-card ${
+      className={`glass glass-edge overflow-hidden rounded-card border border-white/[0.12] text-left shadow-card ${
         fill ? 'flex min-h-0 flex-1 flex-col' : ''
       } ${hover ? HOVER_LIFT_CLASS : ''} ${className}`}
       {...rest}
     >
       {(title || right) && (
-        <header className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-5 py-4">
+        <header className="flex items-center justify-between gap-3 border-b border-white/[0.12] px-5 py-4">
           {title && (
             <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-ink-hi">{title}</h2>
           )}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { CalendarCheck2, Loader2 } from 'lucide-react';
 import { submitOnboarding } from '../api/auth.js';
+import GlowShell from '../components/ui/GlowShell.jsx';
 
 // 오늘 날짜(YYYY-MM-DD, 로컬 기준) — 입사일 max 속성용 (미래 입사일 차단)
 const TODAY = (() => {
@@ -14,7 +15,7 @@ const TODAY = (() => {
 
 // date input 공통 스타일 (다크 테마 캘린더 아이콘 반전 포함)
 const DATE_INPUT_CLASS =
-  'w-full rounded-btn border border-white/[0.09] bg-white/[0.04] px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-all placeholder:text-ink-dim focus:border-accent-cyan/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-accent-cyan/15 [color-scheme:dark]';
+  'w-full rounded-btn border border-white/[0.15] bg-white/[0.04] px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-all placeholder:text-ink-faint focus:border-accent-cyan/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-accent-cyan/15 [color-scheme:dark]';
 
 // 온보딩 — 최초 로그인 시 생일·입사일만 입력, 연차는 서버가 자동 계산 (docs/01 §2-1)
 export default function OnboardingPage() {
@@ -53,12 +54,12 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="flex h-screen items-center justify-center bg-navy-app px-6">
-      <div className="w-full max-w-[440px] rounded-card bg-navy-card p-8 shadow-card">
+    <GlowShell>
+      <div className="glass glass-edge w-full max-w-[440px] rounded-card border border-white/[0.15] p-8 shadow-card">
         {/* 환영 헤더 */}
         <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-card bg-accent shadow-btn">
-            <CalendarCheck2 size={24} className="text-white" />
+            <CalendarCheck2 size={24} className="text-navy-app" />
           </span>
           <h1 className="text-[22px] font-bold tracking-[-0.02em] text-ink-hi">
             {userName ? `${userName}님, 환영합니다!` : '환영합니다!'}
@@ -108,13 +109,13 @@ export default function OnboardingPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-1 flex w-full items-center justify-center gap-2 rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-white shadow-btn transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-navy-app shadow-btn transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
             {submitting ? '등록 중…' : '시작하기'}
           </button>
         </form>
       </div>
-    </div>
+    </GlowShell>
   );
 }

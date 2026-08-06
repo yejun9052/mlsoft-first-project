@@ -2,11 +2,13 @@ import { Loader2 } from 'lucide-react';
 
 // 버튼 — variant(primary/secondary/danger/ghost/link) × size(sm/md/lg) 조합 + 로딩 스핀 내장
 //
-// primary는 단색 대신 코발트→시안 그라데이션 + 발광 섀도우 — 화면당 주요 액션 1~2개에만 쓰는 전제라
-// 이 정도 강조가 과하지 않다. secondary는 글래스 표면(반투명 + 얇은 보더)으로 primary와 위계를 벌린다.
+// primary는 단색 accent + 딥네이비 글자(5.31:1) — 흰 글자는 3.77:1로 미달이라 글자를 뒤집었다.
+// 그라데이션을 쓰지 않는 이유는 화면 전체에서 그라데이션 면이 너무 많아져 강조가 희석됐기 때문
+// (지금은 브랜드 마크와 대시보드 히어로 숫자에만 남겼다).
+// secondary는 글래스 표면(반투명 + 얇은 보더)으로 primary와 위계를 벌린다.
 const VARIANT_CLASS = {
-  primary: 'accent-gradient text-white shadow-btn hover:brightness-110',
-  secondary: 'border border-white/[0.09] bg-white/[0.05] text-ink-body hover:bg-white/[0.09] hover:text-ink-hi',
+  primary: 'bg-accent text-navy-app shadow-btn hover:bg-accent-light',
+  secondary: 'border border-white/[0.15] bg-white/[0.05] text-ink-body hover:bg-white/[0.09] hover:text-ink-hi',
   danger: 'border border-danger/45 bg-danger/[0.07] text-danger hover:bg-danger/15',
   ghost: 'bg-transparent text-ink-mute hover:bg-white/[0.06] hover:text-ink-body',
   link: 'bg-transparent p-0 text-accent-light hover:text-accent-cyan',

@@ -12,7 +12,7 @@ export default function Table({ className = '', children }) {
 export function THead({ children }) {
   return (
     <thead>
-      <tr className="border-b border-white/[0.08] bg-navy-app/40">{children}</tr>
+      <tr className="border-b border-white/[0.12] bg-navy-app/40">{children}</tr>
     </thead>
   );
 }
@@ -35,7 +35,7 @@ export function Th({ children, right = false, className = '' }) {
 export function TR({ children, className = '', ...rest }) {
   return (
     <tr
-      className={`border-b border-white/[0.05] transition-colors last:border-0 hover:bg-accent-cyan/[0.04] ${className}`}
+      className={`border-b border-white/[0.10] transition-colors last:border-0 hover:bg-accent-cyan/[0.04] ${className}`}
       {...rest}
     >
       {children}

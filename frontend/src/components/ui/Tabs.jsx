@@ -3,7 +3,7 @@
 // tabs: [{ value, label, count? }] — count가 없으면 배지는 렌더하지 않는다.
 export default function Tabs({ tabs, value, onChange, className = '' }) {
   return (
-    <div className={`flex items-center gap-1 border-b border-white/[0.07] ${className}`}>
+    <div className={`flex items-center gap-1 border-b border-white/[0.12] ${className}`}>
       {tabs.map((tab) => {
         const active = tab.value === value;
         return (
@@ -26,7 +26,7 @@ export default function Tabs({ tabs, value, onChange, className = '' }) {
               </span>
             )}
             {active && (
-              <span className="accent-gradient absolute inset-x-0 -bottom-px h-0.5 rounded-full shadow-glow" />
+              <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-cyan shadow-glow" />
             )}
           </button>
         );

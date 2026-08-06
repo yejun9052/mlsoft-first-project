@@ -19,7 +19,7 @@ import { useUpdateMyProfile } from '../hooks/useUsers.js';
 function InfoRow({ Icon, label, value }) {
   return (
     <div className="flex items-center gap-3 py-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn border border-white/[0.07] bg-white/[0.04] text-accent-light">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-btn border border-white/[0.12] bg-white/[0.04] text-accent-light">
         <Icon size={15} />
       </span>
       <span className="text-[12px] text-ink-mute">{label}</span>
@@ -85,7 +85,7 @@ export default function MyInfoPage() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.2fr]">
         {/* 좌: 프로필 카드 */}
         <Card>
-          <div className="flex flex-col items-center gap-3 border-b border-white/[0.07] pb-6 text-center">
+          <div className="flex flex-col items-center gap-3 border-b border-white/[0.12] pb-6 text-center">
             <Avatar name={me.name} size="lg" />
             <div>
               <h2 className="text-[18px] font-bold text-ink-hi">{me.name}</h2>
@@ -94,7 +94,7 @@ export default function MyInfoPage() {
             <StatusBadge label={ROLE_LABEL[me.role]} tone="accent" />
           </div>
 
-          <div className="mt-2 divide-y divide-white/[0.06]">
+          <div className="mt-2 divide-y divide-white/[0.10]">
             <InfoRow Icon={Mail} label="이메일" value={me.email} />
             <InfoRow Icon={Building2} label="부서" value={me.departmentName ?? '미배정'} />
             <InfoRow Icon={CalendarDays} label="입사일" value={me.hireDate} />
@@ -106,7 +106,7 @@ export default function MyInfoPage() {
         <div className="flex flex-col gap-5">
           {/* 연차 요약 카드 */}
           <Card title="연차 요약">
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-white/[0.10]">
               <SummaryRow label="기본 부여" value={summary.baseDays} />
               <SummaryRow label="복리 가산" value={summary.bonusDays} />
               <SummaryRow label="사용 (확정)" value={confirmedUsed} />

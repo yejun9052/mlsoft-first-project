@@ -12,7 +12,7 @@ export default function Pagination({ page, totalPages, totalElements, onChange, 
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-3 ${className}`}
+      className={`flex items-center justify-between gap-3 border-t border-white/[0.12] px-5 py-3 ${className}`}
     >
       <span className="text-[11px] text-ink-faint tabular-nums">
         {totalElements !== undefined && `총 ${totalElements}건`}

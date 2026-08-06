@@ -10,29 +10,35 @@
   /* 폰트 */
   --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, sans-serif;
 
-  /* 미드나잇 서피스 — 기존 네이비보다 한 단계 더 내려 글로우·글래스가 살아나는 바닥을 만든다.
+  /* 미드나잇 서피스 — 바닥은 더 내리고 카드는 더 올려, 단계 사이 명도 차를 확실히 벌린다.
+     이전 팔레트는 app(#050b18)~card(#0d1728) 간격이 너무 좁아 카드가 배경에 묻혔다.
      navy-card는 글래스가 얹히는 베이스색(불투명 폴백)이라 완전한 검정으로 내리지 않는다. */
-  --color-navy-app: #050b18;
-  --color-navy-content: #070f1f;
-  --color-navy-card: #0d1728;
-  --color-navy-header: #0a1322;
-  --color-navy-btn2: #16233a;
-  --color-navy-avatar: #1c2f52;
+  --color-navy-app: #030812;
+  --color-navy-content: #060d1c;
+  --color-navy-card: #101d33;
+  --color-navy-header: #0a1526;
+  --color-navy-btn2: #1b2c47;
+  --color-navy-avatar: #24406e;
 
-  /* 코발트 → 시안 액센트. accent-light를 시안 쪽으로 끌어올려 링크·활성 상태가
-     미드나잇 배경에서 확실히 떠 보이게 한다(대비 10:1 이상). */
-  --color-accent: #2563eb;
-  --color-accent-dark: #1d4ed8;
-  --color-accent-light: #7dd3fc;
-  --color-accent-label: #a8c9f0;
+  /* 파랑 램프 4단계 — 딥 코발트 / 비비드 애저 / 페리윙클 / 시안.
+     이전에는 accent-light(#7dd3fc)와 accent-cyan(#22d3ee)이 둘 다 하늘색이라 서로 구별되지 않았다.
+     accent-light를 보랏빛이 도는 페리윙클로 옮겨 시안과 색상환에서 떼어놓고,
+     accent는 채도를 올려 "확실한 파랑"으로 세운다. 네 값 모두 미드나잇 위에서 역할이 구분된다. */
+  --color-accent-dark: #1b4ad9;
+  --color-accent: #3b7dff;
+  --color-accent-light: #93b4ff;
   --color-accent-cyan: #22d3ee;
+  --color-accent-label: #a9c4ea;
 
-  /* 텍스트 — 순백 대신 푸른 기가 도는 화이트로 통일 */
-  --color-ink-hi: #eaf3ff;
-  --color-ink-body: #c3d3e8;
-  --color-ink-mute: #7e93b0;
-  --color-ink-faint: #62789a;
-  --color-ink-dim: #435775;
+  /* 텍스트 — 순백 대신 푸른 기가 도는 화이트로 통일.
+     괄호 안은 글래스 카드 합성색(#0e1a2e) 위에서의 대비비다. WCAG AA 본문 기준은 4.5:1.
+     ink-faint는 11px 캡션·테이블 헤더에 쓰이는데 이전 값(#62789a)이 3.87:1로 미달이라 끌어올렸다.
+     ink-dim은 2.37:1로 본문에 쓸 수 없다 — 아이콘·비활성 컨트롤 같은 장식 전용 토큰이다. */
+  --color-ink-hi: #eaf3ff; /* 15.56:1 */
+  --color-ink-body: #c3d3e8; /* 11.45:1 */
+  --color-ink-mute: #7e93b0; /* 5.55:1 */
+  --color-ink-faint: #7489a7; /* 4.88:1 — 읽는 텍스트의 하한선 */
+  --color-ink-dim: #435775; /* 2.37:1 — 장식·비활성 전용. 텍스트에 쓰지 말 것 */
 
   /* 상태 색 — 코발트 세계에 맞춰 채도를 올린 값. 의미(승인/대기/반려)는 그대로. */
   --color-ok: #2ee6a8;
@@ -45,10 +51,13 @@
   --radius-btn: 11px;
   --radius-badge: 999px;
 
-  /* 섀도우 — 미드나잇 위에서는 "떠 있는 그림자"보다 깊게 가라앉는 그림자가 자연스럽다 */
-  --shadow-card: 0 24px 64px -16px rgba(2, 6, 18, 0.9);
-  --shadow-btn: 0 8px 24px -8px rgba(37, 99, 235, 0.65);
-  --shadow-glow: 0 0 32px -6px rgba(34, 211, 238, 0.4);
+  /* 섀도우 — 카드는 그림자만으로 배경과 분리되기 어려우므로(둘 다 어두움) 바깥 그림자에
+     안쪽 1px 하이라이트 링을 더해 경계를 만든다.
+     단 카드에는 border(0.12) + glass-edge 상단 하이라이트가 이미 걸리므로 링은 셋 중 가장 약하게
+     둔다 — 0.06이면 세 겹이 겹쳐 테두리가 도드라진다. */
+  --shadow-card: 0 24px 64px -16px rgba(0, 2, 8, 0.95), inset 0 0 0 1px rgba(147, 180, 255, 0.04);
+  --shadow-btn: 0 8px 24px -8px rgba(59, 125, 255, 0.7);
+  --shadow-glow: 0 0 32px -6px rgba(34, 211, 238, 0.42);
 }
 
 /* ── 커스텀 유틸리티 (Tailwind v4 @utility) ─────────────────────────────── */
@@ -56,14 +65,16 @@
 /* 글래스 서피스 — 카드/패널 기본. 배경 글로우가 비쳐 보이도록 반투명 + 블러.
    backdrop-filter 미지원 브라우저에서는 navy-card 불투명 배경으로 폴백된다. */
 @utility glass {
-  background-color: color-mix(in srgb, var(--color-navy-card) 72%, transparent);
+  background-color: color-mix(in srgb, var(--color-navy-card) 86%, transparent);
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
 
-/* 글래스 강조 — 모달/사이드바처럼 뒤 콘텐츠를 확실히 가려야 하는 서피스 */
+/* 글래스 강조 — 모달/사이드바처럼 뒤 콘텐츠를 확실히 가려야 하는 서피스.
+   95%까지 올렸더니 배경 기여도가 5%뿐이라 사실상 불투명이 됐다(사이드바가 "글래스"가 아니게 됨).
+   91%면 뒤 앰비언트 글로우가 남으면서도 모달 뒤 콘텐츠는 충분히 가린다. */
 @utility glass-strong {
-  background-color: color-mix(in srgb, var(--color-navy-card) 88%, transparent);
+  background-color: color-mix(in srgb, var(--color-navy-card) 91%, transparent);
   backdrop-filter: blur(28px) saturate(150%);
   -webkit-backdrop-filter: blur(28px) saturate(150%);
 }
@@ -82,7 +93,7 @@
     background: linear-gradient(
       to right,
       transparent,
-      rgba(125, 211, 252, 0.35),
+      rgba(147, 180, 255, 0.35),
       rgba(255, 255, 255, 0.14),
       transparent
     );
@@ -90,9 +101,25 @@
   }
 }
 
-/* 코발트→시안 그라데이션 면 — Primary 버튼, 게이지 채움, 브랜드 마크 */
-@utility accent-gradient {
-  background-image: linear-gradient(135deg, var(--color-accent-cyan) 0%, var(--color-accent) 55%, var(--color-accent-dark) 100%);
+/* 액션 그라데이션 — 그라데이션 면은 이제 브랜드 마크 하나뿐이다.
+   한때 Primary 버튼·세그먼티드 활성·탭 밑줄·게이지·토글까지 13곳이 그라데이션이었는데,
+   면이 너무 많아 강조가 서로 상쇄됐다("그라데이션이 과하다"). 전부 단색 accent로 내리고
+   그라데이션은 브랜드 마크와 대시보드 히어로 숫자(accent-gradient-text) 두 곳에만 남겼다.
+   램프를 밝은 쪽(시안→페리윙클→애저)으로 모으고 글자를 navy-app으로 뒤집은 이유 —
+   흰 글자는 시안 구간에서 1.81:1까지 떨어졌고, 딥네이비 글자는 세 정지점 모두 5.31:1 이상이다.
+   반드시 `text-navy-app`과 함께 쓸 것.
+   background-color 폴백을 함께 깔는 이유 — 어두운 글자를 쓰는 순간 "그라데이션이 안 그려지는
+   상황"의 실패 모드가 뒤집힌다. 흰 글자는 면이 없어도 어두운 카드 위에서 읽히지만, 딥네이비
+   글자는 카드(#0e1a2e)에 그대로 얹혀 1.15:1로 사라진다. 폴백 면을 깔면 최악에도 9.75:1이다.
+   (accent-gradient-text가 -webkit-text-fill-color 순서로 같은 사고를 막는 것과 같은 이유) */
+@utility accent-gradient-action {
+  background-color: var(--color-accent-light);
+  background-image: linear-gradient(
+    135deg,
+    var(--color-accent-cyan) 0%,
+    var(--color-accent-light) 50%,
+    var(--color-accent) 100%
+  );
 }
 
 /* 같은 그라데이션을 글자에 클리핑 — 대시보드 잔여 연차처럼 1페이지 1회용 강조.
@@ -115,7 +142,7 @@
   z-index: -10;
   pointer-events: none;
   background:
-    radial-gradient(60rem 40rem at 12% -8%, rgba(37, 99, 235, 0.22), transparent 60%),
+    radial-gradient(60rem 40rem at 12% -8%, rgba(59, 125, 255, 0.22), transparent 60%),
     radial-gradient(48rem 34rem at 92% 108%, rgba(34, 211, 238, 0.14), transparent 62%);
 }
 
@@ -127,5 +154,5 @@ body {
 /* 스크롤바 — 미드나잇 서피스에 맞춘 얇은 다크 스크롤바 (기본 밝은 스크롤바가 글래스 톤을 깬다) */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(125, 211, 252, 0.18) transparent;
+  scrollbar-color: rgba(147, 180, 255, 0.18) transparent;
 }
