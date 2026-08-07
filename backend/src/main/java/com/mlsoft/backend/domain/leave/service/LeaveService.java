@@ -14,6 +14,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveActionHistory;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
+import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -34,6 +35,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 연차 도메인 서비스 — 신청·조회·승인/반려·취소 (docs/01 2-3·2-3(b)·2-5, docs/03 연차).
@@ -72,6 +74,8 @@ public class LeaveService {
     private final UserRepository userRepository;
     /** 정책 설정 읽기 — 키 상수·파싱을 각 서비스에 흩지 않는다 (docs/02 3-11) */
     private final PolicyConfigReader policyConfigReader;
+    // 공휴일 판정 — 조회 실패해도 예외를 던지지 않는다(빈 집합)
+    private final HolidayService holidayService;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -325,16 +329,21 @@ public class LeaveService {
     }
 
     /**
-     * 신청 날짜 검증 — 개수 상한·주말·과거 거부 (공휴일 검증은 holidays API 마일스톤에서).
+     * 신청 날짜 검증 — 개수 상한·주말·과거·공휴일 거부 (리뷰 I-6).
      *
      * <p>개수 상한을 <b>중복 제거 전 원본 개수</b>로 본다 — 같은 날짜를 수백 개 담은 요청도
      * 여기서 막아야 한다 (중복 제거는 LeaveRequest.create가 한다).
+     *
+     * <p>공휴일은 DB 캐시로 판정한다. 그 해 공휴일이 적재돼 있지 않으면 빈 집합이 와서
+     * <b>검증이 느슨해질 뿐 신청이 막히지는 않는다</b> — 외부 API 장애가 연차 신청을
+     * 중단시키면 안 되기 때문이다 (HolidayService 참고).
      */
     private void validateDates(List<LocalDate> dates) {
         if (dates.size() > policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)) {
             throw new BusinessException(ErrorCode.TOO_MANY_LEAVE_DATES);
         }
         LocalDate today = LocalDate.now(KST);
+        // 값싼 검사(주말·과거)를 먼저 끝낸다 — 어차피 거부될 요청 때문에 DB를 볼 이유가 없다
         for (LocalDate date : dates) {
             DayOfWeek dayOfWeek = date.getDayOfWeek();
             if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
@@ -343,6 +352,11 @@ public class LeaveService {
             if (date.isBefore(today)) {
                 throw new BusinessException(ErrorCode.PAST_DATE_NOT_ALLOWED);
             }
+        }
+        // 공휴일만 DB를 본다. 날짜 수만큼 개별 조회하지 않도록 IN 한 번으로 받는다
+        Set<LocalDate> holidays = holidayService.findHolidayDates(dates);
+        if (!holidays.isEmpty()) {
+            throw new BusinessException(ErrorCode.HOLIDAY_NOT_ALLOWED);
         }
     }
 

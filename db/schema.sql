@@ -16,9 +16,11 @@
 --
 -- ⚠️ 엔티티를 바꾸면 이 파일도 같이 갱신해야 한다. 안 하면 배포 시 validate가
 --    기동을 거부한다(그게 이 설정의 목적이다 — 조용한 ALTER보다 낫다).
---    마이그레이션 도구(Flyway) 전환은 docs/08 Y-6 / docs/12 ⑧.
+--    마이그레이션 도구(Flyway) 전환은 docs/08 Y-6 / docs/12.
 --
--- 최종 생성 2026-08-07 — 테이블 15개 (개인 일정 schedule_entries·schedule_dates 포함)
+-- 최종 생성 2026-08-08 — 테이블 15개
+--   · 개인 일정: schedule_entries · schedule_dates
+--   · 공휴일 holidays.date 에 UNIQUE(uk_holidays_date) — 중복 적재 방지 (리뷰 D-3)
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
@@ -77,7 +79,8 @@ CREATE TABLE `holidays` (
   `date` date NOT NULL,
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `year` int NOT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_holidays_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

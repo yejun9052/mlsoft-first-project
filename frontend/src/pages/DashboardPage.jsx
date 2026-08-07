@@ -11,7 +11,7 @@ import StatusBadge from '../components/ui/StatusBadge.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
-import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holidays 생기면 이 mock 제거
+import { useHolidays } from '../hooks/useHolidays.js';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 
 const TODAY = dayjs().format('YYYY-MM-DD');
@@ -36,6 +36,9 @@ export default function DashboardPage() {
   const summary = summaryQuery.data;
   const myLeaves = myLeavesQuery.data?.content ?? [];
   const calendarLeaves = useMemo(() => calendarQuery.data ?? [], [calendarQuery.data]);
+  // 공휴일 조회 실패는 화면을 막지 않는다 — 다가오는 일정에서 공휴일만 빠진다
+  const holidaysQuery = useHolidays(dayjs().year());
+  const holidays = useMemo(() => holidaysQuery.data ?? [], [holidaysQuery.data]);
 
   // 다가오는 부재 일정 — 오늘 이후의 승인 연차(캘린더 API) + 공휴일(mock)을 날짜순으로 병합.
   // 캘린더 API는 신청 건 단위(dates 배열 포함)라 날짜별 항목으로 펼쳐서(flatMap) 다룬다.
@@ -55,7 +58,7 @@ export default function DashboardPage() {
       .filter((h) => h.date >= TODAY)
       .map((h) => ({ date: h.date, kind: 'holiday', label: h.name, sub: '공휴일', mine: false }));
     return [...leaveEvents, ...holidayEvents].sort((a, b) => a.date.localeCompare(b.date));
-  }, [calendarLeaves, me?.id]);
+  }, [calendarLeaves, holidays, me?.id]);
 
   // 내 신청 중 결재 대기 건수 — 관리자 결재함이 아니라 '내' 대기 건 (검증 F2)
   // 신규 신청(PENDING)과 소급 취소 신청(CANCEL_PENDING) 모두 결재자 처리를 기다리는 건이라 합산.

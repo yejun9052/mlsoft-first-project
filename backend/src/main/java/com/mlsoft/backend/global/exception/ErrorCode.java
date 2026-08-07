@@ -18,6 +18,7 @@ public enum ErrorCode {
     INVALID_INPUT_VALUE(400, "입력값이 올바르지 않습니다."),
     INVALID_APPROVER(400, "승인자로 지정할 수 없는 사용자입니다."),
     WEEKEND_NOT_ALLOWED(400, "주말은 연차로 신청할 수 없습니다."),
+    HOLIDAY_NOT_ALLOWED(400, "공휴일은 연차로 신청할 수 없습니다."),
     PAST_DATE_NOT_ALLOWED(400, "지난 날짜는 신청할 수 없습니다."),
     ALREADY_RETIRED(400, "이미 퇴직 처리된 사용자입니다."),
     ADVANCE_LIMIT_EXCEEDED(400, "당겨쓸 수 있는 연차 상한을 초과했습니다. 관리자에게 문의해주세요."),

@@ -12,6 +12,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
+import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.Role;
@@ -34,12 +35,14 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -63,6 +66,11 @@ class LeaveServiceTest {
     private UserRepository userRepository;
     @Mock
     private PolicyConfigReader policyConfigReader;
+
+    // 공휴일 판정 (리뷰 I-6). 대부분의 테스트는 공휴일이 아닌 날짜를 쓰므로 빈 집합이 기본값이다 —
+    // givenMaxDatesPerRequest에서 함께 스텁한다(둘 다 validateDates가 부르는 협력자).
+    @Mock
+    private HolidayService holidayService;
 
     @InjectMocks
     private LeaveService leaveService;
@@ -192,6 +200,43 @@ class LeaveServiceTest {
                 () -> leaveService.apply(1L, request(dates, null)));
 
         assertEquals(ErrorCode.WEEKEND_NOT_ALLOWED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("신청 — 공휴일 포함: HOLIDAY_NOT_ALLOWED (400)")
+    void apply_holiday_throws() {
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)).willReturn(366);
+
+        List<LocalDate> dates = futureWeekdays(1);
+        // 그날이 공휴일로 적재돼 있는 상황
+        given(holidayService.findHolidayDates(any()))
+                .willReturn(Set.of(dates.get(0)));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(dates, null)));
+
+        assertEquals(ErrorCode.HOLIDAY_NOT_ALLOWED, ex.getErrorCode());
+        // 검증 단계에서 걸렸으므로 차감이 일어나면 안 된다
+        assertEquals(0, applicant.getUseDays().compareTo(BigDecimal.ZERO));
+    }
+
+    @Test
+    @DisplayName("신청 — 공휴일이 적재돼 있지 않으면 검증이 느슨해질 뿐 신청은 통과한다")
+    void apply_holidayNotLoaded_passes() {
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenAdvanceEnabled(false);
+        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
+                .willReturn(Optional.of(user(9L, Role.SYSTEM_ADMIN, "15.0")));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+        given(leaveRequestRepository.save(any(LeaveRequest.class))).willAnswer(inv -> inv.getArgument(0));
+
+        // 외부 API 장애 등으로 그 해 공휴일이 비어 있는 상황 — 예외가 아니라 통과여야 한다
+        leaveService.apply(1L, request(futureWeekdays(1), null));
+
+        assertEquals(0, applicant.getUseDays().compareTo(new BigDecimal("1.0")));
     }
 
     @Test
@@ -565,6 +610,9 @@ class LeaveServiceTest {
 
     private void givenMaxDatesPerRequest(int max) {
         given(policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)).willReturn(max);
+        // 공휴일 없음이 기본. lenient인 이유 — 개수 상한·주말·과거에서 먼저 걸리는 테스트는
+        // 여기까지 오지 않아 스텁이 쓰이지 않는다 (validateDates가 값싼 검사를 먼저 한다).
+        lenient().when(holidayService.findHolidayDates(any())).thenReturn(Set.of());
     }
 
     private LeaveActionHistory historyWith(RequestAction action) {

@@ -17,6 +17,9 @@ public final class ResponseMessage {
     public static final String LEAVE_FETCHED = "연차 정보를 조회했습니다.";
 
     // 복리후생 신청
+    public static final String HOLIDAY_FETCHED = "공휴일을 조회했습니다.";
+    public static final String HOLIDAY_SYNCED = "공휴일을 동기화했습니다.";
+
     // 개인 일정 (외근·출장·재택·교육) — 승인 절차가 없어 "신청"이 아니라 "등록"이다
     public static final String SCHEDULE_CREATED = "일정이 등록되었습니다.";
     public static final String SCHEDULE_UPDATED = "일정이 수정되었습니다.";

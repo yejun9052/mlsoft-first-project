@@ -13,7 +13,7 @@ import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary } from '../hooks/useLeaves.js';
 import { useScheduleCalendar } from '../hooks/useSchedules.js';
 import { useDepartments } from '../hooks/useDepartments.js';
-import { holidays } from '../mocks/data.js'; // TODO(holidays API): /api/holidays 생기면 이 mock 제거
+import { useHolidays } from '../hooks/useHolidays.js';
 
 // 요일 헤더 (일요일 시작)
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -33,7 +33,7 @@ const SCHEDULE_PILL_CLASS = {
 
 // 연·월별 캘린더 셀 데이터(연차 + 개인 일정 + 공휴일)를 날짜별로 묶는다.
 // entries는 이미 날짜 단위로 펼쳐진 목록: { date, personName, label, kind, mine, typeKey }
-function buildCalendarData(entries, year, month) {
+function buildCalendarData(entries, holidays, year, month) {
   const mm = String(month).padStart(2, '0');
   const prefix = `${year}-${mm}-`;
   const map = {};
@@ -74,6 +74,9 @@ export default function CalendarPage() {
   const calendarQuery = useLeaveCalendar(year, month, filters);
   const scheduleQuery = useScheduleCalendar(year, month, filters);
   const departmentsQuery = useDepartments();
+  // 공휴일은 연 단위로 받는다 — 월을 넘겨도 재조회하지 않게. 실패하면 표시만 빠진다
+  const holidaysQuery = useHolidays(year);
+  const holidays = useMemo(() => holidaysQuery.data ?? [], [holidaysQuery.data]);
 
   const isFiltered = Boolean(nameQuery) || Boolean(departmentId);
 
@@ -133,10 +136,10 @@ export default function CalendarPage() {
 
     return {
       weeks: rows,
-      calData: buildCalendarData([...flatLeaves, ...flatSchedules], year, month),
+      calData: buildCalendarData([...flatLeaves, ...flatSchedules], holidays, year, month),
       blockedDates: blocked,
     };
-  }, [year, month, calendarQuery.data, scheduleQuery.data, me?.id]);
+  }, [year, month, calendarQuery.data, scheduleQuery.data, holidays, me?.id]);
 
   // 오늘 강조는 조회 중인 달이 실제 '오늘'의 달과 같을 때만 적용
   const today = dayjs();

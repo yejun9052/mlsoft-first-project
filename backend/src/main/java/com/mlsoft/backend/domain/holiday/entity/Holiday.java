@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,7 +21,9 @@ import java.time.LocalDate;
  * created_at 없는 독립 테이블이므로 BaseTimeEntity 미상속.
  */
 @Entity
-@Table(name = "holidays")
+// date에 UNIQUE — 같은 날짜가 중복 적재되면 캘린더에 공휴일이 두 번 뜨고, 재동기화할 때마다
+// 행이 쌓인다. 애플리케이션 검사만으로는 동시 동기화를 막지 못한다 (리뷰 D-3).
+@Table(name = "holidays", uniqueConstraints = @UniqueConstraint(name = "uk_holidays_date", columnNames = "date"))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
