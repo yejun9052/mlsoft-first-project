@@ -58,7 +58,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             throw unauthorizedDomain();
         }
 
-        // ② 이메일 도메인 검증 (개발 중 대체 방식) — allowed-domain이 비어 있으면 제한 없음(개발용)
+        // ② 이메일 도메인 검증 — allowed-domain이 비어 있으면 제한 없음(개발용).
+        //    운영에서 이 fail-open을 밟지 않도록 AllowedDomainCheck가 기동 단계에서 빈 값을 막는다 (리뷰 O-1).
+        //    여기서 빈 값을 거부하지 않는 이유: local 프로필은 개인 계정 로그인이 필요해서다.
         String allowedDomain = appProperties.allowedDomain();
         if (email == null) {
             throw unauthorizedDomain();

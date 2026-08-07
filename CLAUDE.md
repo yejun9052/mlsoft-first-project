@@ -116,7 +116,10 @@ Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토�
 ```
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
-`COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`가 배포 단계에서 fail-fast 한다.
+
+**운영 프로필은 `ddl-auto: validate`다** (`application-prod.yml`). Hibernate가 테이블을 만들지 않으므로 최초 스키마는 `db/schema.sql`이 만든다 — compose가 mysql 컨테이너의 `/docker-entrypoint-initdb.d/`에 마운트하고, MySQL은 데이터 볼륨이 비어 있을 때만 실행한다. **엔티티를 바꾸면 `db/schema.sql`도 함께 갱신할 것** — 안 하면 배포가 기동 단계에서 멈춘다(의도된 동작). 기존 DB 보정은 `db/backfill-*.sql`.
+
+기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
 ## 문서
 
