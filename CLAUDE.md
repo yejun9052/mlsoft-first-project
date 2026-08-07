@@ -75,7 +75,7 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 권한 가드는 `RequireAuth`(라우트 레벨)로 선차단한다 — useEffect 내 리다이렉트 방식 금지(깜박임·우회 여지).
 
 ### 스타일
-Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토큰은 `frontend/src/index.css`의 `@theme` 블록에 있다 (`navy-*`, `accent-*`, `ink-*`, `radius-*`). docs/04의 "tailwind.config.js에 등록" 서술은 v3 기준이라 현재 코드와 다르다.
+Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토큰은 `frontend/src/index.css`의 `@theme` 블록에 있다 (`navy-*`, `accent-*`, `ink-*`, `radius-*`), 커스텀 유틸리티는 `@utility`. 값의 단일 출처는 `index.css`이고 docs/05가 그걸 문서화한다.
 
 ## 코드 컨벤션
 
@@ -93,11 +93,13 @@ Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토�
 
 ## 설정과 시크릿
 
-| 파일 | 커밋 | 내용 |
-|---|---|---|
-| `backend/src/main/resources/application.yml` | ✅ | 공통 설정, 시크릿은 `${ENV}` 참조만 |
-| `application-local.yml` | ❌ gitignored | 로컬 개발 실제 시크릿 (DB·OAuth·JWT·공휴일 API) |
-| `application-example.yml` | ✅ | 로컬 설정 템플릿 |
+| 파일 | 커밋 | 도커 컨텍스트 | 내용 |
+|---|---|---|---|
+| `backend/src/main/resources/application.yml` | ✅ | 포함 | 공통 설정, 시크릿은 `${ENV}` 참조만 |
+| `application-local.yml` | ❌ gitignored | **❌ dockerignored** | 로컬 개발 실제 시크릿 (DB·OAuth·JWT·공휴일 API) |
+| `application-example.yml` | ✅ | 포함 | 로컬 설정 템플릿 |
+
+**시크릿 파일을 새로 만들면 `.gitignore`와 `.dockerignore` 둘 다에 넣는다.** git과 도커 빌드 컨텍스트는 별개다 — `Dockerfile`의 `COPY backend/ ./`는 파일시스템을 그대로 복사하므로 gitignore가 막아 주지 않고, `bootJar`가 jar 리소스로 패키징해 **운영 이미지에 시크릿이 박힌다** (리뷰 O-4, 2026-08-07 차단).
 
 로컬은 MySQL 서비스 `MySQL96`(3306)의 `mlsoft_leave` DB를 쓴다. 테스트는 H2 인메모리(MySQL 호환 모드, `year/day/value`를 `NON_KEYWORDS`로 허용).
 
@@ -133,7 +135,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | `docs/10-코드리뷰-리포트.md` | 코드 리뷰 결과 (코드 주석의 `리뷰 I-1`, `F-3` 등 참조처) |
 | `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청이 흐르는 길·연차 잔액 상태 전이·기능별 구현 상태. 처음 볼 문서 |
 | `docs/12-남은-작업.md` | **열려 있는 작업만 추린 실행 목록** — 우선순위·의존 관계·착수 순서. 다음에 뭘 할지 정할 때 |
-| `docs/구현-현황/` | 백엔드·프론트엔드·실행환경별 진행 상황 |
+| ~~`docs/구현-현황/`~~ | **폐기(2026-08-07)** — docs/11 §4와 docs/12가 대체. 상태 문서를 3개 병렬로 두니 아무도 안 고쳤다 |
+
+**리포트 문서(07·08·10)는 본문을 고쳐 쓰지 말 것** — 코드 주석이 항목 번호를 참조하므로 번호가 바뀌면 링크가 끊긴다. 07·08은 상단 "구현 상태" 표만 갱신한다.
 
 코드 주석의 `(검증 Y-2)`, `(갭분석 A-3)` 같은 표기는 각각 docs/08, docs/07의 항목 번호를 가리킨다 — 해당 로직을 수정할 땐 그 항목을 먼저 읽을 것.
 
