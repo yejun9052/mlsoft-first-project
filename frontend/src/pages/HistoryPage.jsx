@@ -15,8 +15,17 @@ import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import Field from '../components/ui/Field.jsx';
 import Textarea from '../components/ui/Textarea.jsx';
+import Tabs from '../components/ui/Tabs.jsx';
+import MySchedulesTable from '../components/schedule/MySchedulesTable.jsx';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCancelLeave, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+
+// 탭 — 연차·복리후생(결재를 거치고 잔액을 차감)과 개인 일정(둘 다 없음)은 성격이 달라
+// 같은 표에 섞지 않는다. 상태·사유·취소 열이 개인 일정에는 아예 없다.
+const TABS = [
+  { value: 'LEAVE', label: '연차·복리후생' },
+  { value: 'SCHEDULE', label: '개인 일정' },
+];
 
 // 취소할 수 있는 상태 — 대기 중이거나 승인된 건만 (반려·취소·취소대기는 대상 아님).
 // 과거 날짜가 포함된 승인 건은 서버가 소급 취소(CANCEL_PENDING)로 돌려 승인자 승인을 받는다.
@@ -112,6 +121,7 @@ export default function HistoryPage() {
     () => [...new Set(myLeaveRequests.map((req) => dayjs(req.dates[0]).year()))].sort((a, b) => b - a),
     [myLeaveRequests],
   );
+  const [tab, setTab] = useState('LEAVE');
   const [yearFilter, setYearFilter] = useState(null);
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -128,36 +138,44 @@ export default function HistoryPage() {
     });
   }, [myLeaveRequests, activeYear, typeFilter, statusFilter]);
 
-  // 실패를 로딩과 구분한다 — !summary만 보면 조회 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
-  if (leavesQuery.isError || summaryQuery.isError) {
-    return (
-      <ErrorState
-        label="사용 내역을 불러오지 못했습니다."
-        onRetry={() => {
-          leavesQuery.refetch();
-          summaryQuery.refetch();
-        }}
-      />
-    );
-  }
-
-  if (isLoading || !summary) {
-    return (
-      <div className="flex h-40 items-center justify-center gap-2 text-ink-mute">
-        <Loader2 size={18} className="animate-spin" />
-        <span className="text-[13px]">불러오는 중…</span>
-      </div>
-    );
-  }
+  // 연차 탭의 조회 상태 — 실패를 로딩과 구분한다.
+  // !summary만 보면 조회 실패 시 스피너가 영원히 돈다 (리뷰 F-6).
+  // 개인 일정 탭은 자체 쿼리를 쓰므로 여기서 막지 않는다 — 예전처럼 early return을 두면
+  // 연차 조회가 실패했을 때 멀쩡한 일정 탭까지 못 보게 된다.
+  const leaveFailed = leavesQuery.isError || summaryQuery.isError;
+  const leaveLoading = isLoading || !summary;
 
   // 통계 스트립 값 (선차감 정책상 '사용'은 확정 + 대기 합산이라 캡션으로 구분)
-  const grantedDays = Number(summary.baseDays) + Number(summary.bonusDays);
-  const confirmedUsed = Number(summary.useDays) - Number(summary.pendingDays);
+  const grantedDays = summary ? Number(summary.baseDays) + Number(summary.bonusDays) : 0;
+  const confirmedUsed = summary ? Number(summary.useDays) - Number(summary.pendingDays) : 0;
 
   return (
     <div>
-      <PageHeader title="사용 내역" subtitle="내 연차·복리후생 신청 내역" />
+      <PageHeader title="사용 내역" subtitle="내 연차·복리후생 신청 내역과 개인 일정" />
 
+      <Tabs tabs={TABS} value={tab} onChange={setTab} className="mb-6" />
+
+      {tab === 'SCHEDULE' && <MySchedulesTable />}
+
+      {tab === 'LEAVE' && leaveFailed && (
+        <ErrorState
+          label="사용 내역을 불러오지 못했습니다."
+          onRetry={() => {
+            leavesQuery.refetch();
+            summaryQuery.refetch();
+          }}
+        />
+      )}
+
+      {tab === 'LEAVE' && !leaveFailed && leaveLoading && (
+        <div className="flex h-40 items-center justify-center gap-2 text-ink-mute">
+          <Loader2 size={18} className="animate-spin" />
+          <span className="text-[13px]">불러오는 중…</span>
+        </div>
+      )}
+
+      {tab === 'LEAVE' && !leaveFailed && !leaveLoading && (
+        <>
       {/* 필터 칩 — 한 행으로 압축(연도/종류/상태), 좁은 화면에서만 줄바꿈 */}
       <div className="mb-6 flex flex-wrap items-center gap-x-8 gap-y-3">
         <FilterGroup label="연도">
@@ -254,6 +272,8 @@ export default function HistoryPage() {
           </tbody>
         </Table>
       </TableCard>
+        </>
+      )}
 
       {/* 취소 확인 — 사유는 필수다(서버 CancelRequest도 필수). 승인된 건은 지난 날짜가 섞였는지에 따라
           즉시 취소 / 결재자 승인 대기로 갈리므로 그 사실을 미리 알린다. */}

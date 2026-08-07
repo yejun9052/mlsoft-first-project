@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { getWelfareTargetLabel } from '../../constants/welfare.js';
-import { TEST_APPROVER_CANDIDATES } from '../../constants/approvers.js';
 import { useApplyWelfare, useWelfarePoliciesAll } from '../../hooks/useWelfare.js';
+import { useApprovers } from '../../hooks/useUsers.js';
 import Modal from '../ui/Modal.jsx';
 import Field from '../ui/Field.jsx';
 import Select from '../ui/Select.jsx';
@@ -23,8 +23,8 @@ const FORM_ID = 'welfare-apply-form';
  * 상세 사유는 백엔드 WelfareCreateRequest.reason이 @NotBlank라 필수 입력이다(v1은 선택값이었지만
  * 이번 백엔드 계약은 다르므로 필수로 취급 — 빈 값으로 제출하면 400).
  *
- * 서브 승인자 후보를 내려주는 API가 아직 없어(연차 신청과 동일한 사정 — CalendarPage 참고),
- * 로컬 DB에 존재하는 테스트 TEAM_LEADER 2명을 하드코딩(constants/approvers.js)해 재사용한다.
+ * 서브 승인자 후보는 GET /api/users/approvers에서 받는다 — 서버가 재직 중 TEAM_LEADER·SYSTEM_ADMIN에서
+ * 본인을 빼고 내려주므로 호출부에서 거를 필요가 없다 (리뷰 F-4로 하드코딩 상수를 걷어냈다).
  *
  * initialPolicyId — 정책 테이블(WelfarePage)에서 특정 행을 클릭해 들어온 경우, 구분뿐 아니라
  * 대상까지 미리 선택된 채로 연다(정책 목록은 WelfarePage가 이미 불러온 react-query 캐시를
@@ -33,6 +33,8 @@ const FORM_ID = 'welfare-apply-form';
 export default function WelfareApplyModal({ initialCategory, initialPolicyId, onClose }) {
   const policiesQuery = useWelfarePoliciesAll();
   const policies = policiesQuery.data ?? [];
+  const approversQuery = useApprovers();
+  const approvers = approversQuery.data ?? [];
 
   const [category, setCategory] = useState(initialCategory ?? '');
   const [policyId, setPolicyId] = useState(initialPolicyId != null ? String(initialPolicyId) : '');
@@ -165,13 +167,18 @@ export default function WelfareApplyModal({ initialCategory, initialPolicyId, on
           />
         </Field>
 
-        {/* 서브 승인자 (선택) — 연차 신청과 동일한 테스트 계정 재사용 */}
+        {/* 서브 승인자 (선택) — 연차 신청 패널과 같은 API를 쓴다 */}
         <Field label="서브 승인자 (선택)">
-          <Select value={subApproverId} onChange={(e) => setSubApproverId(e.target.value)}>
-            <option value="">선택 안 함</option>
-            {TEST_APPROVER_CANDIDATES.map((a) => (
+          <Select
+            value={subApproverId}
+            onChange={(e) => setSubApproverId(e.target.value)}
+            disabled={approversQuery.isLoading}
+          >
+            <option value="">{approversQuery.isLoading ? '불러오는 중…' : '선택 안 함'}</option>
+            {approvers.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} · {a.departmentName}
+                {a.name}
+                {a.departmentName ? ` · ${a.departmentName}` : ''}
               </option>
             ))}
           </Select>

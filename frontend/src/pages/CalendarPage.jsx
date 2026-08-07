@@ -9,7 +9,6 @@ import TextInput from '../components/ui/TextInput.jsx';
 import Select from '../components/ui/Select.jsx';
 import CalendarEntryPanel from '../components/leave/CalendarEntryPanel.jsx';
 import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../constants/status.js';
-import { TEST_APPROVER_CANDIDATES } from '../constants/approvers.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary } from '../hooks/useLeaves.js';
 import { useScheduleCalendar } from '../hooks/useSchedules.js';
@@ -352,7 +351,6 @@ export default function CalendarPage() {
           dates={selectedDates}
           blockedDates={blockedDates}
           remainingDays={summaryQuery.data?.remainingDays ?? 0}
-          approvers={TEST_APPROVER_CANDIDATES}
           onRemoveDate={(d) => setSelectedDates((prev) => prev.filter((x) => x !== d))}
           onClose={closePanel}
           onSubmitted={() => setSelectedDates([])}

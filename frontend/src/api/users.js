@@ -7,6 +7,13 @@ export async function getUsers({ keyword, role, page = 0, size = 20 } = {}) {
 }
 
 // 내 부서 팀원 목록 — 서버가 요청자 부서로 스코프, 파라미터 없음 (GET /api/users/team-members)
+// 서브 승인자 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (GET /api/users/approvers)
+// 서버가 본인 제외까지 처리하므로 호출부에서 걸러낼 필요가 없다.
+export async function getApprovers() {
+  const res = await api.get('/users/approvers');
+  return res.data.data;
+}
+
 export async function getTeamMembers() {
   const res = await api.get('/users/team-members');
   return res.data.data; // UserSummaryResponse[] — 잔여 연차 등 민감 정보 미포함(의도된 설계)

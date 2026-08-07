@@ -5,6 +5,7 @@ import { GripVertical, X } from 'lucide-react';
 import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../../constants/status.js';
 import { useApplyLeave } from '../../hooks/useLeaves.js';
 import { useCreateSchedule, useScheduleTypes } from '../../hooks/useSchedules.js';
+import { useApprovers } from '../../hooks/useUsers.js';
 import Field from '../ui/Field.jsx';
 import SegmentedControl from '../ui/SegmentedControl.jsx';
 import Textarea from '../ui/Textarea.jsx';
@@ -57,7 +58,6 @@ export default function CalendarEntryPanel({
   dates,
   blockedDates,
   remainingDays,
-  approvers,
   onRemoveDate,
   onClose,
   onSubmitted,
@@ -74,6 +74,9 @@ export default function CalendarEntryPanel({
   const applyLeaveMutation = useApplyLeave();
   const createScheduleMutation = useCreateSchedule();
   const typesQuery = useScheduleTypes();
+  // 서브 승인자 후보는 서버가 재직 중 TEAM_LEADER·SYSTEM_ADMIN에서 본인을 빼고 내려준다 (리뷰 F-4)
+  const approversQuery = useApprovers();
+  const approvers = approversQuery.data ?? [];
 
   // 서버가 종류를 내려주면 그걸 쓴다 — 백엔드에 종류를 추가하면 화면이 자동으로 따라온다
   const scheduleTypeOptions = useMemo(() => {
@@ -307,11 +310,18 @@ export default function CalendarEntryPanel({
               담당 승인자는 부서장이 자동으로 배정됩니다.
             </p>
             <Field label="서브 승인자 (선택)">
-              <Select value={subApproverId} onChange={(e) => setSubApproverId(e.target.value)}>
-                <option value="">선택 안 함</option>
+              <Select
+                value={subApproverId}
+                onChange={(e) => setSubApproverId(e.target.value)}
+                disabled={approversQuery.isLoading}
+              >
+                <option value="">
+                  {approversQuery.isLoading ? '불러오는 중…' : '선택 안 함'}
+                </option>
                 {approvers.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.name} · {a.departmentName}
+                    {a.name}
+                    {a.departmentName ? ` · ${a.departmentName}` : ''}
                   </option>
                 ))}
               </Select>

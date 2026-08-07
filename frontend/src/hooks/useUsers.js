@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  getApprovers,
   getRetiredUsers,
   getTeamMembers,
   getUsers,
@@ -19,8 +20,21 @@ import {
 const userKeys = {
   list: (keyword, role, page, size) => ['users', 'list', keyword || 'ALL', role || 'ALL', page, size],
   teamMembers: ['users', 'team-members'],
+  approvers: ['users', 'approvers'],
   retired: (page, size) => ['users', 'retired', page, size],
 };
+
+// 서브 승인자 후보 (GET /api/users/approvers) — 연차 신청 패널·복리후생 신청 모달이 함께 쓴다.
+// 팀장 승격·퇴직이 있어야 바뀌는 값이라 자주 조회할 이유가 없다.
+// 이 훅이 constants/approvers.js 하드코딩을 대체했다 (리뷰 F-4) — 그 파일은 DB 행의 사본이라
+// 한쪽만 바뀌면 화면과 실제 승인자가 어긋났다.
+export function useApprovers() {
+  return useQuery({
+    queryKey: userKeys.approvers,
+    queryFn: getApprovers,
+    staleTime: 1000 * 60 * 5,
+  });
+}
 
 // 전체 사용자 목록 — keyword·role 필터 (GET /api/users, SYSTEM_ADMIN 전용)
 export function useUsers({ keyword, role, page = 0, size = 50, enabled = true } = {}) {
