@@ -239,7 +239,8 @@ class UserTest {
     @Test
     @DisplayName("리셋 — 당겨쓴 연차를 새 기본 연차에서 차감하고 0으로 정산한다")
     void resetAnnualLeave_advanceWithinNewBase_settlesAdvanceDays() {
-        User user = userWithBalance("15.0", "0.0", "0.0", "3.0");
+        // 부여 15 · 사용 18 → 빚 3 (advance는 파생값이라 use와 어긋난 값을 넣을 수 없다)
+        User user = userWithBalance("15.0", "18.0", "0.0", "3.0");
         LocalDate resetDate = LocalDate.of(2026, 8, 6);
 
         user.resetAnnualLeave(new BigDecimal("15.0"), resetDate);
@@ -254,7 +255,8 @@ class UserTest {
     @Test
     @DisplayName("리셋 — 빚이 새 기본 연차보다 크면 음수 base로 남기고 남은 빚을 당겨쓰기로 이어받는다")
     void resetAnnualLeave_advanceExceedsNewBase_carriesRemainingDebt() {
-        User user = userWithBalance("15.0", "0.0", "0.0", "20.0");
+        // 부여 15 · 사용 35 → 빚 20
+        User user = userWithBalance("15.0", "35.0", "0.0", "20.0");
         LocalDate resetDate = LocalDate.of(2026, 8, 6);
 
         user.resetAnnualLeave(new BigDecimal("15.0"), resetDate);
@@ -294,10 +296,86 @@ class UserTest {
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));
     }
 
+    // ---- 미래 승인분 이월 (docs/09 §5, 리뷰 I-11) ----
+
+    @Test
+    @DisplayName("리셋 이월 — 이월분은 채무 계산에서 빼야 같은 일수를 두 번 세지 않는다 (I-11)")
+    void resetAnnualLeave_carriedUse_notDoubleCounted() {
+        // 부여 15 · 사용 20, 그 20일이 전부 기산일 이후 날짜라 새 연도로 이월된다
+        User user = userWithBalance("15.0", "20.0", "0.0", "5.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("20.0"),
+                BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
+
+        // 이전 연도에 실제로 귀속되는 사용분은 0 → 채무 0 → 새 base는 정책 그대로
+        assertEquals(0, new BigDecimal("15.0").compareTo(user.getBaseDays()));
+        assertEquals(0, new BigDecimal("20.0").compareTo(user.getUseDays()));
+        // 경제적 초과분은 5일. 기존 advance를 그대로 빼던 방식은 10으로 잡아 5일을 과다 계상했다
+        assertEquals(0, new BigDecimal("5.0").compareTo(user.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("리셋 이월 — 이전 연도 사용분과 이월분이 섞이면 각각 제 몫만 반영된다")
+    void resetAnnualLeave_carriedUse_partial() {
+        // 부여 15 · 사용 20 중 8일이 기산일 이후(이월), 12일은 이전 연도 사용
+        User user = userWithBalance("15.0", "20.0", "0.0", "5.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("8.0"),
+                BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
+
+        // 이전 연도 사용 12 − 부여 15 → 채무 없음
+        assertEquals(0, new BigDecimal("15.0").compareTo(user.getBaseDays()));
+        assertEquals(0, new BigDecimal("8.0").compareTo(user.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("리셋 이월 — 이전 연도 채무와 이월분이 함께 있으면 둘 다 반영된다")
+    void resetAnnualLeave_carriedUse_withDebt() {
+        // 부여 15 · 사용 30 중 5일 이월 → 이전 연도 귀속 25일, 채무 10
+        User user = userWithBalance("15.0", "30.0", "0.0", "15.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("5.0"),
+                BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
+
+        assertEquals(0, new BigDecimal("5.0").compareTo(user.getBaseDays()));  // 15 − 채무 10
+        assertEquals(0, new BigDecimal("5.0").compareTo(user.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));     // 5 − 5 = 0
+    }
+
+    @Test
+    @DisplayName("리셋 이월 — carriedUse가 0이면 기존 2인자 리셋과 결과가 같다")
+    void resetAnnualLeave_carriedUseZero_sameAsLegacy() {
+        User withCarry = userWithBalance("15.0", "35.0", "0.0", "20.0");
+        User legacy = userWithBalance("15.0", "35.0", "0.0", "20.0");
+        LocalDate resetDate = LocalDate.of(2026, 8, 6);
+
+        withCarry.resetAnnualLeave(new BigDecimal("15.0"), BigDecimal.ZERO, BigDecimal.ZERO, resetDate);
+        legacy.resetAnnualLeave(new BigDecimal("15.0"), resetDate);
+
+        assertEquals(0, legacy.getBaseDays().compareTo(withCarry.getBaseDays()));
+        assertEquals(0, legacy.getAdvanceDays().compareTo(withCarry.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("리셋 이월 — 보너스 이월분이 새 연도 잔액에 반영된다")
+    void resetAnnualLeave_carriedBonus_applied() {
+        User user = userWithBalance("15.0", "10.0", "5.0", "0.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("3.0"),
+                new BigDecimal("2.0"), LocalDate.of(2026, 8, 6));
+
+        assertEquals(0, new BigDecimal("2.0").compareTo(user.getBonusDays()));
+        // 잔여 = 15 + 2 − 3 = 14
+        assertEquals(0, new BigDecimal("14.0").compareTo(user.getRemainingDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));
+    }
+
     @Test
     @DisplayName("리셋 반복 — 빚이 정책 연차의 몇 배여도 매년 줄어들어 종료한다 (무한 정산 없음)")
     void resetAnnualLeave_debtLargerThanSeveralYears_terminates() {
-        User user = userWithBalance("15.0", "50.0", "0.0", "50.0");
+        // 부여 15 · 사용 65 → 빚 50 (정책 연차의 3배가 넘는 상황)
+        User user = userWithBalance("15.0", "65.0", "0.0", "50.0");
         BigDecimal annual = new BigDecimal("15.0");
 
         user.resetAnnualLeave(annual, LocalDate.of(2026, 8, 6));

@@ -249,12 +249,53 @@ public class User extends BaseTimeEntity {
      * 어긋나므로 docs/09에서 정정했다.
      */
     public void resetAnnualLeave(BigDecimal newBaseDays, LocalDate resetDate) {
-        this.baseDays = newBaseDays.subtract(this.advanceDays); // 기존 빚을 먼저 읽어 차감
-        this.useDays = BigDecimal.ZERO;
-        this.bonusDays = BigDecimal.ZERO;
+        resetAnnualLeave(newBaseDays, BigDecimal.ZERO, BigDecimal.ZERO, resetDate);
+    }
+
+    /**
+     * 기산일 리셋 (미래 승인분 이월 포함 — docs/09 §4·§5, 리뷰 I-11).
+     *
+     * <p><b>채무는 "이전 연도에 귀속되는 사용분"으로만 계산한다.</b> 이것이 I-11의 답이다:
+     * <pre>
+     * oldYearUse  = use − carriedUse            ← 이월분을 빼야 그 해 실제 사용분이 된다
+     * oldYearDebt = max(0, oldYearUse − base − bonus)
+     * newBase     = 정책연차 − oldYearDebt
+     * newUse      = carriedUse
+     * </pre>
+     *
+     * <p>기존 {@code advance_days}를 그대로 빼면 <b>같은 일수를 두 번 센다.</b> 이월되는 날짜는
+     * 이전 연도에 선차감돼 이미 advance를 만들었는데, {@code carriedUse}로 새 연도에 또 차감되기
+     * 때문이다. 그래서 advance가 아니라 "이월분을 제외한 사용분"에서 채무를 다시 구한다.
+     *
+     * <pre>
+     * 검산 1 (I-11 시나리오) base=15, use=20, 20일 전부 이월
+     *   oldYearUse 0 → 채무 0 → newBase 15, newUse 20 → advance 5   ← 경제적 초과분과 일치
+     *   (기존 방식은 base 10 · advance 10 으로 5일을 과다 계상했다)
+     *
+     * 검산 2 (다년) Y1 부여15·사용35, 이월 0
+     *   채무 20 → base −5, advance 5
+     *   Y2 무활동 리셋 → 채무 5 → base 10
+     *   Σ부여 45 − Σ사용 35 = 10                                    ← 일치
+     * </pre>
+     *
+     * {@code base}가 음수(=남은 빚)여도 식이 그대로 성립한다 — 검산 2의 Y2가 그 경우다.
+     *
+     * @param newBaseDays  근속년수 정책이 정한 새 연차
+     * @param carriedUse   기산일 이후 날짜의 선차감 유지분 (APPROVED·PENDING·CANCEL_PENDING)
+     * @param carriedBonus 이월할 보너스 (정책상 이월 안 하면 0)
+     */
+    public void resetAnnualLeave(BigDecimal newBaseDays, BigDecimal carriedUse,
+                                 BigDecimal carriedBonus, LocalDate resetDate) {
+        BigDecimal bonus = bonusDays != null ? bonusDays : BigDecimal.ZERO;
+        // 이월되는 날짜는 새 연도에서 다시 차감되므로, 이전 연도 채무 계산에서는 빼야 한다 (I-11)
+        BigDecimal oldYearUse = this.useDays.subtract(carriedUse);
+        BigDecimal oldYearDebt = oldYearUse.subtract(this.baseDays).subtract(bonus).max(BigDecimal.ZERO);
+
+        this.baseDays = newBaseDays.subtract(oldYearDebt);
+        this.useDays = carriedUse;
+        this.bonusDays = carriedBonus;
         this.lastResetDate = resetDate;
-        // advance_days는 여기서 0으로 대입하지 않는다 — 파생값의 writer는 syncAdvanceDays 하나뿐이다.
-        // base가 음수면 남은 빚이 그대로 advance로 이어받아진다 (위 검산).
+        // advance_days는 여기서 대입하지 않는다 — 파생값의 writer는 syncAdvanceDays 하나뿐이다.
         syncAdvanceDays();
     }
 
