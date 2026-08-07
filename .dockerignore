@@ -1,4 +1,31 @@
 # 배포용 Dockerfile 빌드 컨텍스트 최적화 — 빌드에 안 쓰는 큰 디렉터리 제외
+
+# ── 시크릿 (리뷰 O-4) ── 최우선. 아래 항목은 성능이 아니라 보안 목적이다.
+#
+# Dockerfile:20 `COPY backend/ ./` 가 resources/ 를 통째로 가져가고 bootJar가 그걸 jar에
+# 패키징하므로, 여기서 빼지 않으면 로컬 시크릿(DB 비밀번호·JWT secret·OAuth 클라이언트·
+# 공휴일 API 키)이 **운영 이미지 안에 박힌다.** 이미지를 받은 사람은 jar만 풀면 전부 읽는다.
+# .gitignore에 있다고 안전한 게 아니다 — git과 도커 빌드 컨텍스트는 별개다.
+#
+# 새 시크릿 파일을 만들면 .gitignore와 **여기 둘 다** 추가할 것.
+#
+# 실제로 실리는 것을 확인한 경로 — `gradlew processResources` 후
+# backend/build/resources/main/ 에 application-local.yml 이 그대로 나온다.
+# 글롭 해석에 의존하지 않도록 명시 경로를 먼저 두고, 위치가 바뀌어도 걸리도록 ** 패턴을 함께 둔다.
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-local.properties
+**/application-local.yml
+**/application-local.properties
+**/application-*-local.yml
+**/*-secret.yml
+**/*-secret.properties
+.env
+.env.*
+!.env.*.example
+
+# 빌드 산출물에도 시크릿 사본이 남는다 (build/resources/main/application-local.yml).
+# 아래 backend/build/ 제외가 이것까지 함께 막는다 — 그 줄을 지우지 말 것.
+
 .git/
 참고자료/
 연차 관리 프로그램 디자인/
