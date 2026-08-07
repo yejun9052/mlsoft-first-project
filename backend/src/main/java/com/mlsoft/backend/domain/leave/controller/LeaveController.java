@@ -76,14 +76,17 @@ public class LeaveController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
     }
 
-    /** 캘린더용 승인 연차 (타인 사유 마스킹) */
+    /** 캘린더용 승인 연차 (타인 사유 마스킹) — keyword(신청자명)·departmentId로 좁힐 수 있다 */
     @GetMapping("/calendar")
     public ResponseEntity<CommonResponse<List<LeaveCalendarResponse>>> getCalendar(
             @AuthenticationPrincipal AuthUser authUser,
             @RequestParam int year,
-            @RequestParam int month
+            @RequestParam int month,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Long departmentId
     ) {
-        List<LeaveCalendarResponse> response = leaveService.getCalendar(authUser.id(), year, month);
+        List<LeaveCalendarResponse> response =
+                leaveService.getCalendar(authUser.id(), year, month, keyword, departmentId);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
     }
 

@@ -82,7 +82,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | POST | `/api/leaves` | 신청 `{leaveType, dates[], reason, subApproverId?}` — 선차감, 중복·잔여·휴일 검증 | 전체 |
 | GET | `/api/leaves/me` | 내 신청 내역 (페이징, status 필터) | 전체 |
 | GET | `/api/leaves/me/summary` | 잔여 현황 (base/bonus/use/잔여/대기/다음 기산일·차감 예정) | 전체 |
-| GET | `/api/leaves/calendar?year=&month=` | 캘린더용 승인 연차 (타인 사유 마스킹) | 전체 |
+| GET | `/api/leaves/calendar?year=&month=&keyword=&departmentId=` | 캘린더용 승인 연차 (타인 사유 마스킹). `keyword`=신청자명 부분일치, `departmentId`=부서 — 둘 다 선택 | 전체 |
 | GET | `/api/leaves/pending` | 내가 승인자인 대기 목록 (취소 대기 포함, 페이징) | TL·SA |
 | GET | `/api/leaves` | 전체 신청 목록 (페이징·필터) | SA |
 | GET | `/api/leaves/team` | 내 팀 연차 현황 (기간 필터) | 전체 |
@@ -90,6 +90,37 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | POST | `/api/leaves/{id}/cancel` | 취소 신청 `{reason}` — 미래=즉시, 과거 포함=CANCEL_PENDING | 본인 |
 | POST | `/api/leaves/{id}/cancel-approval` | 소급 취소 승인/반려 `{approved, comment}` | TL·SA(승인자) |
 | GET | `/api/leaves/{id}/histories` | 해당 건 처리 이력 | 본인·승인자·SA |
+
+## 개인 일정 (schedules) — 2026-08-07 신규
+
+외근·출장·재택근무·교육을 캘린더에 기록한다. **연차와 세 가지가 다르다** —
+잔액을 차감하지 않고, 결재를 거치지 않고, 상태 전이가 없다. 그래서 "신청"이 아니라 "등록"이다.
+
+| Method | URL | 설명 | 권한 |
+|---|---|---|---|
+| POST | `/api/schedules` | 등록 `{scheduleType, dates[], memo?}` — 승인 없이 즉시 확정 | 전체 |
+| PUT | `/api/schedules/{id}` | 수정 (종류·날짜·메모) | 본인 |
+| DELETE | `/api/schedules/{id}` | 삭제 | 본인 |
+| GET | `/api/schedules/calendar?year=&month=&keyword=&departmentId=` | 캘린더용 전 직원 일정 (타인 메모 마스킹) | 전체 |
+| GET | `/api/schedules/me` | 내 일정 목록 (페이징) | 전체 |
+| GET | `/api/schedules/types` | 선택 가능한 종류 + 한글 라벨 `[{value, label}]` | 전체 |
+
+**왜 `LeaveRequest`에 얹지 않았나** — 승인·차감·승인자가 전부 없는데 같은 엔티티에 두면
+신청·결재·취소 흐름마다 "차감 안 하면 건너뛰기" 분기가 생긴다. 그 조건 분기 산재가
+리뷰 I-1·I-5의 원인이었다. 별도 도메인(`domain/schedule`)으로 두면 그 분기가 아예 없다.
+
+**역할 게이트 없음** — 본인 일정을 본인이 등록·삭제하는 것이고, 조회는 캘린더가 이미 전사 공개다.
+소유권 검증은 서비스 계층에서 한다 (docs/04).
+
+**마스킹** — 메모는 본인·SYSTEM_ADMIN에게만 채워 보낸다. 캘린더가 전 직원 일정을 보여주므로
+방문처·개인 사정이 그대로 노출되면 안 된다 (연차 사유 마스킹과 같은 기준 — 검증 Y-4).
+연차와 달리 승인자가 없어 열람 권한자가 둘뿐이다.
+
+**주말·과거 허용** — 연차와 달리 막지 않는다. 주말 출장·지난주 외근을 뒤늦게 기록하는 것이
+정상 사용이다. 같은 날짜에 같은 종류를 두 번 등록하는 것만 막는다 (409 `DUPLICATE_SCHEDULE`).
+
+**종류 추가 방법** — `ScheduleType` enum에 상수 한 줄. `/types`가 라벨까지 내려주므로
+프론트는 수정 없이 따라온다 (설정 카탈로그와 같은 의도 — 리뷰 I-3).
 
 ## 복리후생 (welfare-policies / welfare-requests)
 

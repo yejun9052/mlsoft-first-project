@@ -8,6 +8,26 @@ export const LEAVE_TYPE_LABEL = {
   WELFARE: '경조/복리',
 };
 
+// 개인 일정 종류 (외근·출장·재택·교육) — 백엔드 ScheduleType enum과 1:1.
+// 연차와 달리 잔액을 차감하지 않고 결재도 없어서 LEAVE_TYPE_LABEL과 분리해 둔다.
+// 서버가 /api/schedules/types로 라벨을 내려주므로 이건 폴백이다 —
+// 캘린더 렌더처럼 목록 응답만 있는 자리에서 쓴다.
+export const SCHEDULE_TYPE_LABEL = {
+  FIELD_WORK: '외근',
+  BUSINESS_TRIP: '출장',
+  REMOTE: '재택근무',
+  TRAINING: '교육·연수',
+};
+
+// 일정 종류 → 색 토큰. 연차(accent-cyan 계열)와 확실히 구분되게 골랐다 —
+// 캘린더 한 칸에 둘이 같이 뜨므로 색이 겹치면 "쉬는 사람"과 "일하는 사람"이 헷갈린다.
+export const SCHEDULE_TYPE_TONE = {
+  FIELD_WORK: 'amber',
+  BUSINESS_TRIP: 'violet',
+  REMOTE: 'emerald',
+  TRAINING: 'sky',
+};
+
 export const STATUS_LABEL = {
   APPROVED: '승인',
   PENDING: '대기',

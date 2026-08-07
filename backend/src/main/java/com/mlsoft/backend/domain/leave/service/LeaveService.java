@@ -133,16 +133,22 @@ public class LeaveService {
         return LeaveSummaryResponse.of(user, pendingDays);
     }
 
-    /** 캘린더용 승인 연차 (GET /api/leaves/calendar) — 타인 사유 마스킹 */
+    /**
+     * 캘린더용 승인 연차 (GET /api/leaves/calendar) — 타인 사유 마스킹.
+     * keyword(신청자명)·departmentId는 선택 필터다. 캘린더가 이미 전사 공개라
+     * 이름으로 좁히는 것이 노출 범위를 넓히지 않는다 — 사유 마스킹 기준은 그대로 유지된다.
+     */
     @Transactional(readOnly = true)
-    public List<LeaveCalendarResponse> getCalendar(Long viewerId, int year, int month) {
+    public List<LeaveCalendarResponse> getCalendar(Long viewerId, int year, int month,
+                                                   String keyword, Long departmentId) {
         if (month < 1 || month > 12) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         User viewer = findUserOrThrow(viewerId);
         YearMonth yearMonth = YearMonth.of(year, month);
+        String normalized = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
         List<LeaveRequest> leaves = leaveRequestRepository.findInDateRange(
-                CALENDAR_STATUSES, yearMonth.atDay(1), yearMonth.atEndOfMonth());
+                CALENDAR_STATUSES, yearMonth.atDay(1), yearMonth.atEndOfMonth(), normalized, departmentId);
         return leaves.stream()
                 .map(leave -> LeaveCalendarResponse.of(leave, canViewReason(viewer, leave)))
                 .toList();

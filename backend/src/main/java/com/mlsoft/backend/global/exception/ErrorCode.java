@@ -43,6 +43,7 @@ public enum ErrorCode {
     WELFARE_REQUEST_NOT_FOUND(404, "복리후생 신청을 찾을 수 없습니다."),
     LEAVE_POLICY_NOT_FOUND(404, "연차 정책을 찾을 수 없습니다."),
     LEAVE_POLICY_CONFIG_NOT_FOUND(404, "연차 시스템 설정을 찾을 수 없습니다."),
+    SCHEDULE_NOT_FOUND(404, "일정을 찾을 수 없습니다."),
     RESOURCE_NOT_FOUND(404, "요청한 리소스를 찾을 수 없습니다."),
 
     // 405 Method Not Allowed
@@ -52,6 +53,7 @@ public enum ErrorCode {
     OVERLAPPING_LEAVE_REQUEST(409, "이미 신청된 기간과 중복됩니다."),
     CONCURRENT_UPDATE(409, "다른 요청과 동시에 처리되어 실패했습니다. 다시 시도해주세요."),
     DUPLICATE_WELFARE_POLICY(409, "이미 동일한 구분/대상 조합의 정책이 존재합니다."),
+    DUPLICATE_SCHEDULE(409, "선택한 날짜에 같은 종류의 일정이 이미 등록되어 있습니다."),
 
     // 500 Internal Server Error
     INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다.");

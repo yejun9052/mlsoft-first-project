@@ -51,12 +51,19 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                               @Param("statuses") Collection<RequestStatus> statuses,
                                               Pageable pageable);
 
-    /** 캘린더 — 특정 상태 & 날짜범위와 겹치는 전체 건 (GET /api/leaves/calendar) */
+    /**
+     * 캘린더 — 특정 상태 &amp; 날짜범위와 겹치는 전체 건 (GET /api/leaves/calendar).
+     * keyword(신청자명 부분일치)·departmentId는 둘 다 선택 — null이면 조건이 무력화된다.
+     */
     @Query("select distinct lr from LeaveRequest lr join lr.dates d "
-            + "where lr.status in :statuses and d between :start and :end")
+            + "where lr.status in :statuses and d between :start and :end "
+            + "and (:keyword is null or lower(lr.user.name) like lower(concat('%', :keyword, '%'))) "
+            + "and (:departmentId is null or lr.user.department.id = :departmentId)")
     List<LeaveRequest> findInDateRange(@Param("statuses") Collection<RequestStatus> statuses,
                                        @Param("start") LocalDate start,
-                                       @Param("end") LocalDate end);
+                                       @Param("end") LocalDate end,
+                                       @Param("keyword") String keyword,
+                                       @Param("departmentId") Long departmentId);
 
     /** 팀 현황 — 특정 부서원의 날짜범위와 겹치는 건 (GET /api/leaves/team) */
     @Query("select distinct lr from LeaveRequest lr join lr.dates d "

@@ -17,6 +17,12 @@ public final class ResponseMessage {
     public static final String LEAVE_FETCHED = "연차 정보를 조회했습니다.";
 
     // 복리후생 신청
+    // 개인 일정 (외근·출장·재택·교육) — 승인 절차가 없어 "신청"이 아니라 "등록"이다
+    public static final String SCHEDULE_CREATED = "일정이 등록되었습니다.";
+    public static final String SCHEDULE_UPDATED = "일정이 수정되었습니다.";
+    public static final String SCHEDULE_DELETED = "일정이 삭제되었습니다.";
+    public static final String SCHEDULE_FETCHED = "일정을 조회했습니다.";
+
     public static final String WELFARE_CREATED = "복리후생 신청이 완료되었습니다.";
     public static final String WELFARE_APPROVED = "승인 처리가 완료되었습니다.";
     public static final String WELFARE_REJECTED = "반려 처리가 완료되었습니다.";

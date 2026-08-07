@@ -21,7 +21,9 @@ import {
 const leaveKeys = {
   summary: ['leaves', 'summary'],
   me: (status, page, size) => ['leaves', 'me', status ?? 'ALL', page, size],
-  calendar: (year, month) => ['leaves', 'calendar', year, month],
+  // 검색 필터도 서버 응답을 바꾸므로 키에 넣는다 (리뷰 F-1과 같은 이유)
+  calendar: (year, month, keyword, departmentId) =>
+    ['leaves', 'calendar', year, month, keyword || 'ALL', departmentId || 'ALL'],
   team: (from, to) => ['leaves', 'team', from ?? 'default', to ?? 'default'],
   pending: (page, size) => ['leaves', 'pending', page, size],
   allCount: (status) => ['leaves', 'all-count', status],
@@ -47,11 +49,13 @@ export function useMyLeaves({ status, page = 0, size = 100 } = {}) {
   });
 }
 
-// 캘린더용 승인 연차 (GET /api/leaves/calendar)
-export function useLeaveCalendar(year, month) {
+// 캘린더용 승인 연차 (GET /api/leaves/calendar) — keyword·departmentId는 선택 필터
+export function useLeaveCalendar(year, month, { keyword, departmentId } = {}) {
   return useQuery({
-    queryKey: leaveKeys.calendar(year, month),
-    queryFn: () => getCalendar({ year, month }),
+    queryKey: leaveKeys.calendar(year, month, keyword, departmentId),
+    queryFn: () => getCalendar({ year, month, keyword, departmentId }),
+    // 검색어를 타이핑하는 동안 목록이 빈 화면으로 깜박이지 않게 이전 결과를 유지한다
+    placeholderData: (previous) => previous,
   });
 }
 

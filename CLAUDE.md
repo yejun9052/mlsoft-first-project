@@ -58,6 +58,14 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 `RequestStatus`(PENDING/APPROVED/REJECTED/CANCELLED/CANCEL_PENDING)는 연차·복리후생이 공유하며, 취소 승인/거부의 세부 결과는 status가 아니라 `action_history`의 `RequestAction`으로 기록한다.
 
+### 개인 일정 (`domain/schedule`)
+
+외근·출장·재택근무·교육을 캘린더에 기록한다. **연차 잔액을 차감하지 않고, 결재를 거치지 않고, 상태 전이가 없다** — 그래서 `LeaveRequest`가 아니라 별도 엔티티(`ScheduleEntry`)다. 같은 엔티티에 얹으면 신청·결재·취소 흐름마다 "차감 안 하면 건너뛰기" 분기가 생기는데, 그 조건 분기 산재가 리뷰 I-1·I-5의 원인이었다. **연차 로직을 `ScheduleService`에 복사해 오지 말 것** (그걸 막는 테스트가 있다).
+
+- 종류 추가는 `ScheduleType` enum에 상수 한 줄 — `GET /api/schedules/types`가 라벨까지 내려주므로 프론트가 따라온다
+- 주말·과거 날짜를 막지 않는다 (주말 출장·지난주 외근 기록이 정상 사용). 같은 날짜+같은 종류 중복만 막는다
+- 메모는 본인·SYSTEM_ADMIN에게만 응답에 채워진다 (연차 사유 마스킹과 같은 기준)
+
 ### 시스템 설정 (관리자 조정 가능한 정책값)
 
 `leave_policy_config` 테이블은 **값만** 들고 있고, 카탈로그는 `PolicyConfigKey` enum(`domain/policy/entity/`)이 정의한다 — 키·타입·기본값·허용 범위·라벨·설명·동작여부. **설정을 추가할 땐 이 enum에 상수 한 줄만 넣으면** 시딩(`DataInitializer`)·저장 검증·관리자 화면 렌더가 모두 따라온다. 프론트에 키 이름을 하드코딩하지 말 것 (`GET /api/admin/configs`가 메타데이터를 함께 내려준다).

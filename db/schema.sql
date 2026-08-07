@@ -8,13 +8,22 @@
 --            /docker-entrypoint-initdb.d/ 에 마운트한다. MySQL은 데이터 볼륨이
 --            비어 있을 때만 이 디렉터리를 실행하므로 재기동해도 덮어쓰지 않는다.
 --
--- 생성 방법: 로컬 개발 DB(ddl-auto: update로 엔티티에서 만들어진 것)를 그대로 덤프했다.
---            mysqldump -u root --no-data --skip-comments --databases mlsoft_leave
+-- 생성 방법: 임시 DB에 ddl-auto: update 로 앱을 한 번 띄워 엔티티에서 스키마를
+--            만든 뒤 덤프했다(개발 DB는 건드리지 않는다).
+--   mysql  -u root -e "CREATE DATABASE mlsoft_schemagen ..."
+--   (앱을 mlsoft_schemagen 에 --spring.jpa.hibernate.ddl-auto=update 로 1회 기동)
+--   mysqldump -u root --no-data --skip-comments --skip-add-drop-table mlsoft_schemagen
 --
 -- ⚠️ 엔티티를 바꾸면 이 파일도 같이 갱신해야 한다. 안 하면 배포 시 validate가
 --    기동을 거부한다(그게 이 설정의 목적이다 — 조용한 ALTER보다 낫다).
 --    마이그레이션 도구(Flyway) 전환은 docs/08 Y-6 / docs/12 ⑧.
+--
+-- 최종 생성 2026-08-07 — 테이블 15개 (개인 일정 schedule_entries·schedule_dates 포함)
 -- =====================================================================
+
+CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
+  DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `mlsoft_leave`;
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -26,20 +35,16 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `mlsoft_leave` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-
-USE `mlsoft_leave`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `department` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
+  `active` bit(1) NOT NULL,
   `description` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `parent_id` bigint DEFAULT NULL,
   `leader_id` bigint DEFAULT NULL,
-  `active` bit(1) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `FK2p51g6b22peoewswi0kgvp0kb` (`leader_id`),
   CONSTRAINT `FK2p51g6b22peoewswi0kgvp0kb` FOREIGN KEY (`leader_id`) REFERENCES `users` (`id`)
@@ -92,7 +97,7 @@ CREATE TABLE `leave_action_history` (
   CONSTRAINT `FKepla6r67avn0fthfxru6v3tf6` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKoq63m0l95fc0cg5x6ww0c9onu` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKut1n87icr6yhvofk9hgx5shl` FOREIGN KEY (`leave_requests_id`) REFERENCES `leave_requests` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -123,13 +128,14 @@ CREATE TABLE `leave_policy_config` (
   `value` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `UK5y8sgsoi3qja3a82dxy8grv7a` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `leave_requests` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
+  `advance_used_days` decimal(4,1) NOT NULL,
   `cancel_reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `days` decimal(4,1) NOT NULL,
   `leave_type` enum('ANNUAL','HALF_AM','HALF_PM') COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -138,7 +144,6 @@ CREATE TABLE `leave_requests` (
   `primary_approver_id` bigint NOT NULL,
   `sub_approver_id` bigint DEFAULT NULL,
   `user_id` bigint NOT NULL,
-  `advance_used_days` decimal(4,1) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `FKforbkctpu3sp6ani01ellbgol` (`primary_approver_id`),
   KEY `FKkjmv5wjgbkwcnvxqkicku6vgw` (`sub_approver_id`),
@@ -146,7 +151,7 @@ CREATE TABLE `leave_requests` (
   CONSTRAINT `FKforbkctpu3sp6ani01ellbgol` FOREIGN KEY (`primary_approver_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKh6s8bo5d59oy52b6nxfguf4yx` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKkjmv5wjgbkwcnvxqkicku6vgw` FOREIGN KEY (`sub_approver_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -163,6 +168,28 @@ CREATE TABLE `leave_reset_history` (
   PRIMARY KEY (`id`),
   KEY `FK5xtwcopwf0vymrxo9u9pc5ip3` (`user_id`),
   CONSTRAINT `FK5xtwcopwf0vymrxo9u9pc5ip3` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `schedule_dates` (
+  `schedule_entry_id` bigint NOT NULL,
+  `day` date NOT NULL,
+  UNIQUE KEY `uk_schedule_dates_entry_day` (`schedule_entry_id`,`day`),
+  CONSTRAINT `FKthbmls6l4bp0muhl5ct74vtos` FOREIGN KEY (`schedule_entry_id`) REFERENCES `schedule_entries` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `schedule_entries` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `memo` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `schedule_type` enum('BUSINESS_TRIP','FIELD_WORK','REMOTE','TRAINING') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `FK8dju7qu6977w3dts3qx31sn49` (`user_id`),
+  CONSTRAINT `FK8dju7qu6977w3dts3qx31sn49` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -190,7 +217,7 @@ CREATE TABLE `users` (
   UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`),
   KEY `FKfi832e3qv89fq376fuh8920y4` (`department_id`),
   CONSTRAINT `FKfi832e3qv89fq376fuh8920y4` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -209,7 +236,7 @@ CREATE TABLE `welfare_action_history` (
   CONSTRAINT `FK9n165y2oyujt1hmh0iwx4gx5o` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKlrrdr1u1amvnsgpumyljjxg7p` FOREIGN KEY (`welfare_request_id`) REFERENCES `welfare_requests` (`id`),
   CONSTRAINT `FKoqrrjuo9vaff18it95bknw1kx` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
@@ -230,6 +257,7 @@ CREATE TABLE `welfare_policies` (
 CREATE TABLE `welfare_requests` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
+  `add_days` decimal(4,1) NOT NULL,
   `category` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `evidence_guide` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `primary_approver_id` bigint NOT NULL,
@@ -239,13 +267,12 @@ CREATE TABLE `welfare_requests` (
   `target` enum('CHILD','GRANDPARENT','OTHER','PARENT','SELF','SIBLING','SPOUSE','SPOUSE_GRANDPARENT','SPOUSE_PARENT') COLLATE utf8mb4_unicode_ci NOT NULL,
   `policy_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
-  `add_days` decimal(4,1) NOT NULL,
   PRIMARY KEY (`id`),
   KEY `FKc2s5m4i1dcs5v0r14b1n0421r` (`policy_id`),
   KEY `FKfubsoplr3raeot86n9n0nsjev` (`user_id`),
   CONSTRAINT `FKc2s5m4i1dcs5v0r14b1n0421r` FOREIGN KEY (`policy_id`) REFERENCES `welfare_policies` (`id`),
   CONSTRAINT `FKfubsoplr3raeot86n9n0nsjev` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -256,4 +283,5 @@ CREATE TABLE `welfare_requests` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
 

@@ -21,8 +21,11 @@ export async function getMySummary() {
 }
 
 // 캘린더용 승인 연차 — 회사 전체, 타인 사유는 마스킹 (GET /api/leaves/calendar)
-export async function getCalendar({ year, month }) {
-  const res = await api.get('/leaves/calendar', { params: { year, month } });
+// keyword(신청자명 부분일치)·departmentId는 선택 — 빈 값이면 서버가 필터 없음으로 처리한다.
+export async function getCalendar({ year, month, keyword, departmentId } = {}) {
+  const res = await api.get('/leaves/calendar', {
+    params: { year, month, keyword: keyword || undefined, departmentId: departmentId || undefined },
+  });
   return res.data.data;
 }
 

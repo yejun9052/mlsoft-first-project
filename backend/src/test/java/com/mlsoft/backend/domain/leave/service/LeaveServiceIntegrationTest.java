@@ -91,7 +91,8 @@ class LeaveServiceIntegrationTest {
         assertEquals(2, leaveService.getHistories(leaveId, applicant.getId()).size());
         assertEquals(0, new BigDecimal("2.0").compareTo(reload(applicant).getUseDays()));
         // 승인 연차는 캘린더에 노출 (사유 열람 권한자이므로 마스킹 해제)
-        assertNotNull(leaveService.getCalendar(applicant.getId(), dates.get(0).getYear(), dates.get(0).getMonthValue()));
+        assertNotNull(leaveService.getCalendar(
+                applicant.getId(), dates.get(0).getYear(), dates.get(0).getMonthValue(), null, null));
 
         // when: 본인 취소 (미래 날짜만) — 즉시 취소 + 복구
         RequestStatus result = leaveService.cancel(leaveId, applicant.getId(), new CancelRequest("일정 변경"));
