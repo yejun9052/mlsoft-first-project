@@ -8,6 +8,7 @@ import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -40,6 +41,9 @@ class DepartmentServiceTest {
     private DepartmentRepository departmentRepository;
     @Mock
     private UserRepository userRepository;
+    // 팀장 자격 판정 — 승인자 자격과 같은 기준 (리뷰 I-5a)
+    @Mock
+    private ApproverResolver approverResolver;
 
     @InjectMocks
     private DepartmentService departmentService;
@@ -49,6 +53,8 @@ class DepartmentServiceTest {
     void create_root_withLeader() {
         User leader = user(1L, Role.TEAM_LEADER);
         given(userRepository.findById(1L)).willReturn(Optional.of(leader));
+        // 결재할 수 있는 사람만 팀장이 될 수 있다 (리뷰 I-5a)
+        given(approverResolver.canApprove(leader)).willReturn(true);
         DepartmentCreateRequest request = new DepartmentCreateRequest("개발팀", "설명", 1L, null);
 
         DepartmentResponse response = departmentService.create(request);

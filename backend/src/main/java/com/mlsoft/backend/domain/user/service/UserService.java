@@ -83,7 +83,8 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserSummaryResponse> getApproverCandidates(Long viewerId) {
         return userRepository
-                .findByRoleInAndIsActiveTrueAndIdNot(List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN), viewerId).stream()
+                .findByRoleInAndIsActiveTrueAndHireDateIsNotNullAndIdNot(
+                        List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN), viewerId).stream()
                 .map(UserSummaryResponse::of)
                 .toList();
     }
@@ -111,8 +112,26 @@ public class UserService {
     public UserResponse changeRole(Long targetId, Role role) {
         User target = findUserOrThrow(targetId);
         validateNotRetired(target);
+        Role before = target.getRole();
         target.changeRole(role);
+
+        // 강등이면 팀장직과 대기 결재를 함께 정리한다 (리뷰 I-5a).
+        // department.leader_id를 그대로 두면 결재할 수 없는 사람이 primary로 지정돼
+        // 그 부서의 신청이 영구 PENDING으로 남는다(선차감이 유지된 채로).
+        // 퇴직 경로에는 이관 로직이 있었는데 강등 경로에만 없었다.
+        if (before != Role.EMPLOYEE && role == Role.EMPLOYEE) {
+            releaseLeadership(target);
+            reassignPendingApprovals(target);
+        }
         return UserResponse.of(target);
+    }
+
+    /** 강등·퇴직 시 맡고 있던 부서의 팀장직 해제 — 공석이면 SYSTEM_ADMIN fallback이 받는다 (검증 Y-3) */
+    private void releaseLeadership(User user) {
+        departmentRepository.findByLeader(user).forEach(department -> {
+            log.info("[권한 변경] 팀장직 해제 — departmentId={}, userId={}", department.getId(), user.getId());
+            department.clearLeader();
+        });
     }
 
     /** 부서 변경 (PATCH /api/users/{id}/department, SA) — 퇴직자 대상이면 ALREADY_RETIRED */
@@ -160,7 +179,7 @@ public class UserService {
         }
         target.retire(LocalDate.now(KST));
 
-        departmentRepository.findByLeader(target).forEach(Department::clearLeader);
+        releaseLeadership(target);
         reassignPendingApprovals(target);
 
         log.info("[퇴직 처리] userId={}, retiredAt={}", targetId, target.getRetiredAt());

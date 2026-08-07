@@ -18,6 +18,7 @@ import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -76,6 +77,8 @@ public class LeaveService {
     private final PolicyConfigReader policyConfigReader;
     // 공휴일 판정 — 조회 실패해도 예외를 던지지 않는다(빈 집합)
     private final HolidayService holidayService;
+    // 승인자 결정 — 연차·복리후생 공용 규칙 (리뷰 I-5)
+    private final ApproverResolver approverResolver;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -90,8 +93,8 @@ public class LeaveService {
         User applicant = findUserOrThrow(userId);
         validateDates(request.dates());
 
-        User primaryApprover = resolvePrimaryApprover(applicant);
-        User subApprover = resolveSubApprover(request.subApproverId(), applicant);
+        User primaryApprover = approverResolver.resolvePrimary(applicant);
+        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant);
 
         if (!leaveRequestRepository.findOverlapping(applicant, request.dates(), ACTIVE_STATUSES).isEmpty()) {
             throw new BusinessException(ErrorCode.OVERLAPPING_LEAVE_REQUEST);
@@ -361,33 +364,8 @@ public class LeaveService {
     }
 
     /** 기본 승인자 = 소속 부서 팀장. 미배정·공석·팀장 퇴직·본인이 팀장이면 SYSTEM_ADMIN fallback (검증 Y-3) */
-    private User resolvePrimaryApprover(User applicant) {
-        Department department = applicant.getDepartment();
-        if (department != null && department.getLeader() != null) {
-            User leader = department.getLeader();
-            if (leader.isActive() && !leader.getId().equals(applicant.getId())) {
-                return leader;
-            }
-        }
-        return userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
-    }
-
-    /** 서브 승인자 검증 — 선택 시 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (docs/01 2-3) */
-    private User resolveSubApprover(Long subApproverId, User applicant) {
-        if (subApproverId == null) {
-            return null;
-        }
-        User sub = userRepository.findById(subApproverId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
-        boolean eligible = sub.isActive()
-                && (sub.getRole() == Role.TEAM_LEADER || sub.getRole() == Role.SYSTEM_ADMIN)
-                && !sub.getId().equals(applicant.getId());
-        if (!eligible) {
-            throw new BusinessException(ErrorCode.INVALID_APPROVER);
-        }
-        return sub;
-    }
+    // 승인자 결정은 ApproverResolver 하나로 모았다 (리뷰 I-5) — 복리후생과 같은 규칙이어야 한다.
+    // 예전에는 두 서비스에 같은 메서드가 복사돼 있었고 그 3~4줄에 결함 3개가 밀집해 있었다.
 
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (검증 R-5, docs/03 approval 권한) */
     private void validateApprover(LeaveRequest leave, User actor) {

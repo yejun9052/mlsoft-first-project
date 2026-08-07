@@ -8,6 +8,7 @@ import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,8 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    // 팀장 자격 판정 — 승인자 자격과 같은 기준이어야 한다 (리뷰 I-5a)
+    private final ApproverResolver approverResolver;
 
     /** 전체 목록 (GET /api/departments) — 활성 부서만, 드롭다운용 플랫 목록 */
     @Transactional(readOnly = true)
@@ -54,10 +57,10 @@ public class DepartmentService {
     /** 부서 생성 (POST /api/departments, SA) — parentId 지정 시 2단계 계층 검증 */
     @Transactional
     public DepartmentResponse create(DepartmentCreateRequest request) {
-        validateParent(request.parentId());
+        validateParent(request.parentId(), null); // 생성 시점엔 자기 id가 없다
         Department department = Department.create(request.name().trim(), request.description(), request.parentId());
         if (request.leaderId() != null) {
-            department.assignLeader(findUserOrThrow(request.leaderId()));
+            department.assignLeader(findEligibleLeaderOrThrow(request.leaderId()));
         }
         departmentRepository.save(department);
         return DepartmentResponse.of(department);
@@ -70,10 +73,10 @@ public class DepartmentService {
     @Transactional
     public DepartmentResponse update(Long id, DepartmentUpdateRequest request) {
         Department department = findActiveDepartmentOrThrow(id);
-        validateParent(request.parentId());
+        validateParent(request.parentId(), id);
         department.update(request.name().trim(), request.description(), request.parentId());
         if (request.leaderId() != null) {
-            department.assignLeader(findUserOrThrow(request.leaderId()));
+            department.assignLeader(findEligibleLeaderOrThrow(request.leaderId()));
         } else {
             department.clearLeader();
         }
@@ -91,15 +94,39 @@ public class DepartmentService {
     // ---------------------------------------------------------------------
 
     /** 상위 부서 검증 — 존재·활성 + 그 부서 자신도 루트(parentId null)여야 함 (2단계 계층 강제) */
-    private void validateParent(Long parentId) {
+    /**
+     * 상위 부서 검증 — 2단계 계층만 허용.
+     *
+     * @param parentId 지정하려는 상위 부서
+     * @param selfId   수정 중인 부서 id (생성 시 null). 자기 자신을 상위로 지정하면
+     *                 트리 조회에서 사라지고 순환 참조가 된다 (리뷰 I-9)
+     */
+    private void validateParent(Long parentId, Long selfId) {
         if (parentId == null) {
             return;
+        }
+        if (selfId != null && parentId.equals(selfId)) {
+            throw new BusinessException(ErrorCode.SELF_PARENT_DEPARTMENT);
         }
         Department parent = departmentRepository.findByIdAndActiveTrue(parentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
         if (parent.getParentId() != null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
+    }
+
+    /**
+     * 팀장 지정 검증 — 결재할 수 있는 사람만 (리뷰 I-5a).
+     * 검증 없이 지정하면 EMPLOYEE·퇴직자·온보딩 미완료자가 팀장이 되고,
+     * 그 부서 신청이 전부 결재 불가 상태로 쌓인다.
+     */
+    private User findEligibleLeaderOrThrow(Long leaderId) {
+        User leader = findUserOrThrow(leaderId);
+        // 셀프 결재(팀장 본인의 신청)는 승인자 결정 시점에 fallback으로 걸러지므로 여기서는 자격만 본다
+        if (!approverResolver.canApprove(leader)) {
+            throw new BusinessException(ErrorCode.INVALID_APPROVER);
+        }
+        return leader;
     }
 
     private User findUserOrThrow(Long userId) {

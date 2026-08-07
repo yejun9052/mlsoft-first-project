@@ -86,6 +86,10 @@ class DemoDataInitializerTest {
                 "시연 계정이 운영 DB에 들어가면 실제 사원과 구분할 방법이 없다 — @Profile(\"local\")을 지우지 말 것");
     }
 
+    /** DemoDataInitializer가 만드는 사원 이름 8명 — 시더 계정 판별용 */
+    private static final java.util.Set<String> DEMO_NAMES = java.util.Set.of(
+            "김도현", "이서연", "윤나래", "박준호", "최유진", "정민석", "한소영", "오지훈");
+
     @Test
     @DisplayName("시딩 — 사원·신청·이력이 생성되고 모든 사원이 잔액 불변식을 만족한다")
     void run_createsConsistentDemoData() {
@@ -149,9 +153,16 @@ class DemoDataInitializerTest {
                 "취소된 신청의 선차감이 복구되지 않았다");
     }
 
+    /**
+     * 시더가 만든 계정만 골라낸다.
+     * <p>`@mlsoft.com`으로만 거르면 같은 H2를 쓰는 다른 테스트가 만든 계정까지 섞여
+     * <b>실행 순서에 따라 개수 단언이 흔들린다.</b> 시더는 온보딩까지 마친 계정만 만들고,
+     * 이름이 고정돼 있으므로 이름으로 판별한다.
+     */
     private List<User> demoUsers() {
         return userRepository.findAll().stream()
                 .filter(user -> user.getEmail().endsWith("@mlsoft.com"))
+                .filter(user -> DEMO_NAMES.contains(user.getName()))
                 .toList();
     }
 

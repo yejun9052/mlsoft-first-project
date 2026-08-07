@@ -18,6 +18,7 @@ import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -72,6 +73,11 @@ class LeaveServiceTest {
     @Mock
     private HolidayService holidayService;
 
+    // 승인자 결정은 ApproverResolver로 모였다 (리뷰 I-5) — 여기서는 결정 결과만 주입하고,
+    // 자격 판정 규칙 자체는 ApproverResolverTest가 검증한다.
+    @Mock
+    private ApproverResolver approverResolver;
+
     @InjectMocks
     private LeaveService leaveService;
 
@@ -84,8 +90,7 @@ class LeaveServiceTest {
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         List<LocalDate> dates = futureWeekdays(2);
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenAdvanceEnabled(false);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
 
@@ -105,8 +110,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "1.0");
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenAdvanceEnabled(false);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
 
@@ -123,8 +127,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "1.0");
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenAdvanceEnabled(true);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
 
@@ -144,8 +147,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "1.0");
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenMaxDatesPerRequest(366);
         given(policyConfigReader.getBoolean(PolicyConfigKey.ADVANCE_LEAVE_ENABLED)).willReturn(true);
         given(policyConfigReader.getDecimal(PolicyConfigKey.ADVANCE_MAX_DAYS)).willReturn(new BigDecimal("2.0"));
@@ -228,8 +230,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         givenAdvanceEnabled(false);
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(user(9L, Role.SYSTEM_ADMIN, "15.0")));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(user(9L, Role.SYSTEM_ADMIN, "15.0"));
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
         given(leaveRequestRepository.save(any(LeaveRequest.class))).willAnswer(inv -> inv.getArgument(0));
 
@@ -259,8 +260,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenMaxDatesPerRequest(366);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
                 .willReturn(List.of(mockPending(applicant, admin)));
@@ -275,19 +275,20 @@ class LeaveServiceTest {
     @Test
     @DisplayName("신청 — 서브 승인자가 EMPLOYEE: INVALID_APPROVER")
     void apply_subApproverNotEligible_throws() {
+        // 자격 규칙 자체는 ApproverResolverTest가 검증한다. 여기서는 신청 흐름이 그 거부를
+        // 그대로 전파하고 **차감 전에** 멈추는지만 본다 (예외 전에 상태를 바꾸면 롤백에 의존하게 된다).
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
-        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
-        User employeeSub = user(5L, Role.EMPLOYEE, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
-        given(userRepository.findById(5L)).willReturn(Optional.of(employeeSub));
-        givenMaxDatesPerRequest(366);
+        givenMaxDatesPerRequest(366); // 날짜 검증은 승인자 결정보다 먼저 돈다
+        given(approverResolver.resolveSub(5L, applicant))
+                .willThrow(new BusinessException(ErrorCode.INVALID_APPROVER));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> leaveService.apply(1L, request(futureWeekdays(2), 5L)));
 
         assertEquals(ErrorCode.INVALID_APPROVER, ex.getErrorCode());
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        verify(leaveRequestRepository, never()).save(any());
     }
 
     // ============================ 승인 / 반려 ============================
@@ -439,8 +440,7 @@ class LeaveServiceTest {
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         List<LocalDate> dates = futureWeekdays(13);
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenAdvanceEnabled(true);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
 
@@ -471,8 +471,7 @@ class LeaveServiceTest {
         User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
         List<LocalDate> dates = futureWeekdays(13);
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
         givenAdvanceEnabled(true);
         given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
 

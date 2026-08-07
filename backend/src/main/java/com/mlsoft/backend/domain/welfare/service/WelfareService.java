@@ -6,6 +6,7 @@ import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.domain.welfare.dto.WelfareApprovalRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareCreateRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareResponse;
@@ -41,6 +42,8 @@ public class WelfareService {
     private final WelfareActionHistoryRepository welfareActionHistoryRepository;
     private final WelfarePolicyRepository welfarePolicyRepository;
     private final UserRepository userRepository;
+    // 승인자 결정 — 연차와 같은 규칙 (리뷰 I-5)
+    private final ApproverResolver approverResolver;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -56,8 +59,8 @@ public class WelfareService {
         User applicant = findUserOrThrow(userId);
         WelfarePolicy policy = findActivePolicyOrThrow(request.policyId());
 
-        User primaryApprover = resolvePrimaryApprover(applicant);
-        User subApprover = resolveSubApprover(request.subApproverId(), applicant);
+        User primaryApprover = approverResolver.resolvePrimary(applicant);
+        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant);
 
         WelfareRequest welfare = WelfareRequest.create(
                 policy, applicant, request.reason(),
@@ -156,33 +159,7 @@ public class WelfareService {
     // ---------------------------------------------------------------------
 
     /** 기본 승인자 = 소속 부서 팀장. 미배정·공석·팀장 퇴직·본인이 팀장이면 SYSTEM_ADMIN fallback (LeaveService와 동일 규칙) */
-    private User resolvePrimaryApprover(User applicant) {
-        Department department = applicant.getDepartment();
-        if (department != null && department.getLeader() != null) {
-            User leader = department.getLeader();
-            if (leader.isActive() && !leader.getId().equals(applicant.getId())) {
-                return leader;
-            }
-        }
-        return userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
-    }
-
-    /** 서브 승인자 검증 — 선택 시 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (LeaveService와 동일 규칙) */
-    private User resolveSubApprover(Long subApproverId, User applicant) {
-        if (subApproverId == null) {
-            return null;
-        }
-        User sub = userRepository.findById(subApproverId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
-        boolean eligible = sub.isActive()
-                && (sub.getRole() == Role.TEAM_LEADER || sub.getRole() == Role.SYSTEM_ADMIN)
-                && !sub.getId().equals(applicant.getId());
-        if (!eligible) {
-            throw new BusinessException(ErrorCode.INVALID_APPROVER);
-        }
-        return sub;
-    }
+    // 승인자 결정은 ApproverResolver 하나로 모았다 (리뷰 I-5) — 연차와 같은 규칙이어야 한다.
 
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (docs/03 approval 권한) */
     private void validateApprover(WelfareRequest welfare, User actor) {

@@ -108,8 +108,12 @@ class LeaveServiceIntegrationTest {
     private User saveUser(String name, Role role, Department department) {
         return userRepository.save(User.builder()
                 .name(name)
-                .email(name + "-" + System.nanoTime() + "@mlsoft.com")
+                // 시연 데이터 시더 테스트가 @mlsoft.com 계정을 자기 것으로 세지 않게 도메인을 분리한다
+                // (같은 H2를 공유하므로 실행 순서에 따라 개수 단언이 흔들렸다)
+                .email(name + "-" + System.nanoTime() + "@integration.test")
                 .role(role)
+                // 승인자는 온보딩을 마쳐야 한다 (리뷰 I-5b) — 없으면 INVALID_APPROVER
+                .hireDate(LocalDate.now().minusYears(1))
                 .baseDays(new BigDecimal("15.0"))
                 .useDays(BigDecimal.ZERO)
                 .bonusDays(BigDecimal.ZERO)

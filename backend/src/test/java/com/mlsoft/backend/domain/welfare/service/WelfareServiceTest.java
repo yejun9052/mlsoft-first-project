@@ -5,6 +5,7 @@ import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.domain.welfare.dto.WelfareApprovalRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareCreateRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareResponse;
@@ -51,6 +52,9 @@ class WelfareServiceTest {
     private WelfarePolicyRepository welfarePolicyRepository;
     @Mock
     private UserRepository userRepository;
+    // 승인자 결정은 연차와 같은 ApproverResolver를 쓴다 (리뷰 I-5)
+    @Mock
+    private ApproverResolver approverResolver;
 
     @InjectMocks
     private WelfareService welfareService;
@@ -65,8 +69,7 @@ class WelfareServiceTest {
         WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         given(welfarePolicyRepository.findByIdAndActiveTrue(100L)).willReturn(Optional.of(policy));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
 
         WelfareResponse response = welfareService.apply(1L, new WelfareCreateRequest(100L, "결혼합니다", null));
 
@@ -97,15 +100,13 @@ class WelfareServiceTest {
     @Test
     @DisplayName("신청 — 서브 승인자가 EMPLOYEE: INVALID_APPROVER")
     void apply_subApproverNotEligible_throws() {
+        // 자격 규칙은 ApproverResolverTest가 검증한다 — 여기서는 거부가 전파되고 저장이 없는지만 본다
         User applicant = user(1L, Role.EMPLOYEE);
-        User admin = user(9L, Role.SYSTEM_ADMIN);
-        User employeeSub = user(5L, Role.EMPLOYEE);
         WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         given(welfarePolicyRepository.findByIdAndActiveTrue(100L)).willReturn(Optional.of(policy));
-        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
-                .willReturn(Optional.of(admin));
-        given(userRepository.findById(5L)).willReturn(Optional.of(employeeSub));
+        given(approverResolver.resolveSub(5L, applicant))
+                .willThrow(new BusinessException(ErrorCode.INVALID_APPROVER));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> welfareService.apply(1L, new WelfareCreateRequest(100L, "사유", 5L)));
