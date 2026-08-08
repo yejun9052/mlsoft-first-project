@@ -11,6 +11,7 @@ import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -112,7 +113,9 @@ class LeaveServiceIntegrationTest {
                 // (같은 H2를 공유하므로 실행 순서에 따라 개수 단언이 흔들렸다)
                 .email(name + "-" + System.nanoTime() + "@integration.test")
                 .role(role)
-                // 승인자는 온보딩을 마쳐야 한다 (리뷰 I-5b) — 없으면 INVALID_APPROVER
+                // 승인자는 온보딩을 마쳐야 한다 (리뷰 I-5b) — 없으면 INVALID_APPROVER.
+                // 판별 기준이 hire_date가 아니라 상태로 바뀌었으므로 둘을 함께 세운다 (리뷰 S-1)
+                .onboardingStatus(OnboardingStatus.COMPLETED)
                 .hireDate(LocalDate.now().minusYears(1))
                 .baseDays(new BigDecimal("15.0"))
                 .useDays(BigDecimal.ZERO)

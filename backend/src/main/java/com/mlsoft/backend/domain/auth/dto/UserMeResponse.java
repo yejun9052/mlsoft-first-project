@@ -7,7 +7,10 @@ import java.time.LocalDate;
 
 /**
  * 내 정보 응답 (GET /api/auth/me — docs/03 인증).
- * onboarded=false면 프론트가 온보딩 페이지로 유도한다.
+ *
+ * <p>{@code onboarded=false}면 프론트가 온보딩 페이지로 유도한다. 단 <b>{@code onboardingStatus}를
+ * 함께 봐야 한다</b> — 승인 대기 중인 사원에게 온보딩 폼을 다시 보여주면 제출할 때마다
+ * {@code ALREADY_ONBOARDED}를 맞는다 (리뷰 S-1).
  */
 public record UserMeResponse(
         Long id,
@@ -22,7 +25,9 @@ public record UserMeResponse(
         BigDecimal advanceDays,
         LocalDate hireDate,
         LocalDate birthDay,
-        boolean onboarded
+        boolean onboarded,
+        /** NOT_STARTED / PENDING_APPROVAL / COMPLETED (리뷰 S-1) */
+        String onboardingStatus
 ) {
 
     /** User 엔티티 → 응답 변환 (부서 LAZY 접근 — 트랜잭션 내 호출 필수) */
@@ -41,7 +46,8 @@ public record UserMeResponse(
                 user.getAdvanceDays(),
                 user.getHireDate(),
                 user.getBirthDay(),
-                user.isOnboardingCompleted()
+                user.isOnboardingCompleted(),
+                user.getOnboardingStatus().name()
         );
     }
 }

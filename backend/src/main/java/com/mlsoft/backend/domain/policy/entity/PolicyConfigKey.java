@@ -69,6 +69,17 @@ public enum PolicyConfigKey {
             "입사 1년이 안 된 사원에게 매월 1일씩 적립할 최대 일수. 근로기준법 기준은 11일이다. (갭분석 B-1)",
             PolicyConfigStatus.ACTIVE),
 
+    // ── 온보딩 (리뷰 S-1) ────────────────────────────────────────────────────
+
+    ONBOARDING_AUTO_APPROVE_DAYS(
+            "onboarding_auto_approve_days", ConfigValueType.INTEGER, "90",
+            BigDecimal.ZERO, new BigDecimal("3650"), "일",
+            "온보딩 자동 승인 기간",
+            "오늘로부터 이 기간 안의 입사일이면 온보딩이 바로 확정된다. 그보다 과거를 입력하면 "
+                    + "관리자 승인 대기로 넘어가고 승인 전까지 연차가 부여되지 않는다. "
+                    + "0으로 두면 모든 온보딩이 승인을 거친다.",
+            PolicyConfigStatus.ACTIVE),
+
     // ── 소진 안내 메일 (docs/01 2-8 — 이메일 발송 구현 시 ACTIVE로 전환) ──────
 
     REMINDER_LIST_DAYS(

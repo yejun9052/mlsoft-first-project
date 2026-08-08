@@ -51,7 +51,9 @@ public class BirthdayLeaveGrantService {
     public boolean grant(Long userId, LocalDate today) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        if (!user.isActive() || user.getHireDate() == null || user.getBirthDay() == null) {
+        // 온보딩 확정 전에는 대상이 아니다 — 미확정 입사일이 소급 차단 조건의 기준이 되면 안 된다 (리뷰 S-1)
+        if (!user.isActive() || !user.isOnboardingCompleted()
+                || user.getHireDate() == null || user.getBirthDay() == null) {
             return false;
         }
         int year = today.getYear();

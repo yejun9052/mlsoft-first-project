@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.leave.service;
 
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -122,6 +123,8 @@ class MonthlyLeaveGrantServiceTest {
                 .name("테스트 사원")
                 .email("user1@mlsoft.com")
                 .role(Role.EMPLOYEE)
+                // 스케줄러 3잡은 온보딩이 확정된 사원만 대상으로 삼는다 (리뷰 S-1)
+                .onboardingStatus(OnboardingStatus.COMPLETED)
                 .hireDate(hireDate)
                 .lastResetDate(hireDate)
                 .baseDays(new BigDecimal(baseDays))

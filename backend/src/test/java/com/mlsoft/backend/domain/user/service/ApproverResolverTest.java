@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -110,8 +111,8 @@ class ApproverResolverTest {
     @DisplayName("기본 승인자 — 팀장도 fallback도 없으면 INVALID_APPROVER")
     void resolvePrimary_noApprover_throws() {
         User applicant = user(1L, Role.EMPLOYEE, true, true);
-        given(userRepository.findFirstByRoleAndIsActiveTrueAndHireDateIsNotNullAndIdNotOrderByIdAsc(
-                eq(Role.SYSTEM_ADMIN), any())).willReturn(Optional.empty());
+        given(userRepository.findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                eq(Role.SYSTEM_ADMIN), eq(OnboardingStatus.COMPLETED), any())).willReturn(Optional.empty());
 
         BusinessException e = assertThrows(BusinessException.class,
                 () -> approverResolver.resolvePrimary(applicant));
@@ -181,8 +182,8 @@ class ApproverResolverTest {
     // ==== 헬퍼 ====
 
     private void givenFallback(Long applicantId, User admin) {
-        given(userRepository.findFirstByRoleAndIsActiveTrueAndHireDateIsNotNullAndIdNotOrderByIdAsc(
-                Role.SYSTEM_ADMIN, applicantId)).willReturn(Optional.of(admin));
+        given(userRepository.findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, applicantId)).willReturn(Optional.of(admin));
     }
 
     private static User user(Long id, Role role, boolean active, boolean onboarded) {
@@ -192,6 +193,8 @@ class ApproverResolverTest {
                 .email("user" + id + "@mlsoft.com")
                 .role(role)
                 .isActive(active)
+                // 온보딩 판별은 hire_date가 아니라 상태다 (리뷰 S-1) — 둘을 함께 세워 실제 데이터와 같은 조합을 만든다
+                .onboardingStatus(onboarded ? OnboardingStatus.COMPLETED : OnboardingStatus.NOT_STARTED)
                 .hireDate(onboarded ? LocalDate.of(2020, 1, 1) : null)
                 .baseDays(new BigDecimal("15.0"))
                 .useDays(BigDecimal.ZERO)

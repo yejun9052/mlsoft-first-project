@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserResponse;
 import com.mlsoft.backend.domain.user.dto.UserSummaryResponse;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -83,8 +84,8 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserSummaryResponse> getApproverCandidates(Long viewerId) {
         return userRepository
-                .findByRoleInAndIsActiveTrueAndHireDateIsNotNullAndIdNot(
-                        List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN), viewerId).stream()
+                .findByRoleInAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                        List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN), OnboardingStatus.COMPLETED, viewerId).stream()
                 .map(UserSummaryResponse::of)
                 .toList();
     }

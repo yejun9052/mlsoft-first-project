@@ -212,6 +212,7 @@ CREATE TABLE `users` (
   `last_reset_date` date DEFAULT NULL,
   `monthly_granted_count` int NOT NULL DEFAULT '0',
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `onboarding_status` enum('COMPLETED','NOT_STARTED','PENDING_APPROVAL') COLLATE utf8mb4_unicode_ci NOT NULL,
   `position` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `retired_at` date DEFAULT NULL,
   `role` enum('EMPLOYEE','SYSTEM_ADMIN','TEAM_LEADER') COLLATE utf8mb4_unicode_ci NOT NULL,

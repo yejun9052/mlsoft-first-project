@@ -53,8 +53,17 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    /** 입사일 — null이면 온보딩 미완료 (검증 Y-2) */
+    /**
+     * 입사일. <b>채워져 있다고 온보딩이 끝난 것이 아니다</b> — 확정 여부는 {@link #onboardingStatus}가 갖는다
+     * (리뷰 S-1). 승인 대기 중에도 값은 저장된다(관리자가 무엇을 승인할지 봐야 하므로).
+     */
     private LocalDate hireDate;
+
+    /** 온보딩 확정 여부 (리뷰 S-1) — 연차 부여·인터셉터·스케줄러가 모두 이 값을 본다 */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private OnboardingStatus onboardingStatus = OnboardingStatus.NOT_STARTED;
 
     /** 생일 */
     private LocalDate birthDay;
@@ -150,19 +159,49 @@ public class User extends BaseTimeEntity {
         return baseDays.add(bonus).subtract(useDays);
     }
 
-    /** 온보딩 미완료 여부 — hire_date null 판별 (검증 Y-2) */
+    /**
+     * 온보딩 확정 여부 (검증 Y-2, 리뷰 S-1).
+     * <b>{@code hire_date != null}로 판별하지 말 것</b> — 승인 대기 중에도 입사일은 채워져 있다.
+     */
     public boolean isOnboardingCompleted() {
-        return hireDate != null;
+        return onboardingStatus == OnboardingStatus.COMPLETED;
     }
 
     /**
-     * 온보딩 완료: 생일·입사일 입력. 기산일은 입사일로 초기화.
+     * 온보딩 확정: 생일·입사일 입력. 기산일은 입사일로 초기화.
      * base_days 산정(정책 조회)은 서비스에서 resetAnnualLeave로 수행한다.
+     *
+     * <p>자동 승인 범위 안이면 신청 즉시, 밖이면 관리자 승인 시점에 호출된다 (리뷰 S-1).
      */
     public void completeOnboarding(LocalDate hireDate, LocalDate birthDay) {
         this.hireDate = hireDate;
         this.birthDay = birthDay;
         this.lastResetDate = hireDate;
+        this.onboardingStatus = OnboardingStatus.COMPLETED;
+    }
+
+    /**
+     * 온보딩 승인 요청 — 입사일이 자동 승인 범위를 벗어난 경우 (리뷰 S-1).
+     *
+     * <p><b>기산일을 세우지 않고 연차도 부여하지 않는다.</b> 이 상태에서 연차가 붙으면 승인 절차가
+     * 무의미해진다. 스케줄러도 {@code COMPLETED}만 대상으로 삼으므로 이 사원은 월차·리셋·생일 반차
+     * 어디에도 걸리지 않는다.
+     */
+    public void requestOnboardingApproval(LocalDate hireDate, LocalDate birthDay) {
+        this.hireDate = hireDate;
+        this.birthDay = birthDay;
+        this.onboardingStatus = OnboardingStatus.PENDING_APPROVAL;
+    }
+
+    /**
+     * 온보딩 승인 반려 — 입력값을 지우고 처음으로 되돌린다 (리뷰 S-1).
+     * 되돌리지 않으면 사원이 올바른 입사일로 다시 낼 방법이 없다 — 그게 S-1에서 관리자가
+     * DB를 직접 고쳐야 했던 이유다.
+     */
+    public void rejectOnboarding() {
+        this.hireDate = null;
+        this.birthDay = null;
+        this.onboardingStatus = OnboardingStatus.NOT_STARTED;
     }
 
     /**

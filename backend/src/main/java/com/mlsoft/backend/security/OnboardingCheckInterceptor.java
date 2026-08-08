@@ -1,5 +1,6 @@
 package com.mlsoft.backend.security;
 
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -70,9 +71,13 @@ public class OnboardingCheckInterceptor implements HandlerInterceptor {
             ));
         }
 
-        // ③ 온보딩(생일·입사일 입력) 미완료 → /api/auth/* 외 403
+        // ③ 온보딩 미확정 → /api/auth/* 외 403.
+        // 승인 대기와 미시작을 구분한다 — 같은 메시지를 주면 대기 중인 사원이 온보딩을 다시 내려다
+        // ALREADY_ONBOARDED를 맞고 무엇을 해야 할지 알 수 없게 된다 (리뷰 S-1)
         if (!path.startsWith(AUTH_PATH_PREFIX) && !user.isOnboardingCompleted()) {
-            throw new BusinessException(ErrorCode.ONBOARDING_NOT_COMPLETED);
+            throw new BusinessException(user.getOnboardingStatus() == OnboardingStatus.PENDING_APPROVAL
+                    ? ErrorCode.ONBOARDING_PENDING_APPROVAL
+                    : ErrorCode.ONBOARDING_NOT_COMPLETED);
         }
         return true;
     }

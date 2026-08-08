@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, Shield, Building2, UserMinus } from 'lucide-react';
+import { Search, Shield, Building2, UserMinus, Check, X } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
@@ -25,10 +25,16 @@ import {
   useUsers,
 } from '../hooks/useUsers.js';
 import { useDepartments } from '../hooks/useDepartments.js';
+import {
+  useApproveOnboarding,
+  usePendingOnboardings,
+  useRejectOnboarding,
+} from '../hooks/useAuth.js';
 
-// 탭 정의 (재직 / 퇴직)
+// 탭 정의 (재직 / 퇴직 / 온보딩 승인)
 const TAB_ACTIVE = 'active';
 const TAB_RETIRED = 'retired';
+const TAB_ONBOARDING = 'onboarding';
 
 // 역할 필터 칩 (전체 + 3개 역할)
 const ROLE_FILTERS = [
@@ -60,6 +66,10 @@ export default function AdminMembersPage() {
   const activeQuery = useUsers({ keyword, role: roleFilter === 'ALL' ? undefined : roleFilter });
   const retiredQuery = useRetiredUsers();
   const departmentsQuery = useDepartments();
+  // 온보딩 승인 대기 — 배지에 항상 건수를 띄워야 관리자가 잠긴 계정을 놓치지 않는다 (리뷰 S-1)
+  const onboardingQuery = usePendingOnboardings();
+  const approveOnboardingMutation = useApproveOnboarding();
+  const rejectOnboardingMutation = useRejectOnboarding();
 
   const updateRoleMutation = useUpdateUserRole();
   const updateDepartmentMutation = useUpdateUserDepartment();
@@ -126,9 +136,33 @@ export default function AdminMembersPage() {
     closeRetireConfirm();
   }
 
+  // 온보딩 승인/반려 — 승인은 그 시점에 연차를 부여하므로 되돌리기 어렵다. 확인 다이얼로그를 거친다
+  const [onboardingTarget, setOnboardingTarget] = useState(null);
+
+  function handleOnboardingDecision() {
+    if (!onboardingTarget) return;
+    const { row, approve } = onboardingTarget;
+    const mutation = approve ? approveOnboardingMutation : rejectOnboardingMutation;
+    mutation.mutate(row.userId, {
+      onSuccess: () =>
+        toast.success(
+          approve
+            ? `${row.name}님의 온보딩을 승인했습니다. 연차가 부여되었습니다.`
+            : `${row.name}님의 온보딩을 반려했습니다. 다시 입력할 수 있습니다.`,
+        ),
+    });
+    setOnboardingTarget(null);
+  }
+
+  const onboardingRows = onboardingQuery.data?.content ?? [];
   const tabItems = [
     { value: TAB_ACTIVE, label: '재직', count: activeQuery.data?.page?.totalElements },
     { value: TAB_RETIRED, label: '퇴직', count: retiredQuery.data?.page?.totalElements },
+    {
+      value: TAB_ONBOARDING,
+      label: '온보딩 승인',
+      count: onboardingQuery.data?.page?.totalElements,
+    },
   ];
 
   return (
@@ -136,6 +170,76 @@ export default function AdminMembersPage() {
       <PageHeader title="구성원 관리" subtitle="전체 구성원 조회 및 권한·부서 관리" />
 
       <Tabs tabs={tabItems} value={tab} onChange={setTab} className="mb-5" />
+
+      {/* 온보딩 승인 대기 — 자동 승인 범위를 벗어난 입사일을 신고한 계정 (리뷰 S-1).
+          승인 전까지 연차가 0이고 로그인 외 아무것도 못 하므로 방치하면 그 사원이 잠긴다 */}
+      {tab === TAB_ONBOARDING && (
+        <>
+          <p className="mb-4 text-[13px] leading-relaxed text-ink-mute">
+            최근 입사일이 아닌 값을 신고한 계정입니다. 승인하면 <strong className="text-ink-body">그
+            시점에</strong> 근속 기간에 맞는 연차가 부여되고, 반려하면 사원이 다시 입력할 수 있습니다.
+            승인 전까지 그 계정은 로그인 외에는 아무것도 할 수 없습니다.
+          </p>
+          <TableCard
+            loading={onboardingQuery.isLoading}
+            error={onboardingQuery.isError}
+            errorLabel="온보딩 승인 대기 목록을 불러오지 못했습니다."
+            onRetry={onboardingQuery.refetch}
+            empty={!onboardingQuery.isLoading && onboardingRows.length === 0}
+            emptyLabel="승인을 기다리는 온보딩이 없습니다."
+          >
+            <Table className="min-w-[840px]">
+              <THead>
+                <Th>구성원</Th>
+                <Th>이메일</Th>
+                <Th>신고한 입사일</Th>
+                <Th right>소급 일수</Th>
+                <Th>승인 시 부여</Th>
+                <Th right>관리</Th>
+              </THead>
+              <tbody>
+                {onboardingRows.map((row) => (
+                  <TR key={row.userId}>
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <Avatar name={row.name} />
+                        <span className="font-medium text-ink-hi">{row.name}</span>
+                      </div>
+                    </Td>
+                    <Td className="text-ink-mute">{row.email}</Td>
+                    <Td className="text-ink-body">{row.hireDate}</Td>
+                    <Td right>
+                      <span className="font-semibold text-ink-hi">{row.backdatedDays}</span>
+                      <span className="text-ink-faint">일 전</span>
+                    </Td>
+                    <Td className="text-ink-body">
+                      {/* 근속 1년 미만이면 월차 소급이라 일수가 정책이 아닌 경과 개월 수로 정해진다 */}
+                      {row.yearsOfService == null
+                        ? '월차 소급 (1년 미만)'
+                        : `${row.yearsOfService}년차 정책 연차`}
+                    </Td>
+                    <Td right>
+                      <div className="flex items-center justify-end gap-1">
+                        <IconButton
+                          Icon={Check}
+                          label="승인"
+                          onClick={() => setOnboardingTarget({ row, approve: true })}
+                        />
+                        <IconButton
+                          Icon={X}
+                          label="반려"
+                          tone="danger"
+                          onClick={() => setOnboardingTarget({ row, approve: false })}
+                        />
+                      </div>
+                    </Td>
+                  </TR>
+                ))}
+              </tbody>
+            </Table>
+          </TableCard>
+        </>
+      )}
 
       {/* 검색 + 역할 필터 (재직 탭 전용) */}
       {tab === TAB_ACTIVE && (
@@ -163,7 +267,8 @@ export default function AdminMembersPage() {
         </div>
       )}
 
-      {/* 테이블 카드 */}
+      {/* 테이블 카드 (재직·퇴직) — 온보딩 승인 탭은 위에서 자체 표를 렌더한다 */}
+      {tab !== TAB_ONBOARDING && (
       <TableCard
         loading={loading}
         error={listError}
@@ -231,6 +336,23 @@ export default function AdminMembersPage() {
           </tbody>
         </Table>
       </TableCard>
+      )}
+
+      {/* 온보딩 승인/반려 확인 — 승인은 그 자리에서 연차를 부여하므로 되돌리기 어렵다 */}
+      <ConfirmDialog
+        open={Boolean(onboardingTarget)}
+        title={onboardingTarget?.approve ? '온보딩 승인' : '온보딩 반려'}
+        message={
+          onboardingTarget?.approve
+            ? `${onboardingTarget.row.name}님의 입사일 ${onboardingTarget.row.hireDate}을(를) 확정하고 연차를 부여합니다.`
+            : `${onboardingTarget?.row.name}님의 입력을 지우고 처음으로 되돌립니다. 사원이 다시 입력할 수 있습니다.`
+        }
+        confirmLabel={onboardingTarget?.approve ? '승인' : '반려'}
+        tone={onboardingTarget?.approve ? 'default' : 'danger'}
+        loading={approveOnboardingMutation.isPending || rejectOnboardingMutation.isPending}
+        onConfirm={handleOnboardingDecision}
+        onCancel={() => setOnboardingTarget(null)}
+      />
 
       {/* 역할 변경 모달 */}
       {roleTarget && (

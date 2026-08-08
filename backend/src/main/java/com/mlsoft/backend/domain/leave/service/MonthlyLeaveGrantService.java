@@ -52,7 +52,9 @@ public class MonthlyLeaveGrantService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         LocalDate hireDate = user.getHireDate();
-        if (!user.isActive() || hireDate == null) {
+        // 온보딩 확정 전에는 입사일이 채워져 있어도 대상이 아니다 — 미확정 입사일로 월차를 주면
+        // 승인 절차가 무의미해진다 (리뷰 S-1)
+        if (!user.isActive() || !user.isOnboardingCompleted() || hireDate == null) {
             return 0;
         }
         // 1주년이 지났으면 대상이 아니다 — 남은 월차는 소멸하고 리셋 잡이 정책 연차를 부여한다 (갭분석 B-2)

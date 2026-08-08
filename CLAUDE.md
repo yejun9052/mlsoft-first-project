@@ -40,7 +40,9 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 **`OnboardingCheckInterceptor`가 `/api/**` 전역 가드**로 매 요청 DB를 조회해 세 가지를 검사한다 — JWT는 발급 후 상태 변화를 못 담기 때문:
 1. 퇴직자(`is_active=false`) → 로그아웃 외 전 경로 차단
 2. DB role ≠ 토큰 role → SecurityContext 권한을 DB 기준으로 재구성 (승격·강등 즉시 반영)
-3. 온보딩 미완료(`hire_date == null`) → `/api/auth/*` 외 403
+3. 온보딩 미확정 → `/api/auth/*` 외 403
+
+**온보딩 완료 판별은 `hire_date != null`이 아니라 `onboarding_status == COMPLETED`다** (리뷰 S-1). 입사일이 자가 신고라 자동 승인 기간(`onboarding_auto_approve_days`, 기본 90일) 밖의 값은 **연차 0으로 승인 대기**에 들어가고, 그 상태에서도 `hire_date`는 채워져 있다. 그래서 옛 기준을 쓰면 미확정 입사일이 스케줄러 3잡·승인자 후보의 입력이 된다. 새 코드에서 `getHireDate() != null`로 온보딩을 판별하지 말 것 — `isOnboardingCompleted()`를 쓴다.
 
 따라서 컨트롤러의 `@PreAuthorize`는 **역할 게이트 전용**이고, 소유권·승인자 식별 검증은 서비스 계층 책임이다.
 

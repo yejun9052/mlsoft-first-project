@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.user.repository;
 
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import org.springframework.data.domain.Page;
@@ -31,18 +32,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * primary 승인자 SYSTEM_ADMIN fallback (검증 Y-3, 리뷰 I-5b·I-5c).
      * <p>온보딩 미완료자는 인터셉터가 막아 결재를 못 하므로 제외하고, 신청자 본인도 제외한다
      * (셀프 결재 방지 — 첫 SA가 본인이면 자기 신청을 자기가 승인할 수 있었다).
+     * <p>판별 기준은 {@code hire_date}가 아니라 {@code onboarding_status}다 — 승인 대기 중에도
+     * 입사일은 채워져 있어서 그걸로 거르면 결재 못 하는 사람이 승인자로 지정된다 (리뷰 S-1).
      */
-    Optional<User> findFirstByRoleAndIsActiveTrueAndHireDateIsNotNullAndIdNotOrderByIdAsc(
-            Role role, Long excludeId);
+    Optional<User> findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+            Role role, OnboardingStatus onboardingStatus, Long excludeId);
 
     /** 퇴직자 목록 (GET /api/users/retired, SA) */
     Page<User> findByIsActiveFalse(Pageable pageable);
 
     /**
      * 서브 승인자 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (GET /api/users/approvers).
-     * 온보딩 미완료자는 지정돼도 결재를 못 하므로 후보에서 뺀다 (리뷰 I-5b).
+     * 온보딩이 확정되지 않은 사원은 지정돼도 결재를 못 하므로 후보에서 뺀다 (리뷰 I-5b·S-1).
      */
-    List<User> findByRoleInAndIsActiveTrueAndHireDateIsNotNullAndIdNot(List<Role> roles, Long excludeId);
+    List<User> findByRoleInAndIsActiveTrueAndOnboardingStatusAndIdNot(
+            List<Role> roles, OnboardingStatus onboardingStatus, Long excludeId);
+
+    /** 온보딩 승인 대기 목록 (GET /api/admin/onboardings, SA) — 오래 기다린 순 (리뷰 S-1) */
+    Page<User> findByOnboardingStatusOrderByUpdateAtAsc(OnboardingStatus onboardingStatus, Pageable pageable);
 
     /** 내 부서 팀원 목록 — 재직 중만, 이름순 (GET /api/users/team-members) */
     List<User> findByDepartmentAndIsActiveTrueOrderByNameAsc(Department department);
@@ -56,7 +63,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * <p>"오늘이 입사일"인 사원이 걸리지 않도록 <b>같거나 이전</b>으로 비교한다.
      * 며칠 밀린 경우도 여기 걸리고, 몇 년치 소급은 서비스의 catch-up 루프가 처리한다 (docs/09 §6).
      */
-    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+    @Query("select u.id from User u where u.isActive = true and u.onboardingStatus = COMPLETED "
             + "and u.lastResetDate is not null and u.lastResetDate <= :resetDueOnOrBefore")
     List<Long> findIdsDueForAnnualReset(@Param("resetDueOnOrBefore") LocalDate resetDueOnOrBefore);
 
@@ -64,7 +71,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 월차 적립 대상 사원 id — 입사 1년 미만({@code hire_date > 오늘 − 1년}).
      * <p>적립 시점이 실제로 도래했는지(횟수·상한)는 날짜 계산이 필요해 서비스에서 판정한다.
      */
-    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+    @Query("select u.id from User u where u.isActive = true and u.onboardingStatus = COMPLETED "
             + "and u.hireDate > :hiredAfter")
     List<Long> findIdsUnderOneYear(@Param("hiredAfter") LocalDate hiredAfter);
 
@@ -73,7 +80,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * <p>생일이 지났는지·입사 전 생일인지는 월/일 비교라 서비스에서 판정한다(연도별 2/29 보정 포함).
      * 여기서 연도로 먼저 걸러 두면 매일 전 사원을 훑지 않는다.
      */
-    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+    @Query("select u.id from User u where u.isActive = true and u.onboardingStatus = COMPLETED "
             + "and u.birthDay is not null "
             + "and (u.lastBirthdayGrantYear is null or u.lastBirthdayGrantYear < :year)")
     List<Long> findIdsWithoutBirthdayLeave(@Param("year") int year);

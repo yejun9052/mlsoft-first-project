@@ -80,8 +80,9 @@ public class AnnualLeaveResetService {
     public int reset(Long userId, LocalDate today) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        // 조회 이후 상태가 바뀌었을 수 있다 — 트랜잭션 안에서 가드를 다시 본다
-        if (!user.isActive() || user.getHireDate() == null || user.getLastResetDate() == null) {
+        // 조회 이후 상태가 바뀌었을 수 있다 — 트랜잭션 안에서 가드를 다시 본다.
+        // 온보딩은 hire_date가 아니라 확정 여부로 본다 — 승인 대기 중에도 입사일은 채워져 있다 (리뷰 S-1)
+        if (!user.isActive() || !user.isOnboardingCompleted() || user.getLastResetDate() == null) {
             return 0;
         }
         // 기산일이 입사일보다 앞서면 데이터가 깨진 것이다. 그냥 돌리면 입사 전 날짜의 리셋 이력이 쌓이고,

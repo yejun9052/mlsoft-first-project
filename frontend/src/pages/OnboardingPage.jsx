@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CalendarCheck2, Loader2 } from 'lucide-react';
-import { submitOnboarding } from '../api/auth.js';
+import { CalendarCheck2, Loader2, ShieldCheck } from 'lucide-react';
+import { logout, submitOnboarding } from '../api/auth.js';
 import GlowShell from '../components/ui/GlowShell.jsx';
+
+// 승인 대기 상태 — 자동 승인 범위를 벗어난 입사일을 신고한 경우 (리뷰 S-1)
+const STATUS_PENDING_APPROVAL = 'PENDING_APPROVAL';
 
 // 오늘 날짜(YYYY-MM-DD, 로컬 기준) — 입사일 max 속성용 (미래 입사일 차단)
 const TODAY = (() => {
@@ -24,13 +27,20 @@ export default function OnboardingPage() {
   const [hireDate, setHireDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // 로그인 유저 이름 (환영 문구용, RequireAuth 통과 후 렌더되므로 방어적 파싱만)
-  let userName = '';
+  // 로그인 유저 정보 (환영 문구·승인 대기 판별, RequireAuth 통과 후 렌더되므로 방어적 파싱만)
+  let storedUser = null;
   try {
-    userName = JSON.parse(localStorage.getItem('userInfo'))?.name ?? '';
+    storedUser = JSON.parse(localStorage.getItem('userInfo'));
   } catch {
-    userName = '';
+    storedUser = null;
   }
+  const userName = storedUser?.name ?? '';
+
+  // 제출 결과가 승인 대기면 폼 대신 안내를 띄운다. 새로고침해도 유지되도록 localStorage 값도 함께 본다 —
+  // 폼을 다시 보여주면 제출할 때마다 ALREADY_ONBOARDED만 맞고 무엇을 해야 할지 알 수 없다 (리뷰 S-1)
+  const [pendingApproval, setPendingApproval] = useState(
+    storedUser?.onboardingStatus === STATUS_PENDING_APPROVAL,
+  );
 
   // 제출 — 온보딩 응답(UserMeResponse)을 바로 userInfo에 저장 (onboarded=true 반영).
   // me() 재조회를 끼우면 그 호출이 실패했을 때 onboarded=false가 남아 탈출 불가 루프가 됨 (검증 F1)
@@ -45,12 +55,57 @@ export default function OnboardingPage() {
     try {
       const data = await submitOnboarding({ birthDay, hireDate });
       localStorage.setItem('userInfo', JSON.stringify(data));
+      if (data.onboardingStatus === STATUS_PENDING_APPROVAL) {
+        setSubmitting(false);
+        setPendingApproval(true);
+        return;
+      }
       toast.success('온보딩이 완료되었습니다. 환영합니다!');
       navigate('/dashboard', { replace: true });
     } catch {
       // 에러 toast는 api 인터셉터에서 일괄 처리 — 여기선 버튼만 복구
       setSubmitting(false);
     }
+  }
+
+  // 승인 대기 중에는 할 수 있는 일이 로그아웃뿐이라 그 경로만 남긴다
+  async function handleLogout() {
+    try {
+      await logout();
+    } finally {
+      localStorage.removeItem('userInfo');
+      navigate('/login', { replace: true });
+    }
+  }
+
+  if (pendingApproval) {
+    return (
+      <GlowShell>
+        <div className="glass glass-edge w-full max-w-[440px] rounded-card border border-white/[0.15] p-8 text-center shadow-card">
+          <span className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-card bg-accent/15 ring-1 ring-accent/30">
+            <ShieldCheck size={24} className="text-accent" />
+          </span>
+          <h1 className="mb-3 text-[22px] font-bold tracking-[-0.02em] text-ink-hi">
+            관리자 확인을 기다리는 중입니다
+          </h1>
+          <p className="mb-2 text-[13px] leading-relaxed text-ink-mute">
+            입력하신 입사일이 최근 기간을 벗어나 관리자 확인이 필요합니다.
+            <br />
+            승인되면 근속 기간에 맞는 연차가 부여됩니다.
+          </p>
+          <p className="mb-7 text-[12px] leading-relaxed text-ink-faint">
+            입사일을 잘못 입력하셨다면 관리자에게 반려를 요청해 주세요. 반려되면 다시 입력할 수 있습니다.
+          </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full rounded-btn border border-white/[0.15] px-4 py-3 text-[14px] font-semibold text-ink-body transition-colors hover:bg-white/[0.06]"
+          >
+            로그아웃
+          </button>
+        </div>
+      </GlowShell>
+    );
   }
 
   return (

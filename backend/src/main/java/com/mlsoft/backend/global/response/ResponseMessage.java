@@ -41,6 +41,9 @@ public final class ResponseMessage {
     // 사용자
     public static final String USER_INFO_FETCHED = "사용자 정보를 조회했습니다.";
     public static final String ONBOARDING_COMPLETED = "온보딩이 완료되었습니다.";
+    public static final String ONBOARDING_PENDING_FETCHED = "온보딩 승인 대기 목록을 조회했습니다.";
+    public static final String ONBOARDING_APPROVED = "온보딩을 승인했습니다.";
+    public static final String ONBOARDING_REJECTED = "온보딩을 반려했습니다.";
     public static final String LOGOUT_COMPLETED = "로그아웃 되었습니다.";
 
     // 사용자 관리

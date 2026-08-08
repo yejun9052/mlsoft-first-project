@@ -5,6 +5,7 @@ import com.mlsoft.backend.domain.auth.dto.UserMeResponse;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -44,23 +45,54 @@ public class AuthService {
     }
 
     /**
-     * 최초 온보딩 — 생일·입사일 입력 + base_days 정책 자동 계산 (갭분석 C-1).
-     * - 이미 온보딩 완료(hire_date 존재)면 ALREADY_ONBOARDED
-     * - 1년 미만 신입: base_days = 입사 후 경과 개월 수 소급 적립 (최대 11), 기산일 = 입사일 (갭분석 B-1)
-     * - 1년 이상: base_days = N년차 정책 연차, 기산일 = 최근 입사기념일 (스케줄러 중복 리셋 방지)
-     * - **년차(N) = 만 근속년수** 기준 — MIN(15+(N-1)/2, 25)가 근로기준법과 일치
-     *   (만 1~2년 15일, 만 3년 16일, 만 20년 24일, 만 21년 이상 25일)
+     * 최초 온보딩 — 생일·입사일 입력 (갭분석 C-1, 리뷰 S-1).
+     *
+     * <p><b>입사일은 자가 신고라 그대로 믿지 않는다.</b> 예전에는 {@code @PastOrPresent}만 걸려 있어
+     * 신입이 {@code 1990-01-01}을 넣으면 그 자리에서 25일이 부여됐고, 완료로 판정된 뒤에는
+     * 재입력 경로가 없어 관리자가 DB를 직접 고쳐야 했다.
+     *
+     * <p>이제 자동 승인 기간({@code onboarding_auto_approve_days}, 기본 90일) 안의 입사일만 즉시
+     * 확정하고, 그보다 과거면 <b>연차 없이</b> 승인 대기로 넘긴다. 신입은 대부분 입사 직후에
+     * 온보딩하므로 정상 흐름은 그대로고, 악용 경로만 관리자를 거친다.
+     *
+     * @return 확정됐으면 연차가 채워진 응답, 승인 대기면 {@code onboardingStatus=PENDING_APPROVAL}
      */
     @Transactional
     public UserMeResponse completeOnboarding(Long userId, OnboardingRequest request) {
         User user = findUserOrThrow(userId);
-        if (user.isOnboardingCompleted()) {
+        // 완료뿐 아니라 승인 대기도 재신청을 막는다 — 대기 중에 값을 바꿔 치고 승인받는 것을 차단
+        if (user.getOnboardingStatus() != OnboardingStatus.NOT_STARTED) {
             throw new BusinessException(ErrorCode.ALREADY_ONBOARDED);
         }
 
         LocalDate hireDate = request.hireDate();
         LocalDate today = LocalDate.now(KST);
-        user.completeOnboarding(hireDate, request.birthDay());
+        int autoApproveDays = policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
+
+        if (hireDate.isBefore(today.minusDays(autoApproveDays))) {
+            user.requestOnboardingApproval(hireDate, request.birthDay());
+            log.info("[온보딩] 자동 승인 범위({}일) 밖 — 승인 대기: userId={}, hireDate={}",
+                    autoApproveDays, userId, hireDate);
+            return UserMeResponse.from(user);
+        }
+
+        grantInitialLeave(user, hireDate, request.birthDay(), today);
+        return UserMeResponse.from(user);
+    }
+
+    /**
+     * 온보딩 확정 + 초기 연차 부여 — 자동 승인과 관리자 승인이 <b>같은 경로</b>를 쓴다 (리뷰 S-1).
+     * 둘로 나뉘면 승인 경로만 연차 산정이 어긋나는 사고가 난다.
+     *
+     * <ul>
+     *   <li>1년 미만 신입: base_days = 입사 후 경과 개월 수 소급 적립(상한 설정), 기산일 = 입사일 (갭분석 B-1)</li>
+     *   <li>1년 이상: base_days = N년차 정책 연차, 기산일 = 최근 입사기념일 (스케줄러 중복 리셋 방지)</li>
+     * </ul>
+     * <b>년차(N) = 만 근속년수</b> 기준 — MIN(15+(N-1)/2, 25)가 근로기준법과 일치한다
+     * (만 1~2년 15일, 만 3년 16일, 만 20년 24일, 만 21년 이상 25일).
+     */
+    void grantInitialLeave(User user, LocalDate hireDate, LocalDate birthDay, LocalDate today) {
+        user.completeOnboarding(hireDate, birthDay);
 
         long elapsedYears = ChronoUnit.YEARS.between(hireDate, today);
         if (elapsedYears < 1) {
@@ -74,7 +106,7 @@ public class AuthService {
             user.resetAnnualLeave(monthlyDays, hireDate);
             // 소급으로 몇 회분을 이미 줬는지 기록한다 — 빼면 스케줄러가 같은 개월분을 한 번 더 적립한다 (docs/09 §2)
             user.markMonthlyGranted(monthlyDays.intValue());
-            log.info("[온보딩] 신입 월차 소급: userId={}, hireDate={}, days={}", userId, hireDate, monthlyDays);
+            log.info("[온보딩] 신입 월차 소급: userId={}, hireDate={}, days={}", user.getId(), hireDate, monthlyDays);
         } else {
             // 1년 이상 — 년차(= 만 근속년수) 정책 연차 부여, 기산일은 최근 기념일로 설정해
             //   기산일 스케줄러(last_reset_date + 1년 <= 오늘)의 즉시 재리셋을 방지 (검증 Y-1)
@@ -83,10 +115,8 @@ public class AuthService {
             LocalDate lastAnniversary = hireDate.plusYears(elapsedYears);
             user.resetAnnualLeave(annualDays, lastAnniversary);
             log.info("[온보딩] 정책 연차 부여: userId={}, {}년차, days={}, 기산일={}",
-                    userId, yearsOfService, annualDays, lastAnniversary);
+                    user.getId(), yearsOfService, annualDays, lastAnniversary);
         }
-
-        return UserMeResponse.from(user);
     }
 
     // 사용자 조회 검증 헬퍼

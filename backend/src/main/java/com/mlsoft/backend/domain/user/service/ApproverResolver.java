@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -57,8 +58,8 @@ public class ApproverResolver {
                     department.getId(), leader.getId());
         }
         return userRepository
-                .findFirstByRoleAndIsActiveTrueAndHireDateIsNotNullAndIdNotOrderByIdAsc(
-                        Role.SYSTEM_ADMIN, applicant.getId())
+                .findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                        Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, applicant.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
     }
 
