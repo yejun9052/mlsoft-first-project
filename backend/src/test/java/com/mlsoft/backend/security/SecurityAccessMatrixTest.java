@@ -216,6 +216,39 @@ class SecurityAccessMatrixTest {
                 .andExpect(jsonPath("$.message").value(containsString("관리자")));
     }
 
+    // ==================== 조회 상한 (리뷰 S-4) ====================
+
+    @Test
+    @DisplayName("페이지 크기 상한 초과는 400 — 조용히 깎지 않는다")
+    void 페이지크기초과_400() throws Exception {
+        // 깨지면: size=100000 요청 하나로 전 사원을 한 번에 끌어올 수 있다.
+        // 조용히 100으로 깎으면 클라이언트가 왜 100건만 오는지 알 수 없다 —
+        // PolicyConfigKey가 "20.9"를 20으로 깎는 대신 거부하는 것과 같은 기준이다
+        User admin = saveUser("size-admin", Role.SYSTEM_ADMIN, true, true);
+
+        mockMvc.perform(get("/api/users").param("size", "100000").cookie(tokenCookie(admin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+
+        // 상한 이내는 그대로 통과한다
+        mockMvc.perform(get("/api/users").param("size", "50").cookie(tokenCookie(admin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("팀 현황은 조회 기간이 1년을 넘으면 400 — 페이징이 없어 기간이 곧 상한이다")
+    void 팀현황_기간초과_400() throws Exception {
+        // 깨지면: from=1900-01-01으로 그 부서의 전체 이력을 한 번에 끌어올 수 있다.
+        // 이 엔드포인트는 List를 통째로 돌려주므로 size 상한이 걸리지 않는다
+        User member = saveUser("team-range", Role.EMPLOYEE, true, true);
+
+        mockMvc.perform(get("/api/leaves/team")
+                        .param("from", "1900-01-01")
+                        .param("to", LocalDate.now().toString())
+                        .cookie(tokenCookie(member)))
+                .andExpect(status().isBadRequest());
+    }
+
     // ==================== 객체 단위 권한 (서비스 계층) ====================
 
     @Test

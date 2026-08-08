@@ -8,6 +8,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,7 +26,10 @@ import java.time.LocalDate;
  * 리셋 직전 상태를 기록해 스케줄러 동작을 사후 검증할 수 있게 한다.
  */
 @Entity
-@Table(name = "leave_reset_history")
+// 관리자 목록이 reset_date 내림차순으로 페이징한다 (리뷰 D-1).
+// 스케줄러가 붙으면서 매년 사원당 1행씩 실제로 쌓이기 시작한 테이블이다.
+@Table(name = "leave_reset_history", indexes =
+        @Index(name = "idx_leave_reset_history_reset_date", columnList = "reset_date"))
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,7 +26,14 @@ import lombok.NoArgsConstructor;
  * 신청자(user)를 중복 보관하는 것은 조인 없이 로그를 조회하기 위한 반정규화 (검토 메모 4).
  */
 @Entity
-@Table(name = "leave_action_history")
+// 조회 인덱스 (리뷰 D-1) — 이 테이블은 append-only(수정·삭제 없음)라 인덱스 유지 비용이 insert에만 붙는다.
+// 목록 3종이 모두 createdAt 내림차순 정렬이므로 필터 컬럼과 묶어 정렬까지 인덱스로 처리한다.
+// action 필터는 값이 7개뿐이라 선택도가 낮아 별도 인덱스를 두지 않는다 — 위 3개로 좁힌 뒤 걸러도 충분하다.
+@Table(name = "leave_action_history", indexes = {
+        @Index(name = "idx_leave_history_created", columnList = "created_at"),
+        @Index(name = "idx_leave_history_actor_created", columnList = "actor_id, created_at"),
+        @Index(name = "idx_leave_history_user_created", columnList = "user_id, created_at")
+})
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

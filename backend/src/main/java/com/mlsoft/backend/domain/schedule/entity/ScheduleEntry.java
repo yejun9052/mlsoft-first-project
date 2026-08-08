@@ -12,6 +12,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderBy;
@@ -69,7 +70,9 @@ public class ScheduleEntry extends BaseTimeEntity {
             name = "schedule_dates",
             joinColumns = @JoinColumn(name = "schedule_entry_id"),
             uniqueConstraints = @UniqueConstraint(name = "uk_schedule_dates_entry_day",
-                    columnNames = {"schedule_entry_id", "day"}))
+                    columnNames = {"schedule_entry_id", "day"}),
+            // 캘린더가 day 범위로 스캔한다. 위 UNIQUE는 (일정, 날짜) 순서라 그 용도로 못 쓴다 (리뷰 D-1)
+            indexes = @Index(name = "idx_schedule_dates_day", columnList = "day"))
     @OrderBy // 값 오름차순 — 시작일·종료일 표시가 순서에 의존한다
     @Column(name = "day", nullable = false)
     @Builder.Default

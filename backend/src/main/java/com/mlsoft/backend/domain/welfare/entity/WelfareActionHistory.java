@@ -11,6 +11,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -25,7 +26,12 @@ import lombok.NoArgsConstructor;
  * 액션 체계는 연차와 동일 (RequestAction 7종).
  */
 @Entity
-@Table(name = "welfare_action_history")
+// 조회 인덱스 (리뷰 D-1) — 연차 처리 이력과 같은 근거·같은 조합
+@Table(name = "welfare_action_history", indexes = {
+        @Index(name = "idx_welfare_history_created", columnList = "created_at"),
+        @Index(name = "idx_welfare_history_actor_created", columnList = "actor_id, created_at"),
+        @Index(name = "idx_welfare_history_user_created", columnList = "user_id, created_at")
+})
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

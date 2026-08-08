@@ -35,6 +35,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 
@@ -56,6 +57,9 @@ public class LeaveService {
 
     // 연차 날짜 기준일은 한국 시간 고정 (서버 TZ 무관, DB도 Asia/Seoul) — AuthService와 동일 정책
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
+    /** 팀 현황 조회 기간 상한 — 페이징이 없는 목록이라 기간이 곧 건수 상한이다 (리뷰 S-4) */
+    private static final long MAX_QUERY_RANGE_DAYS = 366;
 
     // 중복 검사 대상 — 잔여를 점유 중인(선차감·승인·소급취소대기) 상태
     private static final List<RequestStatus> ACTIVE_STATUSES =
@@ -165,13 +169,17 @@ public class LeaveService {
     @Transactional(readOnly = true)
     public List<LeaveCalendarResponse> getTeam(Long viewerId, LocalDate from, LocalDate to) {
         User viewer = findUserOrThrow(viewerId);
+        YearMonth thisMonth = YearMonth.now(KST);
+        LocalDate start = (from != null) ? from : thisMonth.atDay(1);
+        LocalDate end = (to != null) ? to : thisMonth.atEndOfMonth();
+        // 입력 검증이 부서 배정 여부보다 먼저다 — 뒤에 두면 부서 미배정 사원에게만 잘못된 기간이
+        // 조용히 통과한다(빈 목록으로 빠져나감). 같은 요청이 사람에 따라 다르게 판정되면 안 된다
+        validateRange(start, end);
+
         Department department = viewer.getDepartment();
         if (department == null) {
             return List.of(); // 부서 미배정 — 조회 대상 없음
         }
-        YearMonth thisMonth = YearMonth.now(KST);
-        LocalDate start = (from != null) ? from : thisMonth.atDay(1);
-        LocalDate end = (to != null) ? to : thisMonth.atEndOfMonth();
         List<LeaveRequest> leaves = leaveRequestRepository.findByDepartmentInDateRange(
                 department.getId(), TEAM_STATUSES, start, end);
         return leaves.stream()
@@ -316,6 +324,19 @@ public class LeaveService {
     // ---------------------------------------------------------------------
     // 내부 헬퍼
     // ---------------------------------------------------------------------
+
+    /**
+     * 조회 기간 검증 — 팀 현황은 페이징 없이 {@code List}를 통째로 돌려주므로 기간이 곧 상한이다 (리뷰 S-4).
+     *
+     * <p>{@code from/to}에 제한이 없으면 {@code from=1900-01-01}으로 그 부서의 전체 이력을 한 번에
+     * 끌어올 수 있다. 페이징을 붙이는 것이 정석이지만 화면이 기간 단위 캘린더라 그 형태가 맞지 않아,
+     * 기간 자체에 상한을 둔다. 1년이면 실제 사용(월·분기 조회)을 넘어선다.
+     */
+    private void validateRange(LocalDate start, LocalDate end) {
+        if (start.isAfter(end) || ChronoUnit.DAYS.between(start, end) > MAX_QUERY_RANGE_DAYS) {
+            throw new BusinessException(ErrorCode.DATE_RANGE_TOO_WIDE);
+        }
+    }
 
     /** 취소 계열 조건부 전이 — rowcount 0이면 이미 처리됨 */
     private void claimCancelTransition(Long leaveId, RequestStatus expected, RequestStatus next, String reason) {

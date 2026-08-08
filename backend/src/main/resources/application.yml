@@ -17,6 +17,15 @@ spring:
       hibernate:
         format_sql: true
 
+  # 페이징 상한 (리뷰 S-4) — 기본 상한이 2000이라 size=2000 요청이 그대로 통과했다.
+  # 이건 최후 방어선(초과분을 100으로 깎는다)이고, 1차 방어는 PageSizeLimitInterceptor가
+  # 400으로 거부하는 것이다 — 조용히 깎으면 클라이언트가 왜 100건만 오는지 알 수 없다.
+  data:
+    web:
+      pageable:
+        default-page-size: 20
+        max-page-size: 100
+
   security:
     oauth2:
       client:

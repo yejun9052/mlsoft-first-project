@@ -97,6 +97,9 @@ CREATE TABLE `leave_action_history` (
   KEY `FKepla6r67avn0fthfxru6v3tf6` (`actor_id`),
   KEY `FKut1n87icr6yhvofk9hgx5shl` (`leave_requests_id`),
   KEY `FKoq63m0l95fc0cg5x6ww0c9onu` (`user_id`),
+  KEY `idx_leave_history_created` (`created_at`),
+  KEY `idx_leave_history_actor_created` (`actor_id`,`created_at`),
+  KEY `idx_leave_history_user_created` (`user_id`,`created_at`),
   CONSTRAINT `FKepla6r67avn0fthfxru6v3tf6` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKoq63m0l95fc0cg5x6ww0c9onu` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKut1n87icr6yhvofk9hgx5shl` FOREIGN KEY (`leave_requests_id`) REFERENCES `leave_requests` (`id`)
@@ -108,6 +111,7 @@ CREATE TABLE `leave_dates` (
   `leave_requests_id` bigint NOT NULL,
   `day` date NOT NULL,
   UNIQUE KEY `uk_leave_dates_request_day` (`leave_requests_id`,`day`),
+  KEY `idx_leave_dates_day` (`day`),
   CONSTRAINT `FKsdttlsgxpce8dgyp7tam6tsk5` FOREIGN KEY (`leave_requests_id`) REFERENCES `leave_requests` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -151,6 +155,9 @@ CREATE TABLE `leave_requests` (
   KEY `FKforbkctpu3sp6ani01ellbgol` (`primary_approver_id`),
   KEY `FKkjmv5wjgbkwcnvxqkicku6vgw` (`sub_approver_id`),
   KEY `FKh6s8bo5d59oy52b6nxfguf4yx` (`user_id`),
+  KEY `idx_leave_requests_user_status` (`user_id`,`status`),
+  KEY `idx_leave_requests_primary_status` (`primary_approver_id`,`status`),
+  KEY `idx_leave_requests_sub_status` (`sub_approver_id`,`status`),
   CONSTRAINT `FKforbkctpu3sp6ani01ellbgol` FOREIGN KEY (`primary_approver_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKh6s8bo5d59oy52b6nxfguf4yx` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKkjmv5wjgbkwcnvxqkicku6vgw` FOREIGN KEY (`sub_approver_id`) REFERENCES `users` (`id`)
@@ -171,6 +178,7 @@ CREATE TABLE `leave_reset_history` (
   `user_id` bigint NOT NULL,
   PRIMARY KEY (`id`),
   KEY `FK5xtwcopwf0vymrxo9u9pc5ip3` (`user_id`),
+  KEY `idx_leave_reset_history_reset_date` (`reset_date`),
   CONSTRAINT `FK5xtwcopwf0vymrxo9u9pc5ip3` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -180,6 +188,7 @@ CREATE TABLE `schedule_dates` (
   `schedule_entry_id` bigint NOT NULL,
   `day` date NOT NULL,
   UNIQUE KEY `uk_schedule_dates_entry_day` (`schedule_entry_id`,`day`),
+  KEY `idx_schedule_dates_day` (`day`),
   CONSTRAINT `FKthbmls6l4bp0muhl5ct74vtos` FOREIGN KEY (`schedule_entry_id`) REFERENCES `schedule_entries` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -240,6 +249,9 @@ CREATE TABLE `welfare_action_history` (
   KEY `FKoqrrjuo9vaff18it95bknw1kx` (`actor_id`),
   KEY `FK9n165y2oyujt1hmh0iwx4gx5o` (`user_id`),
   KEY `FKlrrdr1u1amvnsgpumyljjxg7p` (`welfare_request_id`),
+  KEY `idx_welfare_history_created` (`created_at`),
+  KEY `idx_welfare_history_actor_created` (`actor_id`,`created_at`),
+  KEY `idx_welfare_history_user_created` (`user_id`,`created_at`),
   CONSTRAINT `FK9n165y2oyujt1hmh0iwx4gx5o` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKlrrdr1u1amvnsgpumyljjxg7p` FOREIGN KEY (`welfare_request_id`) REFERENCES `welfare_requests` (`id`),
   CONSTRAINT `FKoqrrjuo9vaff18it95bknw1kx` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`)

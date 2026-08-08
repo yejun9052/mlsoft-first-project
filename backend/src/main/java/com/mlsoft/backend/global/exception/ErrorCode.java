@@ -16,6 +16,8 @@ public enum ErrorCode {
     ALREADY_PROCESSED(400, "이미 처리된 신청입니다."),
     ALREADY_ONBOARDED(400, "이미 온보딩이 완료된 계정입니다."),
     ONBOARDING_NOT_PENDING(400, "승인 대기 중인 온보딩이 아닙니다."),
+    PAGE_SIZE_EXCEEDED(400, "한 번에 조회할 수 있는 건수를 초과했습니다."),
+    DATE_RANGE_TOO_WIDE(400, "조회 기간이 너무 깁니다."),
     INVALID_INPUT_VALUE(400, "입력값이 올바르지 않습니다."),
     INVALID_APPROVER(400, "승인자로 지정할 수 없는 사용자입니다."),
     WEEKEND_NOT_ALLOWED(400, "주말은 연차로 신청할 수 없습니다."),

@@ -22,11 +22,17 @@ import java.io.IOException;
 public class WebConfig implements WebMvcConfigurer {
 
     private final OnboardingCheckInterceptor onboardingCheckInterceptor;
+    private final PageSizeLimitInterceptor pageSizeLimitInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 페이지 크기 검사를 먼저 — 거절할 요청 때문에 DB(유저 상태 조회)를 볼 이유가 없다 (리뷰 S-4)
+        registry.addInterceptor(pageSizeLimitInterceptor)
+                .addPathPatterns("/api/**")
+                .order(0);
         registry.addInterceptor(onboardingCheckInterceptor)
-                .addPathPatterns("/api/**");
+                .addPathPatterns("/api/**")
+                .order(1);
     }
 
     /**

@@ -15,6 +15,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderBy;
@@ -40,7 +41,13 @@ import java.util.List;
  *   (UPDATE ... WHERE status='PENDING')으로 동시 처리를 차단해야 한다 (검증 R-5, 리포트 체크리스트 2)
  */
 @Entity
-@Table(name = "leave_requests")
+// 조회 인덱스 (리뷰 D-1) — 목록 3종이 전부 "누구의 + 어떤 상태" 조합이다.
+// FK 자동 생성 인덱스는 컬럼 하나뿐이라 상태까지 걸러 주지 못한다.
+@Table(name = "leave_requests", indexes = {
+        @Index(name = "idx_leave_requests_user_status", columnList = "user_id, status"),
+        @Index(name = "idx_leave_requests_primary_status", columnList = "primary_approver_id, status"),
+        @Index(name = "idx_leave_requests_sub_status", columnList = "sub_approver_id, status")
+})
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -102,7 +109,10 @@ public class LeaveRequest extends BaseTimeEntity {
             name = "leave_dates",
             joinColumns = @JoinColumn(name = "leave_requests_id"),
             uniqueConstraints = @UniqueConstraint(name = "uk_leave_dates_request_day",
-                    columnNames = {"leave_requests_id", "day"}))
+                    columnNames = {"leave_requests_id", "day"}),
+            // 캘린더 범위 조회와 리셋의 이월분 집계가 day로 스캔한다 (리뷰 D-1).
+            // 위 UNIQUE는 (신청, 날짜) 순서라 day 단독 범위 검색에 쓸 수 없다 — 중복이 아니다.
+            indexes = @Index(name = "idx_leave_dates_day", columnList = "day"))
     @OrderBy // 기본(값) 오름차순 — 시작일·종료일 판정이 순서에 의존하므로 명시 (검증 B5)
     @Column(name = "day", nullable = false)
     @Builder.Default
