@@ -232,7 +232,7 @@ public class LeaveService {
 
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
         if (!approved) {
-            fresh.getUser().restoreLeave(fresh.getDays());
+            restoreCurrentYearPortion(fresh);
         }
         saveHistory(fresh, findUserOrThrow(actorId),
                 approved ? RequestAction.APPROVED : RequestAction.REJECTED, request.comment());
@@ -305,7 +305,7 @@ public class LeaveService {
 
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
         if (approved) {
-            fresh.getUser().restoreLeave(fresh.getDays());
+            restoreCurrentYearPortion(fresh);
         }
         saveHistory(fresh, findUserOrThrow(actorId),
                 approved ? RequestAction.CANCEL_APPROVED : RequestAction.CANCEL_REJECTED, request.comment());
@@ -327,8 +327,23 @@ public class LeaveService {
     /** 조건부 전이 후 재조회해 선차감 복구 + 이력 기록 (즉시 취소 경로) */
     private void restoreAndRecord(Long leaveId, RequestAction action, String reason) {
         LeaveRequest fresh = findLeaveOrThrow(leaveId);
-        fresh.getUser().restoreLeave(fresh.getDays());
+        restoreCurrentYearPortion(fresh);
         saveHistory(fresh, fresh.getUser(), action, reason);
+    }
+
+    /**
+     * 선차감 복구 — <b>현재 기산연도에 남아 있는 몫만</b> 되돌린다 (리뷰 I-10).
+     *
+     * <p>기산일 리셋이 {@code use_days}를 "기산일 이후 날짜"로만 다시 채우므로(docs/09 §5),
+     * 기산일을 걸친 신청을 전체 복구하면 이전 연도 몫이 되살아나 연차가 공짜로 생긴다 —
+     * {@code 2/28~3/2} 신청이 3/1 리셋 뒤 취소되면 {@code use_days}가 −1이 됐다.
+     *
+     * <p>반려·즉시 취소·소급취소 승인 <b>세 경로가 이 하나를 쓴다.</b> 경로마다 따로 계산하면
+     * 어느 하나가 갈라진다 — 같은 종류의 산재가 리뷰 I-1의 원인이었다.
+     */
+    private void restoreCurrentYearPortion(LeaveRequest leave) {
+        User owner = leave.getUser();
+        owner.restoreLeave(leave.daysOnOrAfter(owner.getLastResetDate()));
     }
 
     /**

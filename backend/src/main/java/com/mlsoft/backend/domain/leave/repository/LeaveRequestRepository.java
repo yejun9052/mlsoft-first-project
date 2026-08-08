@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.leave.repository;
 
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
+import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -102,6 +103,37 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                       @Param("expected") RequestStatus expected,
                                       @Param("next") RequestStatus next,
                                       @Param("reason") String reason);
+
+    /**
+     * 기산일 이후 날짜를 종류별로 센다 — 미래 승인분 재차감의 원자료 (docs/09 §5).
+     * 단가를 곱하는 것은 {@link #sumPreDeductedDaysOnOrAfter}가 한다.
+     */
+    @Query("select lr.leaveType, count(d) from LeaveRequest lr join lr.dates d "
+            + "where lr.user = :user and lr.status in :statuses and d >= :from "
+            + "group by lr.leaveType")
+    List<Object[]> countDatesOnOrAfterByType(@Param("user") User user,
+                                             @Param("from") LocalDate from,
+                                             @Param("statuses") Collection<RequestStatus> statuses);
+
+    /**
+     * 기산일 이후 선차감 유지분 합계 — 리셋의 {@code carriedUse} (docs/09 §5).
+     *
+     * <p><b>신청 단위가 아니라 날짜 단위</b>로 센다. 신청 단위로 하면 {@code 2/28~3/2}처럼 기산일을
+     * 걸친 건에서 이전 연도에 이미 쓴 2/28까지 새 연도에 다시 차감돼 사원이 손해를 본다.
+     *
+     * <p>단가를 JPQL의 CASE로 쓰지 않고 자바에서 곱하는 이유는 {@link LeaveType}이 단가의 단일
+     * 출처이기 때문이다 — 쿼리 문자열에 0.5를 적으면 종류가 늘 때 여기가 조용히 틀린다.
+     *
+     * @param statuses 선차감이 <b>유지되고 있는</b> 상태만 (APPROVED·PENDING·CANCEL_PENDING).
+     *                 CANCELLED·REJECTED는 이미 복구됐으므로 넣으면 이중 계상이 된다
+     */
+    default BigDecimal sumPreDeductedDaysOnOrAfter(User user, LocalDate from,
+                                                   Collection<RequestStatus> statuses) {
+        return countDatesOnOrAfterByType(user, from, statuses).stream()
+                .map(row -> ((LeaveType) row[0]).getDaysPerDate()
+                        .multiply(BigDecimal.valueOf((Long) row[1])))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
     /** 이 사람이 primary 승인자인 대기 건 — 퇴직 이관 대상 조회 (PENDING·CANCEL_PENDING, docs/01 2-9) */
     List<LeaveRequest> findByPrimaryApproverAndStatusIn(User primaryApprover, Collection<RequestStatus> statuses);

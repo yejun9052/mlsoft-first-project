@@ -96,6 +96,24 @@ public class User extends BaseTimeEntity {
     /** 마지막 기산일 — 스케줄러는 last_reset_date + 1년 <= 오늘 조건으로 검색 (검증 Y-1) */
     private LocalDate lastResetDate;
 
+    /**
+     * 1년 미만 월차 누적 적립 횟수 (docs/09 §3, 갭분석 B-1).
+     *
+     * <p>docs/09 §3은 {@code last_monthly_grant_date}(날짜)를 두고 거기서 횟수를 역산할 생각이었으나,
+     * <b>말일 클램프 때문에 역산이 성립하지 않는다</b> — {@code 1/31.plusMonths(1)}은 2/28인데
+     * {@code MONTHS.between(1/31, 2/28)}은 0이라 적립하고도 0회로 읽힌다. 그래서 횟수를 직접 센다.
+     *
+     * <p>다음 적립일은 {@code hire_date + (횟수+1)개월}로 계산한다 — 직전 지급일에서 한 달씩
+     * 더해 나가면 클램프가 누적돼 지급일이 앞당겨진다(1/31 → 2/28 → 3/28 → 4/28…).
+     * {@code base_days} 역산을 쓰지 않는 이유는 docs/09 §3(관리자 직접 설정으로 오염) 그대로다.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private int monthlyGrantedCount = 0;
+
+    /** 마지막 생일 반차 지급 연도 — 같은 해 중복 지급 차단 (docs/09 §3). null이면 미지급 */
+    private Integer lastBirthdayGrantYear;
+
     /** true: 재직 / false: 퇴직 */
     @Column(nullable = false)
     private boolean isActive;
@@ -286,12 +304,7 @@ public class User extends BaseTimeEntity {
      */
     public void resetAnnualLeave(BigDecimal newBaseDays, BigDecimal carriedUse,
                                  BigDecimal carriedBonus, LocalDate resetDate) {
-        BigDecimal bonus = bonusDays != null ? bonusDays : BigDecimal.ZERO;
-        // 이월되는 날짜는 새 연도에서 다시 차감되므로, 이전 연도 채무 계산에서는 빼야 한다 (I-11)
-        BigDecimal oldYearUse = this.useDays.subtract(carriedUse);
-        BigDecimal oldYearDebt = oldYearUse.subtract(this.baseDays).subtract(bonus).max(BigDecimal.ZERO);
-
-        this.baseDays = newBaseDays.subtract(oldYearDebt);
+        this.baseDays = newBaseDays.subtract(carryOverDebt(carriedUse));
         this.useDays = carriedUse;
         this.bonusDays = carriedBonus;
         this.lastResetDate = resetDate;
@@ -299,10 +312,48 @@ public class User extends BaseTimeEntity {
         syncAdvanceDays();
     }
 
-    /** 1년 미만 신입 월차 적립 — 매월 1일씩, 최대 11일 (갭분석 B-1). 상한 검증은 서비스에서. */
+    /**
+     * 이전 연도에 귀속되는 채무 — 리셋이 새 연차에서 깎는 양이자 감사 이력의 {@code advance_settled}다 (I-11).
+     *
+     * <pre>oldYearDebt = max(0, (use − carriedUse) − base − bonus)</pre>
+     *
+     * <p><b>리셋 직전 상태에서만 의미가 있다.</b> {@link #resetAnnualLeave}와
+     * {@code LeaveResetHistory.create}가 <b>같은 식을 두 번 쓰지 않도록</b> 여기로 모았다 —
+     * 이력이 자기 식을 따로 갖고 있었던 것이 실제 결함이었다(이력은 {@code advance_days}를 직접 빼서,
+     * {@code carriedUse > 0}이면 기록과 실제 전이가 갈렸다).
+     *
+     * @param carriedUse 새 연도로 이월되는 선차감분 — 새 연도에서 다시 차감되므로 이전 연도 채무에서 뺀다
+     */
+    public BigDecimal carryOverDebt(BigDecimal carriedUse) {
+        BigDecimal bonus = bonusDays != null ? bonusDays : BigDecimal.ZERO;
+        return this.useDays.subtract(carriedUse).subtract(this.baseDays).subtract(bonus).max(BigDecimal.ZERO);
+    }
+
+    /**
+     * 1년 미만 신입 월차 적립 — 매월 1일씩 (갭분석 B-1). 상한 판정은 서비스 책임.
+     * 적립 횟수를 함께 올린다 — {@link #monthlyGrantedCount} 주석 참고.
+     */
     public void addMonthlyLeave() {
         this.baseDays = this.baseDays.add(BigDecimal.ONE);
+        this.monthlyGrantedCount += 1;
         syncAdvanceDays();
+    }
+
+    /**
+     * 온보딩 소급 월차의 적립 횟수 기록 — {@code base_days}는 {@link #resetAnnualLeave}가 이미 세팅했으므로
+     * 횟수만 맞춘다. 이걸 빼면 스케줄러가 소급분을 <b>한 번 더</b> 적립한다.
+     */
+    public void markMonthlyGranted(int count) {
+        this.monthlyGrantedCount = count;
+    }
+
+    /**
+     * 생일 반차 지급 (요구사항 11) — 보너스 가산 + 지급 연도 기록.
+     * 연도를 남기는 것이 멱등성의 근거다. 하루에 두 번 실행돼도 두 번 지급되지 않는다.
+     */
+    public void grantBirthdayLeave(BigDecimal days, int year) {
+        this.lastBirthdayGrantYear = year;
+        addBonusDays(days); // syncAdvanceDays 포함
     }
 
     /** 퇴직 처리 (SYSTEM_ADMIN 전용) — 소프트 삭제, 데이터 3년 보존 */

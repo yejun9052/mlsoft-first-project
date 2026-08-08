@@ -139,6 +139,30 @@ public class LeaveRequest extends BaseTimeEntity {
     }
 
     /**
+     * 기준일 이후 날짜의 일수 — <b>지금 {@code use_days}에 남아 있는 몫</b>이다 (리뷰 I-10).
+     *
+     * <p>반려·취소 복구는 신청 전체가 아니라 이 값을 되돌려야 한다. 기산일 리셋은
+     * {@code use_days}를 "기산일 이후 날짜"로만 다시 채우기 때문에(docs/09 §5 날짜 단위 재차감),
+     * 기산일을 걸친 신청을 전체 복구하면 이전 연도 몫까지 되살아난다.
+     *
+     * <pre>
+     * 2/28·3/1·3/2 신청(3일), 기산일 3/1
+     *   리셋 후 use_days = 2.0  (3/1·3/2만)
+     *   전체 복구 → 2.0 − 3.0 = −1.0   ← 연차 1일이 공짜로 생긴다
+     *   이 메서드 → 2.0 − 2.0 = 0      ← 정확
+     * </pre>
+     *
+     * @param boundary 최근 기산일. null(온보딩 미완료 등 기산일이 없는 예외 상태)이면 전체를 돌려준다
+     */
+    public BigDecimal daysOnOrAfter(LocalDate boundary) {
+        if (boundary == null) {
+            return days;
+        }
+        long count = dates.stream().filter(date -> !date.isBefore(boundary)).count();
+        return leaveType.getDaysPerDate().multiply(BigDecimal.valueOf(count));
+    }
+
+    /**
      * 승인 — PENDING에서만 가능 (선착순 이중 처리 방지).
      */
     public void approve() {

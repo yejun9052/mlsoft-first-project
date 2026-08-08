@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -45,6 +46,37 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** 내 부서 팀원 목록 — 재직 중만, 이름순 (GET /api/users/team-members) */
     List<User> findByDepartmentAndIsActiveTrueOrderByNameAsc(Department department);
+
+    // ── 스케줄러 대상 조회 (docs/09 §2) ─────────────────────────────────────
+    // 공통 가드 2개가 모든 잡에 들어간다 — 퇴직자 제외(is_active), 온보딩 미완료 제외(hire_date not null, 검증 Y-2).
+    // 대상만 id로 좁혀 받고 실제 처리는 유저 1명당 1트랜잭션으로 끊는다 (docs/09 §7).
+
+    /**
+     * 기산일이 지난 사원 id — {@code last_reset_date + 1년 <= 오늘} (검증 Y-1).
+     * <p>"오늘이 입사일"인 사원이 걸리지 않도록 <b>같거나 이전</b>으로 비교한다.
+     * 며칠 밀린 경우도 여기 걸리고, 몇 년치 소급은 서비스의 catch-up 루프가 처리한다 (docs/09 §6).
+     */
+    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+            + "and u.lastResetDate is not null and u.lastResetDate <= :resetDueOnOrBefore")
+    List<Long> findIdsDueForAnnualReset(@Param("resetDueOnOrBefore") LocalDate resetDueOnOrBefore);
+
+    /**
+     * 월차 적립 대상 사원 id — 입사 1년 미만({@code hire_date > 오늘 − 1년}).
+     * <p>적립 시점이 실제로 도래했는지(횟수·상한)는 날짜 계산이 필요해 서비스에서 판정한다.
+     */
+    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+            + "and u.hireDate > :hiredAfter")
+    List<Long> findIdsUnderOneYear(@Param("hiredAfter") LocalDate hiredAfter);
+
+    /**
+     * 생일 반차 미지급자 id — 올해 아직 못 받은 사람만.
+     * <p>생일이 지났는지·입사 전 생일인지는 월/일 비교라 서비스에서 판정한다(연도별 2/29 보정 포함).
+     * 여기서 연도로 먼저 걸러 두면 매일 전 사원을 훑지 않는다.
+     */
+    @Query("select u.id from User u where u.isActive = true and u.hireDate is not null "
+            + "and u.birthDay is not null "
+            + "and (u.lastBirthdayGrantYear is null or u.lastBirthdayGrantYear < :year)")
+    List<Long> findIdsWithoutBirthdayLeave(@Param("year") int year);
 
     /** 전체 목록 검색 — keyword(이름·이메일)·role 필터, 퇴직자 제외 (GET /api/users, SA) */
     @Query("select u from User u where u.isActive = true "

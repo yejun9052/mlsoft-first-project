@@ -492,6 +492,86 @@ class LeaveServiceTest {
         assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
     }
 
+    // ============ 기산일 경계 복구 (리뷰 I-10) ============
+    // 2/28·3/1·3/2 3일 신청이 3/1 리셋을 넘긴 상황. 리셋은 use_days를 "기산일 이후 날짜"로만
+    // 다시 채우므로(docs/09 §5) 그 시점 use_days는 3.0이 아니라 2.0이다.
+    // 전체(3.0)를 복구하면 use_days가 −1.0이 되어 연차 1일이 공짜로 생긴다.
+    // 반려·즉시취소·소급취소승인 세 경로가 모두 같은 계산을 쓰는지 각각 고정한다.
+
+    @Test
+    @DisplayName("I-10 반려 — 기산일 경계 신청은 현재 연도 몫 2일만 복구한다")
+    void processApproval_기산일경계_현재연도몫만복구() {
+        LocalDate resetDate = LocalDate.of(2026, 3, 1);
+        User applicant = userWithResetBalance(1L, "15.0", "2.0", resetDate);
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = pendingLeave(applicant, approver, boundaryDates(resetDate));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(approver));
+        given(leaveRequestRepository.updateStatusIfCurrent(
+                100L, RequestStatus.PENDING, RequestStatus.REJECTED)).willReturn(1);
+
+        leaveService.processApproval(100L, 9L, new ApprovalRequest(false, "반려"));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("I-10 즉시 취소 — 기산일 경계 신청은 현재 연도 몫 2일만 복구한다")
+    void cancel_기산일경계_현재연도몫만복구() {
+        // APPROVED 즉시 취소 경로를 타려면 날짜가 전부 미래여야 하므로 오늘 기준으로 잡는다
+        LocalDate resetDate = LocalDate.now(KST).plusDays(2);
+        User applicant = userWithResetBalance(1L, "15.0", "2.0", resetDate);
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = approvedLeave(applicant, approver, boundaryDates(resetDate));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                100L, RequestStatus.APPROVED, RequestStatus.CANCELLED, "취소")).willReturn(1);
+
+        leaveService.cancel(100L, 1L, new CancelRequest("취소"));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("I-10 소급취소 승인 — 기산일 경계 신청은 현재 연도 몫 2일만 복구한다")
+    void processCancelApproval_기산일경계_현재연도몫만복구() {
+        LocalDate resetDate = LocalDate.of(2026, 3, 1);
+        User applicant = userWithResetBalance(1L, "15.0", "2.0", resetDate);
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = approvedLeave(applicant, approver, boundaryDates(resetDate));
+        leave.requestCancel("소급 취소");
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(approver));
+        given(leaveRequestRepository.updateStatusIfCurrent(
+                100L, RequestStatus.CANCEL_PENDING, RequestStatus.CANCELLED)).willReturn(1);
+
+        leaveService.processCancelApproval(100L, 9L, new ApprovalRequest(true, "승인"));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
+    }
+
+    @Test
+    @DisplayName("I-10 — 신청 전체가 기산일 이전이면 복구량이 0이다")
+    void processApproval_전체가기산일이전_복구없음() {
+        // 그 몫은 이전 연도에서 이미 정리됐다. 되돌리면 없던 연차가 생긴다
+        LocalDate resetDate = LocalDate.of(2026, 3, 1);
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", resetDate);
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = pendingLeave(applicant, approver,
+                List.of(LocalDate.of(2026, 2, 25), LocalDate.of(2026, 2, 26)));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(approver));
+        given(leaveRequestRepository.updateStatusIfCurrent(
+                100L, RequestStatus.PENDING, RequestStatus.REJECTED)).willReturn(1);
+
+        leaveService.processApproval(100L, 9L, new ApprovalRequest(false, "반려"));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+    }
+
     // ==================== 소급취소 승인/반려 ====================
 
     @Test
@@ -578,6 +658,29 @@ class LeaveServiceTest {
                 .advanceDays(new BigDecimal(advanceDays))
                 .isActive(true)
                 .build();
+    }
+
+    /** 기산일 리셋을 한 번 겪은 사원 — use_days는 이미 "기산일 이후 날짜"만 담고 있다 (리뷰 I-10) */
+    private User userWithResetBalance(Long id, String baseDays, String useDays, LocalDate lastResetDate) {
+        BigDecimal base = new BigDecimal(baseDays);
+        BigDecimal use = new BigDecimal(useDays);
+        return User.builder()
+                .id(id)
+                .name("user" + id)
+                .email("user" + id + "@mlsoft.com")
+                .role(Role.EMPLOYEE)
+                .baseDays(base)
+                .useDays(use)
+                .bonusDays(BigDecimal.ZERO)
+                .advanceDays(use.subtract(base).max(BigDecimal.ZERO))
+                .lastResetDate(lastResetDate)
+                .isActive(true)
+                .build();
+    }
+
+    /** 기산일을 걸친 3일 — 하루 전·기산일 당일·하루 뒤 (기산일 이후는 2일) */
+    private List<LocalDate> boundaryDates(LocalDate resetDate) {
+        return List.of(resetDate.minusDays(1), resetDate, resetDate.plusDays(1));
     }
 
     private LeaveRequest pendingLeave(User applicant, User approver, List<LocalDate> dates) {

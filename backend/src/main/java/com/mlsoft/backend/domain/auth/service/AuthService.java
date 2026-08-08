@@ -2,7 +2,9 @@ package com.mlsoft.backend.domain.auth.service;
 
 import com.mlsoft.backend.domain.auth.dto.OnboardingRequest;
 import com.mlsoft.backend.domain.auth.dto.UserMeResponse;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
+import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -30,6 +32,8 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final LeavePolicyService leavePolicyService;
+    /** 월차 상한 — 온보딩 소급분과 스케줄러가 같은 값을 봐야 한다 */
+    private final PolicyConfigReader policyConfigReader;
 
     /**
      * 내 정보 조회 (GET /api/auth/me).
@@ -61,8 +65,15 @@ public class AuthService {
         long elapsedYears = ChronoUnit.YEARS.between(hireDate, today);
         if (elapsedYears < 1) {
             // 1년 미만 신입 — 월차 소급 적립, 이후 매월 적립·1주년 전환은 스케줄러 담당
-            BigDecimal monthlyDays = leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, today);
+            // 상한은 스케줄러와 같은 설정을 본다. 여기만 법정 11일로 고정돼 있으면 관리자가 상한을 5로 낮춰도
+            // 온보딩이 8일을 주고, 스케줄러는 이미 상한 이상이라 되돌리지 않는다
+            BigDecimal maxMonthlyDays = BigDecimal.valueOf(
+                    policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).setScale(1);
+            BigDecimal monthlyDays = leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, today)
+                    .min(maxMonthlyDays);
             user.resetAnnualLeave(monthlyDays, hireDate);
+            // 소급으로 몇 회분을 이미 줬는지 기록한다 — 빼면 스케줄러가 같은 개월분을 한 번 더 적립한다 (docs/09 §2)
+            user.markMonthlyGranted(monthlyDays.intValue());
             log.info("[온보딩] 신입 월차 소급: userId={}, hireDate={}, days={}", userId, hireDate, monthlyDays);
         } else {
             // 1년 이상 — 년차(= 만 근속년수) 정책 연차 부여, 기산일은 최근 기념일로 설정해

@@ -49,7 +49,8 @@ class LeaveResetHistoryServiceTest {
                 .advanceDays(BigDecimal.ZERO)
                 .isActive(true)
                 .build();
-        LeaveResetHistory history = LeaveResetHistory.create(user, LocalDate.of(2026, 4, 10), new BigDecimal("16.0"));
+        LeaveResetHistory history = LeaveResetHistory.create(user, LocalDate.of(2026, 4, 10),
+                new BigDecimal("16.0"), BigDecimal.ZERO, BigDecimal.ZERO);
         Pageable pageable = PageRequest.of(0, 10);
         given(leaveResetHistoryRepository.findAll(pageable))
                 .willReturn(new PageImpl<>(List.of(history), pageable, 1));

@@ -52,20 +52,22 @@ public enum PolicyConfigKey {
             "연차 신청 한 건에 담을 수 있는 날짜 개수. 실수·악의로 대량 신청이 접수되는 것을 막는다.",
             PolicyConfigStatus.ACTIVE),
 
-    // ── 기산일 리셋 (docs/09 — 스케줄러 구현 시 ACTIVE로 전환) ────────────────
+    // ── 기산일 리셋·월차 (docs/09 스케줄러) ──────────────────────────────────
 
     BONUS_CARRY_OVER_ENABLED(
             "bonus_carry_over_enabled", "false",
             "보너스 연차 이월",
             "기산일 리셋 때 남은 복리후생 가산분을 다음 연도로 이월한다. (docs/02 메모 10)",
-            PolicyConfigStatus.PENDING_FEATURE),
+            PolicyConfigStatus.ACTIVE),
 
+    // 상한을 12가 아니라 11로 둔다 — 12회차 지급일은 정확히 1주년인데 그날은 기산일 리셋이 정책 연차로
+    // 갈아 끼우므로 영원히 지급되지 않는다. 설정에 남겨 두면 "12로 올렸는데 아무 일도 안 일어나는" 값이 된다
     MONTHLY_LEAVE_MAX_DAYS(
             "monthly_leave_max_days", ConfigValueType.INTEGER, "11",
-            BigDecimal.ZERO, new BigDecimal("12"), "일",
+            BigDecimal.ZERO, new BigDecimal("11"), "일",
             "1년 미만 월차 적립 상한",
             "입사 1년이 안 된 사원에게 매월 1일씩 적립할 최대 일수. 근로기준법 기준은 11일이다. (갭분석 B-1)",
-            PolicyConfigStatus.PENDING_FEATURE),
+            PolicyConfigStatus.ACTIVE),
 
     // ── 소진 안내 메일 (docs/01 2-8 — 이메일 발송 구현 시 ACTIVE로 전환) ──────
 

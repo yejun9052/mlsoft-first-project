@@ -1,7 +1,9 @@
 package com.mlsoft.backend.domain.auth.service;
 
 import com.mlsoft.backend.domain.auth.dto.OnboardingRequest;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
+import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -37,6 +39,9 @@ class AuthServiceTest {
     @Mock
     private LeavePolicyService leavePolicyService;
 
+    @Mock
+    private PolicyConfigReader policyConfigReader;
+
     @InjectMocks
     private AuthService authService;
 
@@ -48,6 +53,7 @@ class AuthServiceTest {
         LocalDate hireDate = LocalDate.now().minusMonths(5);
         given(leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, LocalDate.now()))
                 .willReturn(new BigDecimal("5.0"));
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).willReturn(11);
 
         // when
         authService.completeOnboarding(1L, new OnboardingRequest(BIRTH_DAY, hireDate));
@@ -56,6 +62,25 @@ class AuthServiceTest {
         assertEquals(0, new BigDecimal("5.0").compareTo(user.getBaseDays()));
         assertEquals(hireDate, user.getLastResetDate());
         assertTrue(user.isOnboardingCompleted());
+        // 소급으로 5회분을 줬다는 기록 — 이게 없으면 스케줄러가 같은 5개월분을 한 번 더 적립한다 (docs/09 §2)
+        assertEquals(5, user.getMonthlyGrantedCount());
+    }
+
+    @Test
+    @DisplayName("온보딩 소급분도 월차 상한 설정을 따른다 — 상한 5면 8개월차도 5일만 받는다")
+    void completeOnboarding_소급분도상한적용() {
+        // 여기만 법정 11일로 고정돼 있으면 관리자가 상한을 낮춰도 온보딩이 초과 지급하고,
+        // 스케줄러는 이미 상한 이상이라 되돌리지 않는다
+        User user = givenUser(7L);
+        LocalDate hireDate = LocalDate.now().minusMonths(8);
+        given(leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, LocalDate.now()))
+                .willReturn(new BigDecimal("8.0"));
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).willReturn(5);
+
+        authService.completeOnboarding(7L, new OnboardingRequest(BIRTH_DAY, hireDate));
+
+        assertEquals(0, new BigDecimal("5.0").compareTo(user.getBaseDays()));
+        assertEquals(5, user.getMonthlyGrantedCount());
     }
 
     @Test

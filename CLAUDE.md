@@ -58,6 +58,18 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 `RequestStatus`(PENDING/APPROVED/REJECTED/CANCELLED/CANCEL_PENDING)는 연차·복리후생이 공유하며, 취소 승인/거부의 세부 결과는 status가 아니라 `action_history`의 `RequestAction`으로 기록한다.
 
+### 스케줄러 (`domain/leave/scheduler`, `domain/leave/service/*GrantService`·`*ResetService`)
+
+`LeaveScheduler`가 매일 00:10 KST에 **① 기산일 리셋 → ② 월차 적립 → ③ 생일 반차** 순으로 돈다. 설계·검산은 docs/09.
+
+- **순서를 바꾸지 말 것** — 취향이 아니라 데이터 의존성이다. 리셋이 `bonus_days`를 갈아 끼우므로 생일 반차가 먼저면 그날 증발하고(생일==기산일인 사원), 월차가 먼저면 1주년에 하루짜리 유령 적립이 남는다
+- **사원 1명 = 1트랜잭션**(`REQUIRES_NEW`). `User`에 낙관적 락이 있어 전체를 한 트랜잭션으로 묶으면 1명의 충돌로 전원이 롤백된다. **그래서 사원별 루프가 진입점에 있다** — 서비스가 자기 메서드를 루프로 부르면 Spring 프록시를 안 타 이 경계가 생기지 않는다
+- **리셋의 `carriedUse`는 회차마다 그 회차 기산일로 다시 집계**한다. 최종 기산일 기준으로 한 번에 계산하면 1차 연도 귀속분이 한 회차 일찍 빠져 그 해 이력이 틀린다
+- **채무 계산은 `User.carryOverDebt` 하나뿐이다** — `resetAnnualLeave`와 `LeaveResetHistory.create`가 공유한다. 이력이 자기 식(`advance_days` 직접 차감)을 갖고 있던 것이 실제 결함이었다(기록이 5일 어긋남)
+- 월차 지급일은 **`hire_date + N개월`**로 계산하고 횟수는 `monthly_granted_count`가 센다. 직전 지급일에서 한 달씩 더하면 말일 클램프가 누적돼 지급일이 앞당겨지고(1/31→2/28→3/28), 날짜에서 횟수를 역산하면 `MONTHS.between(1/31, 2/28)=0`이라 매달 재지급된다
+- 잡 서비스는 `Clock`이 아니라 계산된 `today`를 인자로 받는다. `Clock` 빈은 진입점에만 주입한다
+- **테스트에서 크론이 돌면 안 된다** — 가드는 `LeaveScheduler`의 `@Profile("!test")`다. `SchedulingConfig`를 막으면 `Clock` 빈이 사라져 테스트 컨텍스트가 깨진다
+
 ### 개인 일정 (`domain/schedule`)
 
 외근·출장·재택근무·교육을 캘린더에 기록한다. **연차 잔액을 차감하지 않고, 결재를 거치지 않고, 상태 전이가 없다** — 그래서 `LeaveRequest`가 아니라 별도 엔티티(`ScheduleEntry`)다. 같은 엔티티에 얹으면 신청·결재·취소 흐름마다 "차감 안 하면 건너뛰기" 분기가 생기는데, 그 조건 분기 산재가 리뷰 I-1·I-5의 원인이었다. **연차 로직을 `ScheduleService`에 복사해 오지 말 것** (그걸 막는 테스트가 있다).
@@ -125,7 +137,11 @@ Tailwind v4 CSS-first 설정. **`tailwind.config.js`는 없고** 디자인 토�
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
-**운영 프로필은 `ddl-auto: validate`다** (`application-prod.yml`). Hibernate가 테이블을 만들지 않으므로 최초 스키마는 `db/schema.sql`이 만든다 — compose가 mysql 컨테이너의 `/docker-entrypoint-initdb.d/`에 마운트하고, MySQL은 데이터 볼륨이 비어 있을 때만 실행한다. **엔티티를 바꾸면 `db/schema.sql`도 함께 갱신할 것** — 안 하면 배포가 기동 단계에서 멈춘다(의도된 동작). 기존 DB 보정은 `db/backfill-*.sql`.
+**운영 프로필은 `ddl-auto: validate`다** (`application-prod.yml`). Hibernate가 테이블을 만들지 않으므로 최초 스키마는 `db/schema.sql`이 만든다 — compose가 mysql 컨테이너의 `/docker-entrypoint-initdb.d/`에 마운트하고, MySQL은 데이터 볼륨이 비어 있을 때만 실행한다.
+
+**엔티티를 바꾸면 두 가지를 함께 해야 한다** (하나만 하면 배포가 기동 단계에서 멈춘다 — 의도된 동작이다):
+1. `db/schema.sql` 갱신 — **빈 DB를 처음 만들 때만** 쓰인다
+2. `db/backfill-<날짜>-<주제>.sql`에 `ALTER TABLE` 추가 — **이미 데이터가 있는 DB는 이쪽으로만 컬럼을 받는다.** MySQL 8에는 `ADD COLUMN IF NOT EXISTS`가 없으므로 `information_schema`로 존재 여부를 보고 건너뛰게 쓴다(예: `db/backfill-2026-08-08-scheduler.sql`). 값 보정 UPDATE도 같은 파일에 이어 붙이고 전체를 멱등하게 유지한다
 
 기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
