@@ -67,6 +67,12 @@ public class AuthService {
 
         LocalDate hireDate = request.hireDate();
         LocalDate today = LocalDate.now(KST);
+        // 미래 입사일 차단 (리뷰 I-7) — DTO 애노테이션이 아니라 여기서 KST로 판정한다.
+        // 통과시키면 last_reset_date가 미래가 되어 그 사원이 기산일 스케줄러 대상에서
+        // 그만큼 제외되고(조건이 last_reset_date + 1년 <= 오늘), 월차 소급도 음수 개월로 계산된다.
+        if (hireDate.isAfter(today)) {
+            throw new BusinessException(ErrorCode.FUTURE_HIRE_DATE);
+        }
         int autoApproveDays = policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
 
         if (hireDate.isBefore(today.minusDays(autoApproveDays))) {

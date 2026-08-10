@@ -46,6 +46,11 @@ services:
       DB_URL: jdbc:mysql://mysql:3306/mlsoft_leave?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
       DB_USERNAME: root
       SPRING_PROFILES_ACTIVE: prod
+      # mysql 서비스에만 있고 앱에는 빠져 있었다 (리뷰 I-7).
+      # 도메인 로직은 LocalDate.now(KST)로 시간대를 고정하므로 이것 없이도 연차 계산은 맞지만,
+      # 로그 타임스탬프와 Bean Validation의 날짜 애노테이션은 JVM 기본값(UTC)을 따라
+      # KST 00~09시 사이에 하루 어긋난 채로 찍히고 판정됐다.
+      TZ: Asia/Seoul
     ports:
       - '8080:8080'
 

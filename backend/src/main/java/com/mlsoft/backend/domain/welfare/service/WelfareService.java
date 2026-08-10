@@ -60,7 +60,7 @@ public class WelfareService {
         WelfarePolicy policy = findActivePolicyOrThrow(request.policyId());
 
         User primaryApprover = approverResolver.resolvePrimary(applicant);
-        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant);
+        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant, primaryApprover);
 
         WelfareRequest welfare = WelfareRequest.create(
                 policy, applicant, request.reason(),

@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +34,9 @@ import static org.mockito.BDDMockito.given;
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
+    /** 서비스와 같은 기준 시간대 — 날짜 경계 테스트가 서버 TZ에 흔들리지 않게 고정한다 (리뷰 I-7) */
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private static final LocalDate BIRTH_DAY = LocalDate.of(1995, 4, 1);
 
@@ -150,6 +154,37 @@ class AuthServiceTest {
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> authService.completeOnboarding(5L, new OnboardingRequest(BIRTH_DAY, LocalDate.now())));
         assertEquals(ErrorCode.ALREADY_ONBOARDED, exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("미래 입사일은 FUTURE_HIRE_DATE — 기산일이 미래가 되면 스케줄러 대상에서 빠진다 (리뷰 I-7)")
+    void completeOnboarding_미래입사일_거부() {
+        // DTO의 @PastOrPresent에 맡기면 JVM 기본 시간대로 판정된다 — 운영 컨테이너가 UTC면
+        // KST 00~09시 사이에 "오늘 입사"가 미래로 오판돼 정상 신입이 400을 받았다.
+        // 그래서 경계 판정을 서비스로 옮겼고, 여기서는 KST 기준이다.
+        User user = givenUser(13L);
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> authService
+                .completeOnboarding(13L, new OnboardingRequest(BIRTH_DAY, LocalDate.now(KST).plusDays(1))));
+
+        assertEquals(ErrorCode.FUTURE_HIRE_DATE, exception.getErrorCode());
+        assertEquals(OnboardingStatus.NOT_STARTED, user.getOnboardingStatus());
+        assertNull(user.getLastResetDate());
+    }
+
+    @Test
+    @DisplayName("오늘 입사는 통과한다 — 미래 차단의 경계")
+    void completeOnboarding_오늘입사_통과() {
+        User user = givenUser(14L);
+        LocalDate today = LocalDate.now(KST);
+        given(policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS)).willReturn(90);
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).willReturn(11);
+        given(leavePolicyService.calculateRetroactiveMonthlyDays(today, today)).willReturn(BigDecimal.ZERO);
+
+        authService.completeOnboarding(14L, new OnboardingRequest(BIRTH_DAY, today));
+
+        assertEquals(OnboardingStatus.COMPLETED, user.getOnboardingStatus());
+        assertEquals(today, user.getLastResetDate());
     }
 
     // ============ 입사일 자가 신고 차단 (리뷰 S-1) ============

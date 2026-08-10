@@ -66,10 +66,18 @@ public class ApproverResolver {
     /**
      * 서브 승인자 검증 — 선택 사항이라 {@code null}이면 그대로 {@code null}.
      * 지정했다면 기본 승인자와 같은 조건을 만족해야 한다 (docs/01 2-3).
+     *
+     * <p><b>기본 승인자와 같은 사람은 거부한다</b> (리뷰 I-7). 서브 승인자의 목적은
+     * 두 사람 중 먼저 처리한 쪽이 결재를 확정하는 <b>병렬 선착순</b>인데, 같은 사람이
+     * 양쪽에 들어가면 그 구조가 1인 결재로 축퇴한다 — 화면에는 승인자가 둘로 보이는데
+     * 실제로는 한 명이 막고 있는 상태가 되고, 그 사람이 부재하면 대안이 없다.
      */
-    public User resolveSub(Long subApproverId, User applicant) {
+    public User resolveSub(Long subApproverId, User applicant, User primaryApprover) {
         if (subApproverId == null) {
             return null;
+        }
+        if (primaryApprover != null && subApproverId.equals(primaryApprover.getId())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_APPROVER);
         }
         User sub = userRepository.findById(subApproverId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));

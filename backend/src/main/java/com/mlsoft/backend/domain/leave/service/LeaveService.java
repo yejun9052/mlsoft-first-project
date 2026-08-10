@@ -12,6 +12,7 @@ import com.mlsoft.backend.domain.leave.dto.LeaveResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
 import com.mlsoft.backend.domain.leave.entity.LeaveActionHistory;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
+import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
@@ -36,7 +37,10 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -60,6 +64,9 @@ public class LeaveService {
 
     /** 팀 현황 조회 기간 상한 — 페이징이 없는 목록이라 기간이 곧 건수 상한이다 (리뷰 S-4) */
     private static final long MAX_QUERY_RANGE_DAYS = 366;
+
+    /** 하루에 쓸 수 있는 연차 정원 — 반차 둘이 합쳐 하루가 된다 (리뷰 I-7) */
+    private static final BigDecimal FULL_DAY = new BigDecimal("1.0");
 
     // 중복 검사 대상 — 잔여를 점유 중인(선차감·승인·소급취소대기) 상태
     private static final List<RequestStatus> ACTIVE_STATUSES =
@@ -98,11 +105,9 @@ public class LeaveService {
         validateDates(request.dates());
 
         User primaryApprover = approverResolver.resolvePrimary(applicant);
-        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant);
+        User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant, primaryApprover);
 
-        if (!leaveRequestRepository.findOverlapping(applicant, request.dates(), ACTIVE_STATUSES).isEmpty()) {
-            throw new BusinessException(ErrorCode.OVERLAPPING_LEAVE_REQUEST);
-        }
+        validateNoDateConflict(applicant, request.leaveType(), request.dates());
 
         LeaveRequest leave = LeaveRequest.create(
                 applicant, request.leaveType(), request.dates(), request.reason(), primaryApprover, subApprover);
@@ -377,6 +382,55 @@ public class LeaveService {
      * <b>검증이 느슨해질 뿐 신청이 막히지는 않는다</b> — 외부 API 장애가 연차 신청을
      * 중단시키면 안 되기 때문이다 (HolidayService 참고).
      */
+    /**
+     * 날짜 충돌 검사 — <b>하루 정원 1.0일</b> 기준 (리뷰 I-7).
+     *
+     * <p>예전에는 날짜 교집합만 보고 거부했다. 그래서 <b>같은 날 오전 반차 + 오후 반차</b>가
+     * 409로 막혔다 — 합계 1.0일로 정상적인 사용 패턴인데도 오전 반차를 낸 뒤에는
+     * 오후 반차를 낼 방법이 없었다.
+     *
+     * <p>규칙 두 개로 바꿨다:
+     * <ol>
+     *   <li><b>같은 종류 중복 금지</b> — 오전 반차를 두 번 쓸 수는 없다. 합계 규칙만 두면
+     *       {@code HALF_AM + HALF_AM = 1.0}이 통과한다</li>
+     *   <li><b>날짜별 합계 1.0일 초과 금지</b> — 연차(1.0)는 어떤 것과도 겹칠 수 없고
+     *       반차(0.5) 둘은 종류가 다르면 겹칠 수 있다</li>
+     * </ol>
+     *
+     * <p>집계를 SQL이 아니라 자바에서 하는 이유: 종류별 단가가 {@code LeaveType}의 도메인 값이라
+     * JPQL에 단가를 다시 적으면 두 곳이 갈라진다 (같은 종류의 산재가 리뷰 I-1의 원인이었다).
+     * 겹치는 신청만 좁혀 온 뒤 계산하므로 대상 건수도 작다.
+     */
+    private void validateNoDateConflict(User applicant, LeaveType requestedType, List<LocalDate> dates) {
+        List<LeaveRequest> overlapping =
+                leaveRequestRepository.findOverlapping(applicant, dates, ACTIVE_STATUSES);
+        if (overlapping.isEmpty()) {
+            return;
+        }
+        Set<LocalDate> requested = new HashSet<>(dates);
+        Map<LocalDate, BigDecimal> occupiedDays = new HashMap<>();
+        Map<LocalDate, Set<LeaveType>> occupiedTypes = new HashMap<>();
+        for (LeaveRequest existing : overlapping) {
+            for (LocalDate date : existing.getDates()) {
+                if (!requested.contains(date)) {
+                    continue; // 겹치지 않는 날짜는 이 신청의 정원과 무관하다
+                }
+                occupiedDays.merge(date, existing.getLeaveType().getDaysPerDate(), BigDecimal::add);
+                occupiedTypes.computeIfAbsent(date, key -> new HashSet<>()).add(existing.getLeaveType());
+            }
+        }
+        BigDecimal requestedPerDate = requestedType.getDaysPerDate();
+        for (LocalDate date : requested) {
+            if (occupiedTypes.getOrDefault(date, Set.of()).contains(requestedType)) {
+                throw new BusinessException(ErrorCode.OVERLAPPING_LEAVE_REQUEST);
+            }
+            BigDecimal total = occupiedDays.getOrDefault(date, BigDecimal.ZERO).add(requestedPerDate);
+            if (total.compareTo(FULL_DAY) > 0) {
+                throw new BusinessException(ErrorCode.OVERLAPPING_LEAVE_REQUEST);
+            }
+        }
+    }
+
     private void validateDates(List<LocalDate> dates) {
         if (dates.size() > policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)) {
             throw new BusinessException(ErrorCode.TOO_MANY_LEAVE_DATES);

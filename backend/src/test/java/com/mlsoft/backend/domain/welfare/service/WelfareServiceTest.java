@@ -32,6 +32,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -105,7 +106,7 @@ class WelfareServiceTest {
         WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         given(welfarePolicyRepository.findByIdAndActiveTrue(100L)).willReturn(Optional.of(policy));
-        given(approverResolver.resolveSub(5L, applicant))
+        given(approverResolver.resolveSub(eq(5L), eq(applicant), any()))
                 .willThrow(new BusinessException(ErrorCode.INVALID_APPROVER));
 
         BusinessException ex = assertThrows(BusinessException.class,

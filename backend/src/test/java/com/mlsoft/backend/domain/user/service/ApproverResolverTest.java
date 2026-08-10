@@ -26,6 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * 승인자 결정 규칙 단위 테스트 (리뷰 I-5).
@@ -35,6 +37,9 @@ import static org.mockito.BDDMockito.given;
  */
 @ExtendWith(MockitoExtension.class)
 class ApproverResolverTest {
+
+    /** 기본 승인자 — 중복 검사와 무관한 테스트에서 서브와 다른 사람임을 명시한다 (리뷰 I-7) */
+    private static final User OTHER_PRIMARY = user(9L, Role.TEAM_LEADER, true, true);
 
     @Mock
     private UserRepository userRepository;
@@ -124,7 +129,7 @@ class ApproverResolverTest {
     @Test
     @DisplayName("서브 승인자 — 미지정이면 null (선택 항목)")
     void resolveSub_null_returnsNull() {
-        assertNull(approverResolver.resolveSub(null, user(1L, Role.EMPLOYEE, true, true)));
+        assertNull(approverResolver.resolveSub(null, user(1L, Role.EMPLOYEE, true, true), OTHER_PRIMARY));
     }
 
     @Test
@@ -134,7 +139,7 @@ class ApproverResolverTest {
         given(userRepository.findById(5L)).willReturn(Optional.of(user(5L, Role.EMPLOYEE, true, true)));
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> approverResolver.resolveSub(5L, applicant));
+                () -> approverResolver.resolveSub(5L, applicant, OTHER_PRIMARY));
         assertEquals(ErrorCode.INVALID_APPROVER, e.getErrorCode());
     }
 
@@ -144,7 +149,7 @@ class ApproverResolverTest {
         User applicant = user(1L, Role.EMPLOYEE, true, true);
         given(userRepository.findById(5L)).willReturn(Optional.of(user(5L, Role.TEAM_LEADER, true, false)));
 
-        assertThrows(BusinessException.class, () -> approverResolver.resolveSub(5L, applicant));
+        assertThrows(BusinessException.class, () -> approverResolver.resolveSub(5L, applicant, OTHER_PRIMARY));
     }
 
     @Test
@@ -153,7 +158,33 @@ class ApproverResolverTest {
         User applicant = user(1L, Role.TEAM_LEADER, true, true);
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
 
-        assertThrows(BusinessException.class, () -> approverResolver.resolveSub(1L, applicant));
+        assertThrows(BusinessException.class, () -> approverResolver.resolveSub(1L, applicant, OTHER_PRIMARY));
+    }
+
+    @Test
+    @DisplayName("서브 승인자 — 기본 승인자와 같은 사람이면 DUPLICATE_APPROVER (리뷰 I-7)")
+    void resolveSub_sameAsPrimary_throws() {
+        // 서브 승인자의 목적은 병렬 선착순이다. 같은 사람이 양쪽에 들어가면 1인 결재로 축퇴하는데,
+        // 화면에는 승인자가 둘로 보여 그 사람이 부재할 때 대안이 없다는 것을 알 수 없다.
+        User applicant = user(1L, Role.EMPLOYEE, true, true);
+        User primary = user(5L, Role.TEAM_LEADER, true, true);
+
+        BusinessException e = assertThrows(BusinessException.class,
+                () -> approverResolver.resolveSub(5L, applicant, primary));
+
+        assertEquals(ErrorCode.DUPLICATE_APPROVER, e.getErrorCode());
+        // 중복은 DB를 보기 전에 걸러진다 — 어차피 거부될 요청으로 조회를 태우지 않는다
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("서브 승인자 — 기본 승인자가 아직 없으면(null) 중복 검사를 건너뛴다")
+    void resolveSub_nullPrimary_skipsDuplicateCheck() {
+        User applicant = user(1L, Role.EMPLOYEE, true, true);
+        User sub = user(5L, Role.TEAM_LEADER, true, true);
+        given(userRepository.findById(5L)).willReturn(Optional.of(sub));
+
+        assertEquals(sub, approverResolver.resolveSub(5L, applicant, null));
     }
 
     @Test
@@ -163,7 +194,7 @@ class ApproverResolverTest {
         User sub = user(5L, Role.TEAM_LEADER, true, true);
         given(userRepository.findById(5L)).willReturn(Optional.of(sub));
 
-        assertEquals(sub, approverResolver.resolveSub(5L, applicant));
+        assertEquals(sub, approverResolver.resolveSub(5L, applicant, OTHER_PRIMARY));
     }
 
     // ==== canApprove (팀장 지정 검증에서 쓴다) ====

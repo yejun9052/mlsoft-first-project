@@ -272,6 +272,89 @@ class LeaveServiceTest {
         verify(leaveRequestRepository, never()).save(any());
     }
 
+    // ---- 하루 정원 1.0일 규칙 (리뷰 I-7) ----
+
+    @Test
+    @DisplayName("신청 — 같은 날 오전 반차 뒤 오후 반차: 합계 1.0일이라 통과한다")
+    void apply_halfAmThenHalfPm_allowed() {
+        // 예전에는 날짜 교집합만 보고 409로 막았다. 정상적인 사용 패턴인데 낼 방법이 없었다.
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LocalDate day = futureWeekdays(1).get(0);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenAdvanceEnabled(false);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
+                .willReturn(List.of(halfLeave(applicant, admin, LeaveType.HALF_AM, day)));
+
+        LeaveResponse response =
+                leaveService.apply(1L, halfRequest(LeaveType.HALF_PM, List.of(day)));
+
+        assertEquals(0, new BigDecimal("0.5").compareTo(response.days()));
+        assertEquals(0, new BigDecimal("0.5").compareTo(applicant.getUseDays()));
+        verify(leaveRequestRepository).save(any(LeaveRequest.class));
+    }
+
+    @Test
+    @DisplayName("신청 — 같은 날 같은 반차 종류 두 번: OVERLAPPING_LEAVE_REQUEST")
+    void apply_sameHalfTypeTwice_throws() {
+        // 합계 규칙만 두면 0.5 + 0.5 = 1.0이 통과한다. 오전 반차를 두 번 쓸 수는 없다.
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LocalDate day = futureWeekdays(1).get(0);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenMaxDatesPerRequest(366);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
+                .willReturn(List.of(halfLeave(applicant, admin, LeaveType.HALF_AM, day)));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, halfRequest(LeaveType.HALF_AM, List.of(day))));
+
+        assertEquals(ErrorCode.OVERLAPPING_LEAVE_REQUEST, ex.getErrorCode());
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        verify(leaveRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신청 — 반차가 있는 날에 종일 연차: 합계 1.5일이라 거부")
+    void apply_halfPlusAnnual_throws() {
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LocalDate day = futureWeekdays(1).get(0);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenMaxDatesPerRequest(366);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
+                .willReturn(List.of(halfLeave(applicant, admin, LeaveType.HALF_PM, day)));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(List.of(day), null)));
+
+        assertEquals(ErrorCode.OVERLAPPING_LEAVE_REQUEST, ex.getErrorCode());
+        verify(leaveRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신청 — 조회된 신청의 날짜가 실제로는 겹치지 않으면 통과한다")
+    void apply_overlapQueryHitButNoSharedDate_allowed() {
+        // findOverlapping은 distinct 신청 단위로 돌아오므로, 어떤 날짜가 겹쳤는지는 자바에서 다시 봐야 한다.
+        // 여기서 날짜를 안 맞춰 보면 관계없는 날짜의 잔여 점유가 이 신청의 정원에 더해진다.
+        User applicant = user(1L, Role.EMPLOYEE, "15.0");
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        List<LocalDate> days = futureWeekdays(2);
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenAdvanceEnabled(false);
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any()))
+                .willReturn(List.of(halfLeave(applicant, admin, LeaveType.HALF_AM, days.get(1))));
+
+        // 신청은 days[0] 하루만 — 조회 결과의 days[1]과는 겹치지 않는다
+        leaveService.apply(1L, request(List.of(days.get(0)), null));
+
+        verify(leaveRequestRepository).save(any(LeaveRequest.class));
+    }
+
     @Test
     @DisplayName("신청 — 서브 승인자가 EMPLOYEE: INVALID_APPROVER")
     void apply_subApproverNotEligible_throws() {
@@ -280,7 +363,7 @@ class LeaveServiceTest {
         User applicant = user(1L, Role.EMPLOYEE, "15.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
         givenMaxDatesPerRequest(366); // 날짜 검증은 승인자 결정보다 먼저 돈다
-        given(approverResolver.resolveSub(5L, applicant))
+        given(approverResolver.resolveSub(eq(5L), eq(applicant), any()))
                 .willThrow(new BusinessException(ErrorCode.INVALID_APPROVER));
 
         BusinessException ex = assertThrows(BusinessException.class,
@@ -398,6 +481,41 @@ class LeaveServiceTest {
 
         assertEquals(RequestStatus.CANCELLED, result);
         assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+    }
+
+    @Test
+    @DisplayName("취소 — APPROVED + 오늘 날짜: 즉시 취소다 (I-7 정책 확정 2026-08-10)")
+    void cancel_approvedToday_immediate() {
+        // 경계가 미결이던 항목이다. 오늘 연차를 쓰려다 출근한 경우가 실제로 흔하고,
+        // 소급으로 돌리면 결재를 기다리는 사이 그날이 지나 버려 어차피 소급 경로가 된다.
+        // 판정은 date.isBefore(today) — 오늘은 "지난 날짜"가 아니다.
+        User applicant = userWithBalance(1L, "15.0", "1.0", "0.0");
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = approvedLeave(applicant, approver, List.of(LocalDate.now(KST)));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                100L, RequestStatus.APPROVED, RequestStatus.CANCELLED, "출근함")).willReturn(1);
+
+        RequestStatus result = leaveService.cancel(100L, 1L, new CancelRequest("출근함"));
+
+        assertEquals(RequestStatus.CANCELLED, result);
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays())); // 즉시 복구
+    }
+
+    @Test
+    @DisplayName("취소 — APPROVED + 어제 날짜: 여기서부터 소급이다 (오늘과의 경계)")
+    void cancel_approvedYesterday_becomesCancelPending() {
+        User applicant = userWithBalance(1L, "15.0", "1.0", "0.0");
+        User approver = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = approvedLeave(applicant, approver, List.of(LocalDate.now(KST).minusDays(1)));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                100L, RequestStatus.APPROVED, RequestStatus.CANCEL_PENDING, "소급")).willReturn(1);
+
+        RequestStatus result = leaveService.cancel(100L, 1L, new CancelRequest("소급"));
+
+        assertEquals(RequestStatus.CANCEL_PENDING, result);
+        assertEquals(0, new BigDecimal("1.0").compareTo(applicant.getUseDays())); // 복구 보류
     }
 
     @Test
@@ -630,6 +748,16 @@ class LeaveServiceTest {
 
     private LeaveCreateRequest request(List<LocalDate> dates, Long subApproverId) {
         return new LeaveCreateRequest(LeaveType.ANNUAL, dates, "휴식", subApproverId);
+    }
+
+    /** 반차 신청 — 하루 정원 규칙 검증용 (리뷰 I-7) */
+    private LeaveCreateRequest halfRequest(LeaveType type, List<LocalDate> dates) {
+        return new LeaveCreateRequest(type, dates, "반차", null);
+    }
+
+    /** 이미 하루를 일부 점유하고 있는 기존 반차 신청 */
+    private LeaveRequest halfLeave(User applicant, User approver, LeaveType type, LocalDate date) {
+        return LeaveRequest.create(applicant, type, List.of(date), "기존 반차", approver, null);
     }
 
     private User user(Long id, Role role, String baseDays) {

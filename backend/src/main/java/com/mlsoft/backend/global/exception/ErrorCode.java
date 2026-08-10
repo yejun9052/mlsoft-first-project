@@ -20,6 +20,8 @@ public enum ErrorCode {
     DATE_RANGE_TOO_WIDE(400, "조회 기간이 너무 깁니다."),
     INVALID_INPUT_VALUE(400, "입력값이 올바르지 않습니다."),
     INVALID_APPROVER(400, "승인자로 지정할 수 없는 사용자입니다."),
+    DUPLICATE_APPROVER(400, "기본 승인자와 다른 사람을 서브 승인자로 지정해주세요."),
+    FUTURE_HIRE_DATE(400, "입사일은 미래 날짜일 수 없습니다."),
     WEEKEND_NOT_ALLOWED(400, "주말은 연차로 신청할 수 없습니다."),
     HOLIDAY_NOT_ALLOWED(400, "공휴일은 연차로 신청할 수 없습니다."),
     SELF_PARENT_DEPARTMENT(400, "부서를 자기 자신의 상위 부서로 지정할 수 없습니다."),

@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.leave.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * 연차 취소 요청 (POST /api/leaves/{id}/cancel — docs/03).
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
  */
 public record CancelRequest(
         @NotBlank(message = "취소 사유를 입력해주세요.")
+        @Size(max = 255, message = "취소 사유는 255자 이내로 입력해주세요.")
         String reason
 ) {
 }
