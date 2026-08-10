@@ -223,7 +223,7 @@ export default function ApprovalsPage() {
   const [comment, setComment] = useState('');
 
   // 처리 완료(승인/반려) 탭 — 내가 처리한 결재 이력 (GET /api/leave-histories/my-actions).
-  // actor가 본인인 이력만 오므로 "내가 처리한 것"과 정확히 일치한다. 팀 로그(my-team)는 신청자 부서
+  // actor가 본인인 이력만 오므로 "내가 처리한 것"과 정확히 일치한다. 결재자 로그(my-approvals)는 승인자 지정
   // 기준이라 남이 처리한 건도 섞이므로 이 화면에는 맞지 않는다.
   const isProcessedTab = activeTab !== 'PENDING';
   const processedLeaveQuery = useLeaveHistories({

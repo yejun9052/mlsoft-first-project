@@ -89,28 +89,25 @@ class WelfareHistoryServiceTest {
     }
 
     @Test
-    @DisplayName("팀 로그 — 요청자의 소속 부서로 스코프한다")
-    void getMyTeamHistories_scopesToRequesterDepartment() {
-        Department department = department(10L, "개발팀");
-        User leader = user(2L, "김팀장", department);
-        given(userRepository.findById(2L)).willReturn(Optional.of(leader));
-        given(welfareActionHistoryRepository.findByUserDepartmentId(10L, PAGEABLE))
+    @DisplayName("결재자 로그 — 요청자 id를 승인자 조건으로 넘긴다 (연차와 같은 기준, 리뷰 S-6)")
+    void getMyApprovalHistories_scopesToApproverId() {
+        given(welfareActionHistoryRepository.findByApprover(2L, null, PAGEABLE))
                 .willReturn(new PageImpl<>(List.of(), PAGEABLE, 0));
 
-        welfareHistoryService.getMyTeamHistories(2L, null, PAGEABLE);
+        welfareHistoryService.getMyApprovalHistories(2L, null, PAGEABLE);
 
-        verify(welfareActionHistoryRepository).findByUserDepartmentId(10L, PAGEABLE);
+        verify(welfareActionHistoryRepository).findByApprover(2L, null, PAGEABLE);
     }
 
     @Test
-    @DisplayName("팀 로그 — 부서 미배정 요청자는 조회 없이 빈 페이지를 받는다")
-    void getMyTeamHistories_withoutDepartment_returnsEmptyPage() {
-        given(userRepository.findById(2L)).willReturn(Optional.of(user(2L, "김팀장", null)));
+    @DisplayName("결재자 로그 — action 필터는 저장소로 그대로 넘어간다 (서비스 분기 없음)")
+    void getMyApprovalHistories_passesActionThrough() {
+        given(welfareActionHistoryRepository.findByApprover(2L, RequestAction.APPROVED, PAGEABLE))
+                .willReturn(new PageImpl<>(List.of(), PAGEABLE, 0));
 
-        Page<WelfareHistoryLogResponse> responses = welfareHistoryService.getMyTeamHistories(2L, null, PAGEABLE);
+        welfareHistoryService.getMyApprovalHistories(2L, RequestAction.APPROVED, PAGEABLE);
 
-        assertTrue(responses.isEmpty());
-        verify(welfareActionHistoryRepository, never()).findByUserDepartmentId(anyLong(), any());
+        verify(welfareActionHistoryRepository).findByApprover(2L, RequestAction.APPROVED, PAGEABLE);
     }
 
     // ---------------------------------------------------------------------

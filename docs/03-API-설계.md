@@ -166,9 +166,26 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
 | GET | `/api/leave-histories` | 연차 처리 로그 (페이징, action 필터) | SA |
-| GET | `/api/leave-histories/my-team` | 팀 처리 로그 | TL |
+| GET | `/api/leave-histories/my-approvals` | 내가 결재자인 건의 로그 | TL |
+| GET | `/api/leave-histories/my-actions` | 내가 처리한 로그 | 전체 |
 | GET | `/api/welfare-histories` | 복리후생 처리 로그 | SA |
-| GET | `/api/welfare-histories/my-team` | 팀 처리 로그 | TL |
+| GET | `/api/welfare-histories/my-approvals` | 내가 결재자인 건의 로그 | TL |
+| GET | `/api/welfare-histories/my-actions` | 내가 처리한 로그 | 전체 |
+
+## 관리자 조작 감사 로그 (audit — 리뷰 S-3)
+
+| Method | URL | 설명 | 권한 |
+|---|---|---|---|
+| GET | `/api/admin/audit-logs` | 감사 로그 (페이징 최신순, `action`·`targetUserId` 필터) | SA |
+| GET | `/api/admin/audit-logs/actions` | 필터용 액션 목록 (`{name, label}`) | SA |
+
+> **쓰기 엔드포인트가 없다.** 기록은 조작이 일어나는 서비스 안에서만 만들어지고 수정·삭제 경로가
+> 존재하지 않는다(append-only). 기록 대상은 `AdminAction` enum 7종 —
+> 권한·부서·연차 직접 설정 변경, 퇴직 처리, 온보딩 승인/반려, 시스템 설정 변경.
+>
+> 응답은 `before/after` 문자열 한 쌍을 담는다. 감사의 목적이 대조이므로 타입별 컬럼으로 쪼개지 않는다.
+> `targetUserId`는 시스템 설정 변경처럼 사원이 대상이 아닌 조작에서 `null`이고, `targetLabel`에는
+> **조작 시점의** 대상 표시명(사원명 또는 설정 키)이 들어간다 — 개명 후에도 그때 기록이 유지된다.
 
 ## 이메일 (emails — 관리자)
 
@@ -183,17 +200,24 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
-> **처리 이력 — 스코프 3종 (2026-08-06)**
+> **처리 이력 — 스코프 3종** (2026-08-06 신설 · **2026-08-10 중간 스코프 확정**)
 >
 > | URL | 스코프 | 권한 |
 > |---|---|---|
 > | `GET /api/leave-histories` · `/api/welfare-histories` | 전사 | SA |
-> | `.../my-team` | **신청자 소속 부서** — 남이 처리한 건도 포함 | TL·SA |
+> | `.../my-approvals` | **내가 primary·sub 승인자로 지정된 신청** — 남이 처리한 건도 포함 | TL·SA |
 > | `.../my-actions` | **actor가 본인인 이력만** | 로그인 전체 |
 >
-> `my-actions`는 결재 화면의 "승인·반려 완료" 탭용이다. `my-team`은 부서 기준이라 "내가 처리한 것"과
-> 다르고, 전사는 너무 넓다. actor를 토큰에서 가져오므로 부서 스코프 논쟁(리뷰 S-6)과 무관하고
-> 역할 게이트가 없다 — 본인이 한 일만 보인다.
+> **`my-team` → `my-approvals` 개명 (리뷰 S-6 확정, 2026-08-10).** 예전 `my-team`은 *신청자 소속 부서*
+> 기준이었고 그게 실제 결재 권한과 어긋났다 — 부서를 옮긴 사원의 과거 이력이 새 팀장에게 보이고,
+> 반대로 퇴직 이관으로 결재를 넘겨받은 건은 내 부서가 아니라서 안 보였다. 승인자 지정 기준으로
+> 바꾸면 둘 다 맞는다. 이름도 함께 바꾼 이유는 `my-team`이 더 이상 "내 팀"이 아니기 때문이다.
+>
+> 부서를 보지 않으므로 **부서 미배정 분기가 사라졌다** — 예전에는 부서가 없으면 빈 페이지였다.
+>
+> `my-approvals`와 `my-actions`의 차이: 전자는 내가 승인자인 신청의 **모든** 이력이라 같은 건을
+> 서브 승인자가 처리한 기록도 포함되고, 후자는 **내가 직접 누른 것**만이다. 결재 화면의
+> "승인·반려 완료" 탭이 필요한 것은 후자라 역할 게이트가 없다 — 본인이 한 일만 보인다.
 >
 > 연차 로그 응답에는 `dates`(신청 날짜 목록)가 포함된다 — 결재 화면이 기간을 표시한다.
 

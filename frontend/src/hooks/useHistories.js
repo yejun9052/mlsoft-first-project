@@ -3,8 +3,8 @@ import {
   getLeaveHistories,
   getMyActionLeaveHistories,
   getMyActionWelfareHistories,
-  getMyTeamLeaveHistories,
-  getMyTeamWelfareHistories,
+  getMyApprovalLeaveHistories,
+  getMyApprovalWelfareHistories,
   getWelfareHistories,
 } from '../api/histories.js';
 
@@ -19,24 +19,25 @@ const historyKeys = {
 };
 
 // 스코프별 엔드포인트.
-// all      = 전사 (SA 전용)
-// my-team  = 내 팀 (TL·SA) — 신청자 부서 기준이라 남이 처리한 건도 포함된다
-// my-actions = 내가 처리한 것 (로그인 전체) — actor가 본인인 이력만. 결재 완료 탭이 쓴다
+// all          = 전사 (SA 전용)
+// my-approvals = 내가 결재자로 지정된 신청의 이력 (TL·SA) — 서브 승인자가 처리한 기록도 포함된다.
+//                예전 my-team(신청자 부서 기준)을 대체한다 (리뷰 S-6, 2026-08-10)
+// my-actions   = 내가 직접 처리한 것 (로그인 전체) — actor가 본인인 이력만. 결재 완료 탭이 쓴다
 const LEAVE_FETCHER = {
   all: getLeaveHistories,
-  'my-team': getMyTeamLeaveHistories,
+  'my-approvals': getMyApprovalLeaveHistories,
   'my-actions': getMyActionLeaveHistories,
 };
 const WELFARE_FETCHER = {
   all: getWelfareHistories,
-  'my-team': getMyTeamWelfareHistories,
+  'my-approvals': getMyApprovalWelfareHistories,
   'my-actions': getMyActionWelfareHistories,
 };
 
 // 페이지 전환 시 목록이 빈 화면으로 깜박이지 않게 이전 페이지 데이터를 유지한다(react-query v5).
 const PAGED_OPTIONS = { placeholderData: keepPreviousData };
 
-// 연차 처리 로그 (GET /api/leave-histories[/my-team|/my-actions])
+// 연차 처리 로그 (GET /api/leave-histories[/my-approvals|/my-actions])
 export function useLeaveHistories({ scope = 'all', action, page = 0, size = 20, enabled = true } = {}) {
   return useQuery({
     queryKey: historyKeys.leave(scope, action, page, size),
@@ -46,7 +47,7 @@ export function useLeaveHistories({ scope = 'all', action, page = 0, size = 20, 
   });
 }
 
-// 복리후생 처리 로그 (GET /api/welfare-histories[/my-team|/my-actions])
+// 복리후생 처리 로그 (GET /api/welfare-histories[/my-approvals|/my-actions])
 export function useWelfareHistories({ scope = 'all', action, page = 0, size = 20, enabled = true } = {}) {
   return useQuery({
     queryKey: historyKeys.welfare(scope, action, page, size),

@@ -41,16 +41,19 @@ public class LeaveHistoryController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_HISTORY_FETCHED, response));
     }
 
-    /** 내 팀 연차 처리 로그 (페이징, 최신순 기본 정렬, action 필터) */
-    @GetMapping("/my-team")
+    /**
+     * 내가 결재자인 신청의 이력 (페이징, 최신순 기본 정렬, action 필터 — 리뷰 S-6).
+     * 예전 {@code /my-team}(신청자 소속 부서 기준)을 대체한다 — 부서는 실제 결재 권한과 어긋났다.
+     */
+    @GetMapping("/my-approvals")
     @PreAuthorize("hasAnyRole('TEAM_LEADER','SYSTEM_ADMIN')")
-    public ResponseEntity<CommonResponse<Page<LeaveHistoryLogResponse>>> getMyTeamHistories(
+    public ResponseEntity<CommonResponse<Page<LeaveHistoryLogResponse>>> getMyApprovalHistories(
             @AuthenticationPrincipal AuthUser authUser,
             @RequestParam(required = false) RequestAction action,
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<LeaveHistoryLogResponse> response =
-                leaveHistoryService.getMyTeamHistories(authUser.id(), action, pageable);
+                leaveHistoryService.getMyApprovalHistories(authUser.id(), action, pageable);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_HISTORY_FETCHED, response));
     }
 

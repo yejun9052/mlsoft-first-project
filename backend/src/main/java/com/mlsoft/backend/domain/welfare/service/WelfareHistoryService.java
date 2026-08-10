@@ -1,14 +1,9 @@
 package com.mlsoft.backend.domain.welfare.service;
 
 import com.mlsoft.backend.domain.common.RequestAction;
-import com.mlsoft.backend.domain.department.entity.Department;
-import com.mlsoft.backend.domain.user.entity.User;
-import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.welfare.dto.WelfareHistoryLogResponse;
 import com.mlsoft.backend.domain.welfare.entity.WelfareActionHistory;
 import com.mlsoft.backend.domain.welfare.repository.WelfareActionHistoryRepository;
-import com.mlsoft.backend.global.exception.BusinessException;
-import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class WelfareHistoryService {
 
     private final WelfareActionHistoryRepository welfareActionHistoryRepository;
-    private final UserRepository userRepository;
 
     /** 전체 처리 로그 (GET /api/welfare-histories, SA) — action이 null이면 전체 */
     @Transactional(readOnly = true)
@@ -35,18 +29,15 @@ public class WelfareHistoryService {
         return histories.map(WelfareHistoryLogResponse::of);
     }
 
-    /** 팀 처리 로그 (GET /api/welfare-histories/my-team, TL) — 부서 미배정이면 빈 페이지 */
+    /**
+     * 내가 결재자인 신청의 이력 (GET /api/welfare-histories/my-approvals, TL·SA — 리뷰 S-6).
+     * 연차와 같은 기준으로 확정됐다 (2026-08-10) — 신청자 부서가 아니라 승인자 지정.
+     */
     @Transactional(readOnly = true)
-    public Page<WelfareHistoryLogResponse> getMyTeamHistories(Long requesterId, RequestAction action,
-                                                              Pageable pageable) {
-        Department department = findUserOrThrow(requesterId).getDepartment();
-        if (department == null) {
-            return Page.empty(pageable);
-        }
-        Page<WelfareActionHistory> histories = action == null
-                ? welfareActionHistoryRepository.findByUserDepartmentId(department.getId(), pageable)
-                : welfareActionHistoryRepository.findByUserDepartmentIdAndAction(department.getId(), action, pageable);
-        return histories.map(WelfareHistoryLogResponse::of);
+    public Page<WelfareHistoryLogResponse> getMyApprovalHistories(Long approverId, RequestAction action,
+                                                                  Pageable pageable) {
+        return welfareActionHistoryRepository.findByApprover(approverId, action, pageable)
+                .map(WelfareHistoryLogResponse::of);
     }
 
     /** 내가 처리한 로그 (GET /api/welfare-histories/my-actions) — 결재 화면 "완료" 탭용. LeaveHistoryService와 동일 규칙 */
@@ -57,10 +48,5 @@ public class WelfareHistoryService {
                 ? welfareActionHistoryRepository.findByActorId(actorId, pageable)
                 : welfareActionHistoryRepository.findByActorIdAndAction(actorId, action, pageable);
         return histories.map(WelfareHistoryLogResponse::of);
-    }
-
-    private User findUserOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 }

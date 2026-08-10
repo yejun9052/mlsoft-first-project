@@ -9,8 +9,6 @@ import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
-import com.mlsoft.backend.domain.user.repository.UserRepository;
-import com.mlsoft.backend.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,16 +38,13 @@ import static org.mockito.Mockito.verify;
 /**
  * 연차 처리 로그 서비스 단위 테스트 (GET /api/leave-histories — docs/03 처리 이력).
  * 핵심 관심사는 두 가지 — LAZY 연관(신청자·부서·신청)을 응답 DTO로 정확히 옮기는지,
- * 그리고 팀 스코프를 요청 파라미터가 아니라 요청자의 부서로 결정하는지.
+ * 그리고 스코프를 요청 파라미터가 아니라 <b>토큰의 요청자 id</b>로 결정하는지 (리뷰 S-6).
  */
 @ExtendWith(MockitoExtension.class)
 class LeaveHistoryServiceTest {
 
     @Mock
     private LeaveActionHistoryRepository leaveActionHistoryRepository;
-
-    @Mock
-    private UserRepository userRepository;
 
     @InjectMocks
     private LeaveHistoryService leaveHistoryService;
@@ -92,41 +87,51 @@ class LeaveHistoryServiceTest {
     }
 
     @Test
-    @DisplayName("팀 로그 — 요청자의 소속 부서로 스코프한다")
-    void getMyTeamHistories_scopesToRequesterDepartment() {
+    @DisplayName("결재자 로그 — 요청자 id를 승인자 조건으로 넘긴다 (리뷰 S-6)")
+    void getMyApprovalHistories_scopesToApproverId() {
         Department department = department(10L, "개발팀");
         User leader = user(2L, "김팀장", department);
         User applicant = user(1L, "박민수", department);
-        given(userRepository.findById(2L)).willReturn(Optional.of(leader));
-        given(leaveActionHistoryRepository.findByUserDepartmentId(10L, PAGEABLE))
+        given(leaveActionHistoryRepository.findByApprover(2L, null, PAGEABLE))
                 .willReturn(new PageImpl<>(
                         List.of(history(applicant, leader, RequestAction.PENDING, "신청")), PAGEABLE, 1));
 
-        Page<LeaveHistoryLogResponse> responses = leaveHistoryService.getMyTeamHistories(2L, null, PAGEABLE);
+        Page<LeaveHistoryLogResponse> responses =
+                leaveHistoryService.getMyApprovalHistories(2L, null, PAGEABLE);
 
         assertEquals(1, responses.getTotalElements());
         assertEquals("개발팀", responses.getContent().get(0).departmentName());
-        verify(leaveActionHistoryRepository).findByUserDepartmentId(10L, PAGEABLE);
+        verify(leaveActionHistoryRepository).findByApprover(2L, null, PAGEABLE);
     }
 
     @Test
-    @DisplayName("팀 로그 — 부서 미배정 요청자는 조회 없이 빈 페이지를 받는다")
-    void getMyTeamHistories_withoutDepartment_returnsEmptyPage() {
-        given(userRepository.findById(2L)).willReturn(Optional.of(user(2L, "김팀장", null)));
+    @DisplayName("결재자 로그 — 부서 미배정 팀장도 결재 건이 있으면 보인다 (예전엔 빈 페이지였다)")
+    void getMyApprovalHistories_withoutDepartment_stillReturnsRows() {
+        // 부서 기준일 때는 부서가 없으면 스코프가 성립하지 않아 조회 없이 빠져나갔다.
+        // 승인자 기준에서는 부서와 무관하게 내가 결재자로 지정된 건이 나와야 한다.
+        User approver = user(2L, "김팀장", null);
+        User applicant = user(1L, "박민수", null);
+        given(leaveActionHistoryRepository.findByApprover(2L, null, PAGEABLE))
+                .willReturn(new PageImpl<>(
+                        List.of(history(applicant, approver, RequestAction.APPROVED, "승인")), PAGEABLE, 1));
 
-        Page<LeaveHistoryLogResponse> responses = leaveHistoryService.getMyTeamHistories(2L, null, PAGEABLE);
+        Page<LeaveHistoryLogResponse> responses =
+                leaveHistoryService.getMyApprovalHistories(2L, null, PAGEABLE);
 
-        assertTrue(responses.isEmpty());
-        verify(leaveActionHistoryRepository, never()).findByUserDepartmentId(anyLong(), any());
+        assertEquals(1, responses.getTotalElements());
+        assertNull(responses.getContent().get(0).departmentName());
     }
 
     @Test
-    @DisplayName("팀 로그 — 존재하지 않는 요청자면 USER_NOT_FOUND")
-    void getMyTeamHistories_withUnknownRequester_throws() {
-        given(userRepository.findById(99L)).willReturn(Optional.empty());
+    @DisplayName("결재자 로그 — 사용자 조회를 하지 않는다 (부서를 볼 필요가 없어졌다)")
+    void getMyApprovalHistories_doesNotLookUpUser() {
+        given(leaveActionHistoryRepository.findByApprover(2L, RequestAction.REJECTED, PAGEABLE))
+                .willReturn(new PageImpl<>(List.of(), PAGEABLE, 0));
 
-        assertThrows(BusinessException.class,
-                () -> leaveHistoryService.getMyTeamHistories(99L, null, PAGEABLE));
+        leaveHistoryService.getMyApprovalHistories(2L, RequestAction.REJECTED, PAGEABLE);
+
+        // action 필터도 저장소로 그대로 넘어간다 — 서비스에서 분기하지 않는다
+        verify(leaveActionHistoryRepository).findByApprover(2L, RequestAction.REJECTED, PAGEABLE);
     }
 
     @Test

@@ -7,6 +7,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -31,14 +33,23 @@ public interface LeaveActionHistoryRepository extends JpaRepository<LeaveActionH
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
     Page<LeaveActionHistory> findByAction(RequestAction action, Pageable pageable);
 
-    /** 팀 처리 로그 — 신청자 소속 부서 기준 (GET /api/leave-histories/my-team, TL) */
+    /**
+     * 내가 결재자인 신청의 이력 (GET /api/leave-histories/my-approvals, TL·SA — 리뷰 S-6).
+     *
+     * <p><b>신청자 소속 부서가 아니라 승인자 지정 기준이다.</b> 부서로 묶으면 실제 결재 권한과
+     * 화면이 어긋난다 — 부서를 옮긴 사원의 과거 이력이 새 팀장에게 보이고, 퇴직 이관으로
+     * 결재를 넘겨받은 건은 정작 안 보인다.
+     *
+     * <p>action이 {@code null}이면 조건이 무력화된다 — 필터 조합별 파생 메서드를 늘리지 않는다.
+     */
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
-    Page<LeaveActionHistory> findByUserDepartmentId(Long departmentId, Pageable pageable);
-
-    /** 팀 처리 로그 — action 필터 (GET /api/leave-histories/my-team?action=, TL) */
-    @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})
-    Page<LeaveActionHistory> findByUserDepartmentIdAndAction(Long departmentId, RequestAction action,
-                                                             Pageable pageable);
+    @Query("select h from LeaveActionHistory h "
+            + "where (h.leaveRequest.primaryApprover.id = :approverId "
+            + "or h.leaveRequest.subApprover.id = :approverId) "
+            + "and (:action is null or h.action = :action)")
+    Page<LeaveActionHistory> findByApprover(@Param("approverId") Long approverId,
+                                            @Param("action") RequestAction action,
+                                            Pageable pageable);
 
     /** 내가 처리한 로그 (GET /api/leave-histories/my-actions) — actor 기준이라 부서 스코프와 무관하다 */
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "leaveRequest"})

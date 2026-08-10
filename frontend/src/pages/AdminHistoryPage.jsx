@@ -41,7 +41,8 @@ const PAGE_SIZE = 20;
 export default function AdminHistoryPage() {
   const { data: me } = useCurrentUser();
   const isAdmin = me?.role === ROLE.SYSTEM_ADMIN;
-  const scope = isAdmin ? 'all' : 'my-team';
+  // 팀장은 "내가 결재자인 건" 스코프 — 소속 부서 기준이 아니다 (리뷰 S-6)
+  const scope = isAdmin ? 'all' : 'my-approvals';
 
   const [tab, setTab] = useState(TAB_LEAVE);
   const [action, setAction] = useState('ALL');

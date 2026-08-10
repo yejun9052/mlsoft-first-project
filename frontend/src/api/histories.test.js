@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import api from './index.js';
 import {
   getLeaveHistories,
-  getMyTeamLeaveHistories,
-  getMyTeamWelfareHistories,
+  getMyApprovalLeaveHistories,
+  getMyApprovalWelfareHistories,
   getWelfareHistories,
 } from './histories.js';
 
@@ -31,9 +31,10 @@ describe('api/histories.js', () => {
     });
   });
 
-  it('getMyTeamLeaveHistories calls the /my-team endpoint — 부서를 파라미터로 보내지 않는다', async () => {
-    await getMyTeamLeaveHistories({ page: 1 });
-    expect(api.get).toHaveBeenCalledWith('/leave-histories/my-team', {
+  it('getMyApprovalLeaveHistories calls /my-approvals — 대상을 파라미터로 보내지 않는다', async () => {
+    // 스코프는 서버가 토큰의 요청자 id로 결정한다 (리뷰 S-6)
+    await getMyApprovalLeaveHistories({ page: 1 });
+    expect(api.get).toHaveBeenCalledWith('/leave-histories/my-approvals', {
       params: { action: undefined, page: 1, size: 20 },
     });
   });
@@ -45,9 +46,9 @@ describe('api/histories.js', () => {
     });
   });
 
-  it('getMyTeamWelfareHistories calls the /my-team endpoint', async () => {
-    await getMyTeamWelfareHistories();
-    expect(api.get).toHaveBeenCalledWith('/welfare-histories/my-team', {
+  it('getMyApprovalWelfareHistories calls /my-approvals', async () => {
+    await getMyApprovalWelfareHistories();
+    expect(api.get).toHaveBeenCalledWith('/welfare-histories/my-approvals', {
       params: { action: undefined, page: 0, size: 20 },
     });
   });

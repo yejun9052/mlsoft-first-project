@@ -41,16 +41,16 @@ public class WelfareHistoryController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.WELFARE_HISTORY_FETCHED, response));
     }
 
-    /** 내 팀 복리후생 처리 로그 (페이징, 최신순 기본 정렬, action 필터) */
-    @GetMapping("/my-team")
+    /** 내가 결재자인 신청의 이력 (페이징, 최신순 기본 정렬, action 필터 — 리뷰 S-6) */
+    @GetMapping("/my-approvals")
     @PreAuthorize("hasAnyRole('TEAM_LEADER','SYSTEM_ADMIN')")
-    public ResponseEntity<CommonResponse<Page<WelfareHistoryLogResponse>>> getMyTeamHistories(
+    public ResponseEntity<CommonResponse<Page<WelfareHistoryLogResponse>>> getMyApprovalHistories(
             @AuthenticationPrincipal AuthUser authUser,
             @RequestParam(required = false) RequestAction action,
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         Page<WelfareHistoryLogResponse> response =
-                welfareHistoryService.getMyTeamHistories(authUser.id(), action, pageable);
+                welfareHistoryService.getMyApprovalHistories(authUser.id(), action, pageable);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.WELFARE_HISTORY_FETCHED, response));
     }
 

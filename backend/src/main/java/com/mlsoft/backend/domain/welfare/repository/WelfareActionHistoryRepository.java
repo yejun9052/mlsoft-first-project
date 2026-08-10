@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * 복리후생 처리 이력 저장소.
@@ -24,14 +26,18 @@ public interface WelfareActionHistoryRepository extends JpaRepository<WelfareAct
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
     Page<WelfareActionHistory> findByAction(RequestAction action, Pageable pageable);
 
-    /** 팀 처리 로그 — 신청자 소속 부서 기준 (GET /api/welfare-histories/my-team, TL) */
+    /**
+     * 내가 결재자인 신청의 이력 (GET /api/welfare-histories/my-approvals, TL·SA — 리뷰 S-6).
+     * 연차와 같은 기준 — 신청자 부서가 아니라 승인자 지정으로 좁힌다.
+     */
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
-    Page<WelfareActionHistory> findByUserDepartmentId(Long departmentId, Pageable pageable);
-
-    /** 팀 처리 로그 — action 필터 (GET /api/welfare-histories/my-team?action=, TL) */
-    @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
-    Page<WelfareActionHistory> findByUserDepartmentIdAndAction(Long departmentId, RequestAction action,
-                                                               Pageable pageable);
+    @Query("select h from WelfareActionHistory h "
+            + "where (h.welfareRequest.primaryApproverId = :approverId "
+            + "or h.welfareRequest.subApproverId = :approverId) "
+            + "and (:action is null or h.action = :action)")
+    Page<WelfareActionHistory> findByApprover(@Param("approverId") Long approverId,
+                                              @Param("action") RequestAction action,
+                                              Pageable pageable);
 
     /** 내가 처리한 로그 (GET /api/welfare-histories/my-actions) — actor 기준 */
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
