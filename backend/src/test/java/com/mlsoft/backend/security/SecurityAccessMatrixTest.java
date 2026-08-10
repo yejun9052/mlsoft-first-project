@@ -127,6 +127,21 @@ class SecurityAccessMatrixTest {
     }
 
     @Test
+    @DisplayName("감사 로그는 관리자 전용 — 팀장도 못 본다 (리뷰 S-3)")
+    void 감사로그_관리자전용() throws Exception {
+        // 깨지면: 전 직원의 권한·연차 변경 내역이 팀장에게 노출된다
+        User leader = saveUser("audit-leader", Role.TEAM_LEADER, true, true);
+        User admin = saveUser("audit-admin", Role.SYSTEM_ADMIN, true, true);
+
+        mockMvc.perform(get("/api/admin/audit-logs").cookie(tokenCookie(leader)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/audit-logs/actions").cookie(tokenCookie(leader)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/audit-logs").cookie(tokenCookie(admin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("토큰은 관리자 · DB는 강등 → 같은 요청부터 403")
     void 강등_즉시반영_403() throws Exception {
         // 이 시스템의 특징적인 동작이다. 깨지면: 강등된 사람이 토큰 만료(24h)까지 관리자로 남는다.

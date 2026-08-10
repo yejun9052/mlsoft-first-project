@@ -1,5 +1,7 @@
 package com.mlsoft.backend.domain.auth.service;
 
+import com.mlsoft.backend.domain.audit.entity.AdminAction;
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -41,6 +43,8 @@ class OnboardingApprovalServiceTest {
     private UserRepository userRepository;
     @Mock
     private AuthService authService;
+    @Mock
+    private AdminAuditService adminAuditService;
 
     @InjectMocks
     private OnboardingApprovalService onboardingApprovalService;
@@ -91,6 +95,37 @@ class OnboardingApprovalServiceTest {
                 () -> onboardingApprovalService.approve(1L, 99L));
         assertEquals(ErrorCode.ONBOARDING_NOT_PENDING, e.getErrorCode());
         verify(authService, never()).grantInitialLeave(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("감사 — 승인은 부여된 연차까지 남는다 (승인 한 번으로 연차가 생기므로)")
+    void approve_감사기록() {
+        LocalDate hireDate = LocalDate.of(2020, 3, 1);
+        User user = pendingUser(hireDate);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        willAnswer(invocation -> {
+            user.completeOnboarding(hireDate, user.getBirthDay());
+            user.updateBaseDays(new BigDecimal("15.0"));
+            return null;
+        }).given(authService).grantInitialLeave(eq(user), eq(hireDate), any(), any());
+
+        onboardingApprovalService.approve(1L, 99L);
+
+        verify(adminAuditService).recordUserChange(99L, AdminAction.ONBOARDING_APPROVED, user,
+                "승인 대기 (입사일 2020-03-01)", "확정 · 연차 15.0일");
+    }
+
+    @Test
+    @DisplayName("감사 — 반려는 지워지는 입사일을 남긴다 (여기 말고는 남지 않는다)")
+    void reject_감사기록() {
+        User user = pendingUser(LocalDate.of(1990, 1, 1));
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+
+        onboardingApprovalService.reject(1L, 99L);
+
+        assertNull(user.getHireDate()); // 엔티티에서는 사라졌다
+        verify(adminAuditService).recordUserChange(99L, AdminAction.ONBOARDING_REJECTED, user,
+                "승인 대기 (입사일 1990-01-01)", "반려 · 온보딩 초기화");
     }
 
     // ============================ 헬퍼 ============================

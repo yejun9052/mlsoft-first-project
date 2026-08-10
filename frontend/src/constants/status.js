@@ -69,3 +69,18 @@ export const ACTION_TONE = {
   CANCEL_APPROVED: 'muted',
   CANCEL_REJECTED: 'danger',
 };
+
+// 관리자 조작 감사 로그 액션 → 색 토큰 (리뷰 S-3).
+// **라벨은 여기 없다** — 서버가 GET /api/admin/audit-logs/actions로 내려준다.
+// 색만 두는 이유: 새 조작이 추가되면 라벨·필터는 서버 카탈로그를 따라 자동으로 붙고,
+// 색만 기본값(muted)으로 떨어져 화면이 깨지지 않는다.
+// 연차·잔액을 직접 바꾸는 조작(warn)과 계정을 잠그는 조작(danger)이 먼저 눈에 들어오게 골랐다.
+export const ADMIN_ACTION_TONE = {
+  ROLE_CHANGED: 'accent',
+  DEPARTMENT_CHANGED: 'accent',
+  BASE_DAYS_CHANGED: 'warn',
+  USER_RETIRED: 'danger',
+  ONBOARDING_APPROVED: 'ok',
+  ONBOARDING_REJECTED: 'danger',
+  CONFIG_CHANGED: 'warn',
+};

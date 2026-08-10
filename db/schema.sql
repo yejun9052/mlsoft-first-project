@@ -21,6 +21,16 @@
 -- 최종 생성 2026-08-08 — 테이블 15개
 --   · 개인 일정: schedule_entries · schedule_dates
 --   · 공휴일 holidays.date 에 UNIQUE(uk_holidays_date) — 중복 적재 방지 (리뷰 D-3)
+--
+-- 2026-08-10 추가 — 테이블 16개
+--   · admin_audit_log — 관리자 조작 감사 로그 (리뷰 S-3)
+--     같은 절차(임시 DB + ddl-auto: update + mysqldump)로 생성했지만 **전체를 교체하지 않고
+--     이 블록만 삽입했다**. 새로 덤프하면 기존 테이블에 무관한 차이가 3종 섞여 들어온다:
+--       ① FK 단독 인덱스가 사라진다 — D-1의 복합 인덱스가 FK를 커버하면 MySQL이
+--          중복 인덱스를 만들지 않는다. 생성 순서 차이일 뿐 둘 다 유효하다.
+--       ② carried_bonus_days·monthly_granted_count의 DEFAULT 절이 사라진다 —
+--          이 값은 Hibernate가 아니라 backfill SQL이 넣은 것이다. 지우면 안전망이 없어진다.
+--       ③ AUTO_INCREMENT 시작값이 데이터 유무에 따라 달라진다.
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
@@ -37,6 +47,25 @@ USE `mlsoft_leave`;
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `admin_audit_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `after_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `before_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `target_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `actor_id` bigint NOT NULL,
+  `target_user_id` bigint DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_audit_created` (`created_at`),
+  KEY `idx_audit_actor_created` (`actor_id`,`created_at`),
+  KEY `idx_audit_target_created` (`target_user_id`,`created_at`),
+  CONSTRAINT `FK4vvcqcx4rnv9ptoierfcvu96l` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FK8uh7kqh3yijgjkelu45upt5tl` FOREIGN KEY (`target_user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `department` (

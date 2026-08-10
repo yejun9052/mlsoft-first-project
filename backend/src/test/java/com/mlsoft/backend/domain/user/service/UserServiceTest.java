@@ -1,5 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
+import com.mlsoft.backend.domain.audit.entity.AdminAction;
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
@@ -50,6 +52,9 @@ class UserServiceTest {
     private static final List<RequestStatus> LEAVE_REASSIGN_STATUSES =
             List.of(RequestStatus.PENDING, RequestStatus.CANCEL_PENDING);
 
+    /** 조작한 관리자 id — 감사 기록의 actor (리뷰 S-3) */
+    private static final Long ACTOR_ID = 99L;
+
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -58,6 +63,8 @@ class UserServiceTest {
     private LeaveRequestRepository leaveRequestRepository;
     @Mock
     private WelfareRequestRepository welfareRequestRepository;
+    @Mock
+    private AdminAuditService adminAuditService;
 
     @InjectMocks
     private UserService userService;
@@ -74,7 +81,7 @@ class UserServiceTest {
         given(departmentRepository.findByLeader(target)).willReturn(List.of(department));
         givenNoReassignTargets(target);
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         assertNull(department.getLeader());
         assertFalse(target.isActive());
@@ -100,7 +107,7 @@ class UserServiceTest {
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         assertEquals(fallback, leave.getPrimaryApprover());
     }
@@ -130,7 +137,7 @@ class UserServiceTest {
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         assertEquals(fallback, leave.getSubApprover());
     }
@@ -157,7 +164,7 @@ class UserServiceTest {
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         assertEquals(fallback.getId(), welfare.getPrimaryApproverId());
     }
@@ -170,7 +177,7 @@ class UserServiceTest {
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
         givenNoReassignTargets(target);
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         verify(leaveRequestRepository).findByPrimaryApproverAndStatusIn(eq(target), eq(LEAVE_REASSIGN_STATUSES));
         verify(leaveRequestRepository).findBySubApproverAndStatusIn(eq(target), eq(LEAVE_REASSIGN_STATUSES));
@@ -184,7 +191,7 @@ class UserServiceTest {
         User target = retiredUser(1L);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L));
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
         assertEquals(ErrorCode.ALREADY_RETIRED, ex.getErrorCode());
         verify(departmentRepository, never()).findByLeader(any());
@@ -213,7 +220,7 @@ class UserServiceTest {
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.empty());
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L));
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_APPROVER, ex.getErrorCode());
     }
@@ -226,7 +233,7 @@ class UserServiceTest {
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
         givenNoReassignTargets(target);
 
-        userService.retire(1L);
+        userService.retire(1L, ACTOR_ID);
 
         verify(userRepository, never()).findFirstByRoleAndIsActiveTrueOrderByIdAsc(any());
     }
@@ -240,7 +247,7 @@ class UserServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> userService.changeRole(1L, Role.TEAM_LEADER));
+                () -> userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID));
 
         assertEquals(ErrorCode.ALREADY_RETIRED, ex.getErrorCode());
     }
@@ -252,7 +259,7 @@ class UserServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> userService.changeDepartment(1L, 10L));
+                () -> userService.changeDepartment(1L, 10L, ACTOR_ID));
 
         assertEquals(ErrorCode.ALREADY_RETIRED, ex.getErrorCode());
         verify(departmentRepository, never()).findByIdAndActiveTrue(any());
@@ -269,7 +276,7 @@ class UserServiceTest {
                 Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> userService.changeRole(1L, Role.EMPLOYEE));
+                () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
 
         assertEquals(ErrorCode.LAST_SYSTEM_ADMIN, ex.getErrorCode());
         assertEquals(Role.SYSTEM_ADMIN, target.getRole());
@@ -286,7 +293,7 @@ class UserServiceTest {
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
         givenNoReassignTargets(target);
 
-        userService.changeRole(1L, Role.EMPLOYEE);
+        userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID);
 
         assertEquals(Role.EMPLOYEE, target.getRole());
     }
@@ -297,7 +304,7 @@ class UserServiceTest {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
-        userService.changeRole(1L, Role.SYSTEM_ADMIN);
+        userService.changeRole(1L, Role.SYSTEM_ADMIN, ACTOR_ID);
 
         assertEquals(Role.SYSTEM_ADMIN, target.getRole());
         verify(userRepository, never())
@@ -312,7 +319,7 @@ class UserServiceTest {
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
         givenNoReassignTargets(target);
 
-        userService.changeRole(1L, Role.EMPLOYEE);
+        userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID);
 
         verify(userRepository, never())
                 .countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(any(), any(), any());
@@ -326,7 +333,7 @@ class UserServiceTest {
         given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
                 Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L));
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
         assertEquals(ErrorCode.LAST_SYSTEM_ADMIN, ex.getErrorCode());
         assertTrue(target.isActive());
@@ -342,7 +349,7 @@ class UserServiceTest {
         given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
                 Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
 
-        assertThrows(BusinessException.class, () -> userService.retire(1L));
+        assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
         // 기존 fallback 가드는 이관 대상이 있을 때만 돌기 때문에 이 경로를 못 막았다
         verify(userRepository, never()).findFirstByRoleAndIsActiveTrueOrderByIdAsc(any());
@@ -357,7 +364,7 @@ class UserServiceTest {
         given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
                 Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
 
-        assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE));
+        assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
 
         verify(userRepository).countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
                 Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L);
@@ -372,7 +379,7 @@ class UserServiceTest {
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("-1.0"))));
+                () -> userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("-1.0")), ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_INPUT_VALUE, ex.getErrorCode());
     }
@@ -383,7 +390,7 @@ class UserServiceTest {
         User target = retiredUser(1L);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
-        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")));
+        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")), ACTOR_ID);
 
         assertEquals(0, new BigDecimal("20.0").compareTo(target.getBaseDays()));
     }
@@ -394,10 +401,78 @@ class UserServiceTest {
         User target = userWithAdvance(1L, "10.0", "13.0", "3.0");
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
-        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")));
+        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")), ACTOR_ID);
 
         assertEquals(0, new BigDecimal("20.0").compareTo(target.getBaseDays()));
         assertEquals(0, BigDecimal.ZERO.compareTo(target.getAdvanceDays()));
+    }
+
+    // ============================ 감사 기록 (리뷰 S-3) ============================
+
+    @Test
+    @DisplayName("감사 — 권한 변경은 전/후 권한 라벨과 함께 남는다")
+    void changeRole_recordsAudit() {
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+        givenNoReassignTargets(target);
+
+        userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(ACTOR_ID, AdminAction.ROLE_CHANGED, target, "팀장", "사원");
+    }
+
+    @Test
+    @DisplayName("감사 — 부서 미배정에서의 이동도 '미배정'으로 남는다 (빈칸이면 무엇에서 바뀌었는지 알 수 없다)")
+    void changeDepartment_recordsAuditWithUnassignedLabel() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        Department department = Department.create("개발팀", "설명", null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
+
+        userService.changeDepartment(1L, 10L, ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.DEPARTMENT_CHANGED, target, "미배정", "개발팀");
+    }
+
+    @Test
+    @DisplayName("감사 — 연차 직접 설정은 전/후 일수로 남는다")
+    void updateBaseDays_recordsAudit() {
+        User target = activeUser(1L, Role.EMPLOYEE); // baseDays = 10
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateBaseDays(1L, new BaseDaysUpdateRequest(new BigDecimal("20.0")), ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.BASE_DAYS_CHANGED, target, "10일", "20.0일");
+    }
+
+    @Test
+    @DisplayName("감사 — 퇴직은 퇴직일과 함께 남는다")
+    void retire_recordsAudit() {
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+        givenNoReassignTargets(target);
+
+        userService.retire(1L, ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(ACTOR_ID, AdminAction.USER_RETIRED, target,
+                "재직", "퇴직 (" + target.getRetiredAt() + ")");
+    }
+
+    @Test
+    @DisplayName("감사 — 조작이 막히면 기록도 남지 않는다 (기록은 조작과 같은 트랜잭션)")
+    void blockedOperation_recordsNothing() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+
+        assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
+
+        verify(adminAuditService, never()).recordUserChange(any(), any(), any(), any(), any());
     }
 
     // ============================ 헬퍼 ============================

@@ -1,5 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
+import com.mlsoft.backend.domain.audit.entity.AdminAction;
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
@@ -55,6 +57,7 @@ public class UserService {
     private final DepartmentRepository departmentRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final WelfareRequestRepository welfareRequestRepository;
+    private final AdminAuditService adminAuditService;
 
     // ---------------------------------------------------------------------
     // 조회
@@ -113,7 +116,7 @@ public class UserService {
      * 마지막 관리자를 강등하려 하면 LAST_SYSTEM_ADMIN (리뷰 S-2).
      */
     @Transactional
-    public UserResponse changeRole(Long targetId, Role role) {
+    public UserResponse changeRole(Long targetId, Role role, Long actorId) {
         User target = findUserOrThrow(targetId);
         validateNotRetired(target);
         if (role != Role.SYSTEM_ADMIN) {
@@ -121,6 +124,8 @@ public class UserService {
         }
         Role before = target.getRole();
         target.changeRole(role);
+        adminAuditService.recordUserChange(actorId, AdminAction.ROLE_CHANGED, target,
+                before.getLabel(), role.getLabel());
 
         // 강등이면 팀장직과 대기 결재를 함께 정리한다 (리뷰 I-5a).
         // department.leader_id를 그대로 두면 결재할 수 없는 사람이 primary로 지정돼
@@ -143,13 +148,21 @@ public class UserService {
 
     /** 부서 변경 (PATCH /api/users/{id}/department, SA) — 퇴직자 대상이면 ALREADY_RETIRED */
     @Transactional
-    public UserResponse changeDepartment(Long targetId, Long departmentId) {
+    public UserResponse changeDepartment(Long targetId, Long departmentId, Long actorId) {
         User target = findUserOrThrow(targetId);
         validateNotRetired(target);
         Department department = departmentRepository.findByIdAndActiveTrue(departmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        String before = departmentLabel(target.getDepartment());
         target.assignDepartment(department);
+        adminAuditService.recordUserChange(actorId, AdminAction.DEPARTMENT_CHANGED, target,
+                before, department.getName());
         return UserResponse.of(target);
+    }
+
+    /** 부서 미배정도 감사 기록에서는 값으로 남아야 한다 — 빈칸이면 무엇에서 바뀌었는지 알 수 없다 */
+    private String departmentLabel(Department department) {
+        return department == null ? "미배정" : department.getName();
     }
 
     /**
@@ -157,13 +170,16 @@ public class UserService {
      * 과거 데이터 정정 목적이라 퇴직자 여부는 검사하지 않는다(의도적 판단).
      */
     @Transactional
-    public UserResponse updateBaseDays(Long targetId, BaseDaysUpdateRequest request) {
+    public UserResponse updateBaseDays(Long targetId, BaseDaysUpdateRequest request, Long actorId) {
         User target = findUserOrThrow(targetId);
         BigDecimal baseDays = request.baseDays();
         if (baseDays.compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
+        BigDecimal before = target.getBaseDays();
         target.updateBaseDays(baseDays);
+        adminAuditService.recordUserChange(actorId, AdminAction.BASE_DAYS_CHANGED, target,
+                before + "일", baseDays + "일");
         return UserResponse.of(target);
     }
 
@@ -180,7 +196,7 @@ public class UserService {
      *   WelfareRequest: PENDING)을 SYSTEM_ADMIN fallback으로 재배정
      */
     @Transactional
-    public void retire(Long targetId) {
+    public void retire(Long targetId, Long actorId) {
         User target = findUserOrThrow(targetId);
         if (!target.isActive()) {
             throw new BusinessException(ErrorCode.ALREADY_RETIRED);
@@ -191,7 +207,9 @@ public class UserService {
         releaseLeadership(target);
         reassignPendingApprovals(target);
 
-        log.info("[퇴직 처리] userId={}, retiredAt={}", targetId, target.getRetiredAt());
+        adminAuditService.recordUserChange(actorId, AdminAction.USER_RETIRED, target,
+                "재직", "퇴직 (" + target.getRetiredAt() + ")");
+        log.info("[퇴직 처리] userId={}, retiredAt={}, actorId={}", targetId, target.getRetiredAt(), actorId);
     }
 
     /**

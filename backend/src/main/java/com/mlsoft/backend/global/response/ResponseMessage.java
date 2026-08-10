@@ -63,6 +63,9 @@ public final class ResponseMessage {
     public static final String LEAVE_HISTORY_FETCHED = "연차 처리 로그를 조회했습니다.";
     public static final String WELFARE_HISTORY_FETCHED = "복리후생 처리 로그를 조회했습니다.";
 
+    // 관리자 조작 감사 로그 (리뷰 S-3)
+    public static final String ADMIN_AUDIT_LOG_FETCHED = "관리자 조작 이력을 조회했습니다.";
+
     // 연차 정책 관리 (docs/03 시스템 설정)
     public static final String LEAVE_POLICY_FETCHED = "연차 정책 목록을 조회했습니다.";
     public static final String LEAVE_POLICY_UPDATED = "연차 정책이 수정되었습니다.";

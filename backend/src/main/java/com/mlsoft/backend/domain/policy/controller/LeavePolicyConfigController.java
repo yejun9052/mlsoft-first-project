@@ -5,10 +5,12 @@ import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigUpdateRequest;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyConfigService;
 import com.mlsoft.backend.global.response.CommonResponse;
 import com.mlsoft.backend.global.response.ResponseMessage;
+import com.mlsoft.backend.security.AuthUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,9 +42,10 @@ public class LeavePolicyConfigController {
     @PutMapping
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CommonResponse<LeavePolicyConfigResponse>> update(
-            @Valid @RequestBody LeavePolicyConfigUpdateRequest request
+            @Valid @RequestBody LeavePolicyConfigUpdateRequest request,
+            @AuthenticationPrincipal AuthUser authUser
     ) {
-        LeavePolicyConfigResponse response = leavePolicyConfigService.update(request);
+        LeavePolicyConfigResponse response = leavePolicyConfigService.update(request, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_POLICY_CONFIG_UPDATED, response));
     }
 }

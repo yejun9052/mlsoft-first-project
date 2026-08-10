@@ -1,5 +1,7 @@
 package com.mlsoft.backend.domain.auth.service;
 
+import com.mlsoft.backend.domain.audit.entity.AdminAction;
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.auth.dto.OnboardingApprovalResponse;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -32,6 +34,7 @@ public class OnboardingApprovalService {
 
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final AdminAuditService adminAuditService;
 
     /** 승인 대기 목록 (GET /api/admin/onboardings, SA) — 오래 기다린 순 */
     @Transactional(readOnly = true)
@@ -53,6 +56,10 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         // 자동 승인과 완전히 같은 경로 — 부여 규칙이 갈라지지 않는다
         authService.grantInitialLeave(user, user.getHireDate(), user.getBirthDay(), LocalDate.now(KST));
+        // 승인 한 번으로 연차가 부여되므로 부여량까지 기록에 남긴다 (리뷰 S-3)
+        adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_APPROVED, user,
+                "승인 대기 (입사일 " + user.getHireDate() + ")",
+                "확정 · 연차 " + user.getBaseDays() + "일");
         log.info("[온보딩 승인] userId={}, hireDate={}, 부여 연차={}, actorId={}",
                 userId, user.getHireDate(), user.getBaseDays(), actorId);
     }
@@ -68,6 +75,9 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         LocalDate rejected = user.getHireDate();
         user.rejectOnboarding();
+        // 반려는 입력값을 지우므로, 무엇을 반려했는지가 여기 말고는 남지 않는다 (리뷰 S-3)
+        adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_REJECTED, user,
+                "승인 대기 (입사일 " + rejected + ")", "반려 · 온보딩 초기화");
         log.info("[온보딩 반려] userId={}, 반려한 입사일={}, actorId={}", userId, rejected, actorId);
     }
 

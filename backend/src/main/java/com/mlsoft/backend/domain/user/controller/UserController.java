@@ -95,9 +95,10 @@ public class UserController {
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CommonResponse<UserResponse>> changeRole(
             @PathVariable Long id,
-            @Valid @RequestBody RoleUpdateRequest request
+            @Valid @RequestBody RoleUpdateRequest request,
+            @AuthenticationPrincipal AuthUser authUser
     ) {
-        UserResponse response = userService.changeRole(id, request.role());
+        UserResponse response = userService.changeRole(id, request.role(), authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_ROLE_UPDATED, response));
     }
 
@@ -106,9 +107,10 @@ public class UserController {
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CommonResponse<UserResponse>> changeDepartment(
             @PathVariable Long id,
-            @Valid @RequestBody DepartmentAssignRequest request
+            @Valid @RequestBody DepartmentAssignRequest request,
+            @AuthenticationPrincipal AuthUser authUser
     ) {
-        UserResponse response = userService.changeDepartment(id, request.departmentId());
+        UserResponse response = userService.changeDepartment(id, request.departmentId(), authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_DEPARTMENT_UPDATED, response));
     }
 
@@ -117,17 +119,21 @@ public class UserController {
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CommonResponse<UserResponse>> updateBaseDays(
             @PathVariable Long id,
-            @Valid @RequestBody BaseDaysUpdateRequest request
+            @Valid @RequestBody BaseDaysUpdateRequest request,
+            @AuthenticationPrincipal AuthUser authUser
     ) {
-        UserResponse response = userService.updateBaseDays(id, request);
+        UserResponse response = userService.updateBaseDays(id, request, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_BASE_DAYS_UPDATED, response));
     }
 
     /** 퇴직 처리 — leader 해제·결재 이관 포함 */
     @PostMapping("/{id}/retire")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<CommonResponse<Void>> retire(@PathVariable Long id) {
-        userService.retire(id);
+    public ResponseEntity<CommonResponse<Void>> retire(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        userService.retire(id, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_RETIRED));
     }
 }

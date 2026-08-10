@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.policy.service;
 
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigResponse;
 import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigUpdateRequest;
 import com.mlsoft.backend.domain.policy.entity.ConfigValueType;
@@ -33,8 +34,13 @@ import static org.mockito.BDDMockito.given;
 @ExtendWith(MockitoExtension.class)
 class LeavePolicyConfigServiceTest {
 
+    /** 조작한 관리자 id — 감사 기록의 actor (리뷰 S-3) */
+    private static final Long ACTOR_ID = 99L;
+
     @Mock
     private LeavePolicyConfigRepository leavePolicyConfigRepository;
+    @Mock
+    private AdminAuditService adminAuditService;
 
     @InjectMocks
     private LeavePolicyConfigService leavePolicyConfigService;
@@ -84,7 +90,7 @@ class LeavePolicyConfigServiceTest {
                 .willReturn(Optional.of(config));
 
         LeavePolicyConfigResponse response = leavePolicyConfigService
-                .update(new LeavePolicyConfigUpdateRequest("advance_leave_enabled", "true"));
+                .update(new LeavePolicyConfigUpdateRequest("advance_leave_enabled", "true"), ACTOR_ID);
 
         assertEquals("true", response.value());
         assertEquals("true", config.getValue());
@@ -96,7 +102,7 @@ class LeavePolicyConfigServiceTest {
         LeavePolicyConfigUpdateRequest request = new LeavePolicyConfigUpdateRequest("unknown_key", "1");
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.LEAVE_POLICY_CONFIG_NOT_FOUND, ex.getErrorCode());
     }
@@ -108,7 +114,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("advance_leave_enabled", "ture");
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_CONFIG_VALUE, ex.getErrorCode());
     }
@@ -121,7 +127,7 @@ class LeavePolicyConfigServiceTest {
                 .willReturn(Optional.of(config));
 
         LeavePolicyConfigResponse response = leavePolicyConfigService
-                .update(new LeavePolicyConfigUpdateRequest("advance_leave_enabled", "TRUE"));
+                .update(new LeavePolicyConfigUpdateRequest("advance_leave_enabled", "TRUE"), ACTOR_ID);
 
         assertEquals("true", response.value());
     }
@@ -133,7 +139,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("advance_max_days", "abc");
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_CONFIG_VALUE, ex.getErrorCode());
     }
@@ -145,7 +151,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("advance_max_days", "26.0"); // max 25.0
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.CONFIG_VALUE_OUT_OF_RANGE, ex.getErrorCode());
     }
@@ -157,7 +163,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("leave_max_dates_per_request", "0"); // min 1
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.CONFIG_VALUE_OUT_OF_RANGE, ex.getErrorCode());
     }
@@ -169,7 +175,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("leave_max_dates_per_request", "10.5");
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_CONFIG_VALUE, ex.getErrorCode());
     }
@@ -182,7 +188,7 @@ class LeavePolicyConfigServiceTest {
                 .willReturn(Optional.of(config));
 
         LeavePolicyConfigResponse response = leavePolicyConfigService
-                .update(new LeavePolicyConfigUpdateRequest("leave_max_dates_per_request", "20.0"));
+                .update(new LeavePolicyConfigUpdateRequest("leave_max_dates_per_request", "20.0"), ACTOR_ID);
 
         assertEquals("20.0", response.value());
     }
@@ -194,7 +200,7 @@ class LeavePolicyConfigServiceTest {
                 new LeavePolicyConfigUpdateRequest("reminder_auto_cycle", "D45");
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> leavePolicyConfigService.update(request));
+                () -> leavePolicyConfigService.update(request, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_CONFIG_VALUE, ex.getErrorCode());
     }
@@ -207,7 +213,7 @@ class LeavePolicyConfigServiceTest {
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         LeavePolicyConfigResponse response = leavePolicyConfigService
-                .update(new LeavePolicyConfigUpdateRequest("advance_max_days", "3.0"));
+                .update(new LeavePolicyConfigUpdateRequest("advance_max_days", "3.0"), ACTOR_ID);
 
         assertEquals("3.0", response.value());
     }

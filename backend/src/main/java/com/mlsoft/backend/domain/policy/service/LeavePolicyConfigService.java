@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.policy.service;
 
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigResponse;
 import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigUpdateRequest;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
@@ -31,6 +32,7 @@ import java.util.stream.Collectors;
 public class LeavePolicyConfigService {
 
     private final LeavePolicyConfigRepository leavePolicyConfigRepository;
+    private final AdminAuditService adminAuditService;
 
     /** 설정 목록 (GET /api/admin/configs, SA) — 카탈로그 선언 순서 */
     @Transactional(readOnly = true)
@@ -48,7 +50,7 @@ public class LeavePolicyConfigService {
      * 저장 시점에 막지 않으면 값을 읽는 시점(사원의 연차 신청 등)에 문제가 드러난다.
      */
     @Transactional
-    public LeavePolicyConfigResponse update(LeavePolicyConfigUpdateRequest request) {
+    public LeavePolicyConfigResponse update(LeavePolicyConfigUpdateRequest request, Long actorId) {
         PolicyConfigKey key = PolicyConfigKey.from(request.name());
         String value = key.normalize(request.value());
         key.validate(value);
@@ -57,8 +59,12 @@ public class LeavePolicyConfigService {
         LeavePolicyConfig config = leavePolicyConfigRepository.findByName(key.getKey())
                 .orElseGet(() -> leavePolicyConfigRepository.save(
                         LeavePolicyConfig.create(key.getKey(), key.getDefaultValue())));
+        // 아직 시딩 전이면 직전 값은 기본값이다 — 위에서 그 값으로 행을 만들었으므로 그대로 읽는다
+        String before = config.getValue();
         config.updateValue(value);
-        log.info("[설정 변경] key={}, value={}", key.getKey(), value);
+        // 당겨쓰기 허용·상한처럼 전 사원의 신청 결과를 바꾸는 값이라 누가 언제 바꿨는지가 남아야 한다 (리뷰 S-3)
+        adminAuditService.recordConfigChange(actorId, key.getKey(), before, value);
+        log.info("[설정 변경] key={}, value={}, actorId={}", key.getKey(), value, actorId);
         return LeavePolicyConfigResponse.of(key, config);
     }
 }
