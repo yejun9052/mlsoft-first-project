@@ -7,6 +7,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -254,6 +256,111 @@ class UserServiceTest {
 
         assertEquals(ErrorCode.ALREADY_RETIRED, ex.getErrorCode());
         verify(departmentRepository, never()).findByIdAndActiveTrue(any());
+    }
+
+    // ============================ 마지막 SYSTEM_ADMIN 보호 (리뷰 S-2) ============================
+
+    @Test
+    @DisplayName("권한 변경 — 마지막 SYSTEM_ADMIN 강등: LAST_SYSTEM_ADMIN, 강등 자체가 일어나지 않는다")
+    void changeRole_lastSystemAdmin_throws() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.changeRole(1L, Role.EMPLOYEE));
+
+        assertEquals(ErrorCode.LAST_SYSTEM_ADMIN, ex.getErrorCode());
+        assertEquals(Role.SYSTEM_ADMIN, target.getRole());
+        verify(departmentRepository, never()).findByLeader(any());
+    }
+
+    @Test
+    @DisplayName("권한 변경 — 다른 관리자가 남아 있으면 강등된다")
+    void changeRole_otherAdminRemains_succeeds() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(1L);
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+        givenNoReassignTargets(target);
+
+        userService.changeRole(1L, Role.EMPLOYEE);
+
+        assertEquals(Role.EMPLOYEE, target.getRole());
+    }
+
+    @Test
+    @DisplayName("권한 변경 — SYSTEM_ADMIN을 SYSTEM_ADMIN으로 재지정하면 잔여 관리자 수를 세지 않는다")
+    void changeRole_toSameAdminRole_skipsLastAdminCheck() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.changeRole(1L, Role.SYSTEM_ADMIN);
+
+        assertEquals(Role.SYSTEM_ADMIN, target.getRole());
+        verify(userRepository, never())
+                .countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("권한 변경 — 대상이 관리자가 아니면 잔여 관리자 수를 세지 않는다")
+    void changeRole_nonAdminTarget_skipsLastAdminCheck() {
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+        givenNoReassignTargets(target);
+
+        userService.changeRole(1L, Role.EMPLOYEE);
+
+        verify(userRepository, never())
+                .countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("퇴직 — 마지막 SYSTEM_ADMIN: LAST_SYSTEM_ADMIN, 퇴직도 이관도 일어나지 않는다")
+    void retire_lastSystemAdmin_throwsAndSkipsReassignment() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L));
+
+        assertEquals(ErrorCode.LAST_SYSTEM_ADMIN, ex.getErrorCode());
+        assertTrue(target.isActive());
+        verify(departmentRepository, never()).findByLeader(any());
+        verify(leaveRequestRepository, never()).findByPrimaryApproverAndStatusIn(any(), any());
+    }
+
+    @Test
+    @DisplayName("퇴직 — 대기 결재가 0건이어도 마지막 관리자는 막힌다 (fallback 조회를 건너뛰는 경로)")
+    void retire_lastSystemAdminWithNoPendingApprovals_stillBlocked() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+
+        assertThrows(BusinessException.class, () -> userService.retire(1L));
+
+        // 기존 fallback 가드는 이관 대상이 있을 때만 돌기 때문에 이 경로를 못 막았다
+        verify(userRepository, never()).findFirstByRoleAndIsActiveTrueOrderByIdAsc(any());
+    }
+
+    @Test
+    @DisplayName("잔여 관리자 계산은 온보딩 완료자만 센다 — 미완료 관리자만 남으면 락아웃으로 본다")
+    void lastAdminCheck_countsOnlyOnboardedAdmins() {
+        User target = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        // 온보딩 미완료 관리자는 인터셉터가 /api/auth/* 밖을 막아 실제로 아무 조작을 못 한다
+        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+
+        assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE));
+
+        verify(userRepository).countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L);
     }
 
     // ============================ 연차 직접 설정 ============================

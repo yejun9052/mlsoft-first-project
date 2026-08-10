@@ -108,11 +108,17 @@ public class UserService {
         return UserResponse.of(user);
     }
 
-    /** 권한 변경 (PATCH /api/users/{id}/role, SA) — 퇴직자 대상이면 ALREADY_RETIRED */
+    /**
+     * 권한 변경 (PATCH /api/users/{id}/role, SA) — 퇴직자 대상이면 ALREADY_RETIRED.
+     * 마지막 관리자를 강등하려 하면 LAST_SYSTEM_ADMIN (리뷰 S-2).
+     */
     @Transactional
     public UserResponse changeRole(Long targetId, Role role) {
         User target = findUserOrThrow(targetId);
         validateNotRetired(target);
+        if (role != Role.SYSTEM_ADMIN) {
+            validateNotLastSystemAdmin(target);
+        }
         Role before = target.getRole();
         target.changeRole(role);
 
@@ -168,6 +174,7 @@ public class UserService {
     /**
      * 퇴직 처리 (POST /api/users/{id}/retire, SA — docs/01 2-9).
      * - 이미 퇴직 처리된 대상이면 ALREADY_RETIRED
+     * - 대상이 마지막 SYSTEM_ADMIN이면 LAST_SYSTEM_ADMIN (리뷰 S-2)
      * - 대상이 팀장인 부서는 전부 leader 해제
      * - 대상이 primary/sub 승인자로 걸린 대기 건(LeaveRequest: PENDING·CANCEL_PENDING,
      *   WelfareRequest: PENDING)을 SYSTEM_ADMIN fallback으로 재배정
@@ -178,6 +185,7 @@ public class UserService {
         if (!target.isActive()) {
             throw new BusinessException(ErrorCode.ALREADY_RETIRED);
         }
+        validateNotLastSystemAdmin(target);
         target.retire(LocalDate.now(KST));
 
         releaseLeadership(target);
@@ -225,6 +233,32 @@ public class UserService {
     private void validateNotRetired(User user) {
         if (!user.isActive()) {
             throw new BusinessException(ErrorCode.ALREADY_RETIRED);
+        }
+    }
+
+    /**
+     * 마지막 SYSTEM_ADMIN 보호 (리뷰 S-2).
+     *
+     * <p>강등·퇴직 뒤에도 실제로 관리 화면을 쓸 수 있는 관리자가 최소 1명 남는지 본다.
+     * 0명이 되면 권한 부여 엔드포인트 자체가 SA 전용이라 <b>복구 수단이 DB 직접 UPDATE뿐</b>이다.
+     *
+     * <p>기존 {@code reassignPendingApprovals}의 fallback 조회가 우연히 이걸 막아 주는 것처럼
+     * 보였지만, <b>대기 결재가 0건이면 그 조회 자체를 건너뛴다</b>. 갓 만든 시스템이나
+     * 결재가 비어 있는 시점이 오히려 락아웃에 가장 가깝다.
+     *
+     * <p>남은 인원을 셀 때 <b>온보딩 완료까지 함께 본다</b> — 미완료 계정은
+     * {@code OnboardingCheckInterceptor}가 {@code /api/auth/*} 밖을 막아 관리자 화면에 못 들어간다.
+     * 게다가 그 계정의 입사일이 자동 승인 기간 밖이면 {@code PENDING_APPROVAL}로 들어가는데
+     * 그걸 승인해 줄 관리자가 없어 교착이 된다 (리뷰 S-1).
+     */
+    private void validateNotLastSystemAdmin(User target) {
+        if (target.getRole() != Role.SYSTEM_ADMIN) {
+            return;
+        }
+        long remaining = userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, target.getId());
+        if (remaining == 0) {
+            throw new BusinessException(ErrorCode.LAST_SYSTEM_ADMIN);
         }
     }
 

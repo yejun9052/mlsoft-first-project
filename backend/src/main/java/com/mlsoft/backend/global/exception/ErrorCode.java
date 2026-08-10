@@ -25,6 +25,7 @@ public enum ErrorCode {
     SELF_PARENT_DEPARTMENT(400, "부서를 자기 자신의 상위 부서로 지정할 수 없습니다."),
     PAST_DATE_NOT_ALLOWED(400, "지난 날짜는 신청할 수 없습니다."),
     ALREADY_RETIRED(400, "이미 퇴직 처리된 사용자입니다."),
+    LAST_SYSTEM_ADMIN(400, "마지막 시스템 관리자입니다. 다른 관리자를 먼저 지정해주세요."),
     ADVANCE_LIMIT_EXCEEDED(400, "당겨쓸 수 있는 연차 상한을 초과했습니다. 관리자에게 문의해주세요."),
     TOO_MANY_LEAVE_DATES(400, "한 번에 신청할 수 있는 날짜 수를 초과했습니다."),
     INVALID_CONFIG_VALUE(400, "설정 값 형식이 올바르지 않습니다."),

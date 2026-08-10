@@ -38,6 +38,14 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
             Role role, OnboardingStatus onboardingStatus, Long excludeId);
 
+    /**
+     * 본인을 뺀 나머지 중 실제로 관리 화면을 쓸 수 있는 해당 권한 사원 수 (리뷰 S-2).
+     * <p>재직·온보딩 완료를 함께 본다 — 미완료 계정은 인터셉터가 {@code /api/auth/*} 밖을 막아
+     * 관리자가 남아 있어도 아무 조작을 못 한다.
+     */
+    long countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
+            Role role, OnboardingStatus onboardingStatus, Long excludeId);
+
     /** 퇴직자 목록 (GET /api/users/retired, SA) */
     Page<User> findByIsActiveFalse(Pageable pageable);
 
