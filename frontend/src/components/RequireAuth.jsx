@@ -30,6 +30,18 @@ export default function RequireAuth({ roles, children }) {
     return isPending ? null : <Navigate to="/login" replace />;
   }
 
+  // 역할 게이트가 걸린 라우트는 **서버 확인 전에 통과시키지 않는다** (Codex 리뷰 2026-08-10).
+  // 거부 쪽만 막아 뒀더니 허용 쪽이 낡은 저장값으로 열렸다 — 강등된 관리자가 /admin을
+  // 새로고침하면 응답이 오기 전까지 관리자 화면이 마운트되고, 그 화면의 API 호출이
+  // 줄줄이 403을 받아 에러 토스트만 쌓였다.
+  //
+  // 이 대기를 **roles가 있는 라우트에만** 건다. 전 라우트에 걸면 모든 사용자가 매 새로고침마다
+  // 공백 화면을 한 번씩 보게 되는데, 그 비용을 역할이 바뀌는 드문 경우 때문에 전원이 낼 이유가 없다.
+  // 일반 화면은 권한 오판의 여지가 없으므로 저장값으로 즉시 렌더한다.
+  if (roles && !serverConfirmed) {
+    return null;
+  }
+
   const isOnboardingRoute = pathname === ONBOARDING_PATH;
 
   // 온보딩 미완료 → 온보딩 페이지 외 접근 차단 (검증 Y-2)
@@ -42,15 +54,11 @@ export default function RequireAuth({ roles, children }) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // 권한 미달 → 대시보드로 차단.
-  //
-  // **아직 서버로 확인되지 않은 저장값으로는 거부하지 않는다.** 거부하면 이 가드가 언마운트돼
-  // 재검증 결과가 도착해도 돌아올 경로가 없다 — 승격된 사용자가 /admin 링크로 들어오면
-  // 낡은 저장값(EMPLOYEE) 때문에 대시보드로 튕기고, 목적지를 잃는다.
-  // 확인 전에는 아무것도 렌더하지 않으므로 보호된 화면이 새지 않고, 실제 게이트는 서버다
-  // (OnboardingCheckInterceptor + @PreAuthorize).
+  // 권한 미달 → 대시보드로 차단. 여기 도달했다면 위에서 서버 확인을 이미 기다렸으므로
+  // 낡은 저장값으로 거부하는 일이 없다 — 승격된 사용자가 /admin 링크로 들어와도
+  // 목적지를 잃지 않는다(거부하면 이 가드가 언마운트돼 돌아올 경로가 없다).
   if (roles && !roles.includes(userInfo.role)) {
-    return serverConfirmed ? <Navigate to="/dashboard" replace /> : null;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

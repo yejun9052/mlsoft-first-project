@@ -60,6 +60,23 @@ describe('RequireAuth — 권한 판정은 서버 응답 기준 (리뷰 F-7)', (
     expect(screen.queryByText('관리자 화면')).not.toBeInTheDocument();
   });
 
+  it('서버 확인 전에는 관리자 화면을 렌더하지 않는다 (Codex 리뷰 2026-08-10)', async () => {
+    // 거부 쪽만 막아 뒀더니 허용 쪽이 낡은 저장값으로 열렸다 — 강등된 관리자가 /admin을
+    // 새로고침하면 응답 전까지 관리자 화면이 마운트되고 그 화면의 API가 줄줄이 403을 받았다.
+    storeUserInfo({ name: '강등된사람', role: 'SYSTEM_ADMIN', onboarded: true });
+    let resolveMe;
+    me.mockReturnValue(new Promise((resolve) => { resolveMe = resolve; }));
+
+    renderGuard();
+
+    // 응답이 오기 전 — 아무것도 렌더되지 않는다
+    expect(screen.queryByText('관리자 화면')).not.toBeInTheDocument();
+    expect(screen.queryByText('대시보드')).not.toBeInTheDocument();
+
+    resolveMe({ name: '강등된사람', role: 'EMPLOYEE', onboarded: true });
+    await waitFor(() => expect(screen.getByText('대시보드')).toBeInTheDocument());
+  });
+
   it('DB에서 승격되면 저장값이 사원이어도 통과한다', async () => {
     storeUserInfo({ name: '승격된사람', role: 'EMPLOYEE', onboarded: true });
     me.mockResolvedValue({ name: '승격된사람', role: 'SYSTEM_ADMIN', onboarded: true });

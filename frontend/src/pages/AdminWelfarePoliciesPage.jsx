@@ -27,6 +27,10 @@ const PAGE_SIZE = 10;
 const MIN_DAYS = 0;
 const MAX_DAYS = 365;
 
+// 0.5일 단위만 허용 — 반차 단가와 같은 기준이고, 서버 컬럼도 DECIMAL(4,1)이다.
+// `7`, `7.0`, `7.5`는 통과하고 `0.25`·`7.04`는 거부한다.
+const HALF_DAY_PATTERN = /^\d+(?:\.[05])?$/;
+
 const EMPTY_FORM = {
   category: '',
   target: 'SELF',
@@ -93,12 +97,18 @@ export default function AdminWelfarePoliciesPage() {
     const category = form.category.trim();
     const defaultEvidence = form.defaultEvidence.trim();
     const description = form.description.trim();
-    const days = Number(form.defaultDays);
+    const rawDays = form.defaultDays.trim();
+    const days = Number(rawDays);
 
     const nextErrors = {};
     if (!category) nextErrors.category = '구분을 입력해주세요.';
-    if (form.defaultDays === '' || Number.isNaN(days)) {
+    if (!rawDays) {
       nextErrors.defaultDays = '부여 일수를 입력해주세요.';
+    } else if (!HALF_DAY_PATTERN.test(rawDays)) {
+      // step="0.5"는 브라우저 입력 보조일 뿐 직접 입력을 막지 못한다 (Codex 리뷰 2026-08-10).
+      // 예전에는 toFixed(1)로 반올림해서 0.25가 조용히 0.3으로, 7.04가 7.0으로 저장됐다 —
+      // 관리자가 입력하지 않은 정책값이 저장되고, 그 값이 승인마다 bonus_days에 가산된다.
+      nextErrors.defaultDays = '부여 일수는 0.5일 단위로 입력해주세요.';
     } else if (days < MIN_DAYS || days > MAX_DAYS) {
       nextErrors.defaultDays = `부여 일수는 ${MIN_DAYS}~${MAX_DAYS}일 사이여야 합니다.`;
     }
@@ -110,8 +120,9 @@ export default function AdminWelfarePoliciesPage() {
     const body = {
       category,
       target: form.target,
-      // 서버가 DECIMAL(4,1)로 받으므로 소수 한 자리로 맞춰 보낸다
-      defaultDays: days.toFixed(1),
+      // 서버가 DECIMAL(4,1)이라 소수 한 자리로 맞춰 보낸다.
+      // **반올림하지 않는다** — 위 검증이 0.5 단위만 통과시켰으므로 자리만 채우면 된다.
+      defaultDays: rawDays.includes('.') ? rawDays : `${rawDays}.0`,
       defaultEvidence,
       description,
     };
