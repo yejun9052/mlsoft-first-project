@@ -59,27 +59,16 @@ export function useRetiredUsers({ page = 0, size = 50, enabled = true } = {}) {
   });
 }
 
-// 내 정보 수정 뮤테이션 — 성공 시 useCurrentUser(['auth','me'])를 무효화해 대시보드 등 다른 화면의
-// 프로필 표시도 갱신한다. 사이드바는 react-query가 아니라 localStorage(userInfo)를 직접 읽으므로,
-// onboarded 등 다른 필드를 잃지 않도록 name·birthDay만 병합해 함께 갱신해준다.
+// 내 정보 수정 뮤테이션 — 성공 시 ['auth']를 무효화하면 끝이다.
+// 예전에는 localStorage의 userInfo에 name·birthDay를 손으로 병합했다. 사이드바가 react-query가
+// 아니라 localStorage를 직접 읽었기 때문인데, F-7에서 사이드바가 useCurrentUser를 쓰게 되면서
+// 그 병합이 필요 없어졌다 — useCurrentUser가 새 응답을 받으면 localStorage까지 함께 맞춘다.
+// 필드를 골라 병합하는 코드가 남아 있으면 응답에 필드가 늘 때 한쪽만 갱신되는 종류의 결함이 생긴다.
 export function useUpdateMyProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: updateMyProfile,
-    onSuccess: (data) => {
-      try {
-        const stored = JSON.parse(localStorage.getItem('userInfo'));
-        if (stored) {
-          localStorage.setItem(
-            'userInfo',
-            JSON.stringify({ ...stored, name: data.name, birthDay: data.birthDay }),
-          );
-        }
-      } catch {
-        // localStorage 파싱 실패는 무시 — 다음 로그인 시 정상화됨
-      }
-      queryClient.invalidateQueries({ queryKey: ['auth'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth'] }),
   });
 }
 

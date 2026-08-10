@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -15,7 +16,9 @@ import {
 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../../constants/roles.js';
 import { logout } from '../../api/auth.js';
-import { useAllLeavesCount, useLeaveSummary, usePendingApprovals } from '../../hooks/useLeaves.js';
+import { useCurrentUser } from '../../hooks/useAuth.js';
+import { useLeaveSummary, usePendingApprovals } from '../../hooks/useLeaves.js';
+import { usePendingWelfareApprovals } from '../../hooks/useWelfare.js';
 import Avatar from '../ui/Avatar.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
 
@@ -128,29 +131,32 @@ function LeaveSummaryPanel() {
 // 사이드바 — 236px 고정, 로고 → MENU → 관리자 → 연차 요약 → 하단 유저 카드 (docs/05 ①)
 export default function Sidebar() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // 로그인 유저 정보 (RequireAuth 통과 후 렌더되므로 존재 전제, 방어적 파싱만)
-  let userInfo = null;
-  try {
-    userInfo = JSON.parse(localStorage.getItem('userInfo'));
-  } catch {
-    userInfo = null;
-  }
+  // 로그인 유저 정보 — 서버 응답 기준. localStorage를 직접 읽으면 강등·승격이 재로그인
+  // 전까지 메뉴에 반영되지 않는다 (리뷰 F-7).
+  const { data: userInfo } = useCurrentUser();
   const role = userInfo?.role;
   const adminItems = ADMIN_ITEMS.filter((item) => item.roles.includes(role));
 
-  // 결재 관리 배지 — 팀장은 "내가 승인자인 대기"(개인 스코프), 관리자는 회사 전체 대기(신규+취소)
-  // 합계를 보여준다. 다른 role은 enabled=false라 두 쿼리 다 아예 호출되지 않는다.
-  const isTeamLeader = role === ROLE.TEAM_LEADER;
-  const isAdmin = role === ROLE.SYSTEM_ADMIN;
-  const myPendingQuery = usePendingApprovals({ size: 1, enabled: isTeamLeader });
-  const allPendingCountQuery = useAllLeavesCount('PENDING', isAdmin);
-  const allCancelPendingCountQuery = useAllLeavesCount('CANCEL_PENDING', isAdmin);
-  const approvalsBadge = isAdmin
-    ? (allPendingCountQuery.data ?? 0) + (allCancelPendingCountQuery.data ?? 0)
-    : (myPendingQuery.data?.page?.totalElements ?? 0);
+  // 결재 관리 배지 — **결재 화면의 대기 목록과 같은 기준**이어야 한다 (리뷰 F-8).
+  // 그 목록은 역할과 무관하게 "내가 승인자인 연차(신규+취소) + 내가 승인자인 복리후생"이다.
+  // 예전에는 관리자에게 전사 연차 건수를 보여줬는데, 두 값이 겹치는 구석이 없었다 —
+  // 남이 결재할 건까지 세면서 정작 복리후생은 빠져 있어, 배지를 누르면 숫자가 달랐다.
+  const isApprover = role === ROLE.TEAM_LEADER || role === ROLE.SYSTEM_ADMIN;
+  // size=1 — 목록이 아니라 페이지 메타(totalElements)만 쓴다. 쿼리 키에 size가 들어가므로
+  // 결재 화면의 size=50 호출과 캐시가 섞이지 않는다 (리뷰 F-1).
+  const myLeavePendingQuery = usePendingApprovals({ size: 1, enabled: isApprover });
+  const myWelfarePendingQuery = usePendingWelfareApprovals({ size: 1, enabled: isApprover });
+  const approvalsBadge =
+    (myLeavePendingQuery.data?.page?.totalElements ?? 0) +
+    (myWelfarePendingQuery.data?.page?.totalElements ?? 0);
 
-  // 로그아웃 — 서버 쿠키 만료 후 로컬 정보 정리, 실패해도 로컬은 항상 정리하고 로그인으로
+  // 로그아웃 — 서버 쿠키 만료 후 로컬 정보 정리, 실패해도 로컬은 항상 정리하고 로그인으로.
+  // **쿼리 캐시까지 비운다** — SPA 이동이라 QueryClient가 살아 있어서, 비우지 않으면
+  // ① useCurrentUser의 캐시가 남아 localStorage를 방금 지운 값으로 되살리고
+  // ② 같은 탭에서 다른 계정으로 로그인했을 때 이전 사용자의 연차·결재 데이터가 한 프레임 보인다.
+  // (401 경로는 window.location으로 전체 새로고침되므로 이 문제가 없다 — api/index.js)
   async function handleLogout() {
     try {
       await logout();
@@ -158,6 +164,7 @@ export default function Sidebar() {
       // 서버 오류여도 클라이언트 세션은 종료
     } finally {
       localStorage.removeItem('userInfo');
+      queryClient.clear();
       navigate('/login', { replace: true });
     }
   }
