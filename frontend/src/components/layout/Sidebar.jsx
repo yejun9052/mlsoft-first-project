@@ -29,7 +29,7 @@ const MENU_ITEMS = [
   { to: '/myinfo', label: '내 정보', Icon: UserRound },
 ];
 
-// 관리자 섹션 (역할별 노출 5개) — 결재 → 조직(구성원·부서) → 정책 → 로그 순
+// 관리자 섹션 (역할별 노출 6개) — 결재 → 조직(구성원·부서) → 정책(연차·복리후생) → 로그 순
 const ADMIN_ITEMS = [
   {
     to: '/approvals',
@@ -40,6 +40,7 @@ const ADMIN_ITEMS = [
   { to: '/admin', label: '구성원 관리', Icon: UsersRound, roles: [ROLE.SYSTEM_ADMIN] },
   { to: '/admin/departments', label: '부서 관리', Icon: Building2, roles: [ROLE.SYSTEM_ADMIN] },
   { to: '/admin/policy', label: '연차 정책', Icon: Settings, roles: [ROLE.SYSTEM_ADMIN] },
+  { to: '/admin/welfare-policies', label: '복리후생 정책', Icon: Gift, roles: [ROLE.SYSTEM_ADMIN] },
   {
     to: '/admin/history',
     label: '처리 이력',

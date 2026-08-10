@@ -1,11 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   applyWelfare,
   cancelWelfareRequest,
+  createWelfarePolicy,
+  deactivateWelfarePolicy,
   getAllWelfarePolicies,
   getMyWelfareRequests,
   getPendingWelfareApprovals,
+  getWelfarePolicies,
   processWelfareApproval,
+  updateWelfarePolicy,
 } from '../api/welfare.js';
 
 // 쿼리 키 규칙: ['welfare', 서브리소스, ...파라미터]. 접두사(['welfare'])로 invalidate하면
@@ -14,6 +18,8 @@ import {
 // 공유해 먼저 캐시된 응답이 재사용된다 (리뷰 F-1).
 const welfareKeys = {
   policiesAll: ['welfare', 'policies', 'all'],
+  policies: (keyword, category, page, size) =>
+    ['welfare', 'policies', keyword || '', category || '', page, size],
   me: (page, size) => ['welfare', 'me', page, size],
   pending: (page, size) => ['welfare', 'pending', page, size],
 };
@@ -31,6 +37,43 @@ function invalidateWelfareAndRelated(queryClient, { touchesLeaveBalance = false 
 // 활성 정책 전체 — 신청 폼·카테고리 카드 그리드 공용 (GET /api/welfare-policies/all)
 export function useWelfarePoliciesAll() {
   return useQuery({ queryKey: welfareKeys.policiesAll, queryFn: getAllWelfarePolicies });
+}
+
+// 정책 목록 (페이징 — GET /api/welfare-policies). 관리 화면이 쓴다.
+// policiesAll과 나눠 둔 이유: 신청 폼은 전체가 한 번에 필요하고(카드 그리드), 관리 화면은
+// 페이징·검색이 필요하다. 응답 형태가 달라(List vs Page) 훅도 분리한다.
+export function useWelfarePolicies({ keyword, category, page = 0, size = 10 } = {}) {
+  return useQuery({
+    queryKey: welfareKeys.policies(keyword, category, page, size),
+    queryFn: () => getWelfarePolicies({ keyword, category, page, size }),
+    placeholderData: keepPreviousData,
+  });
+}
+
+// 정책 추가·수정·비활성화 — 셋 다 신청 폼의 정책 목록을 바꾸므로 ['welfare'] 전체를 무효화한다.
+// 연차 잔액은 건드리지 않는다 (부여는 승인 시점에 일어난다).
+export function useCreateWelfarePolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createWelfarePolicy,
+    onSuccess: () => invalidateWelfareAndRelated(queryClient),
+  });
+}
+
+export function useUpdateWelfarePolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }) => updateWelfarePolicy(id, body),
+    onSuccess: () => invalidateWelfareAndRelated(queryClient),
+  });
+}
+
+export function useDeactivateWelfarePolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: deactivateWelfarePolicy,
+    onSuccess: () => invalidateWelfareAndRelated(queryClient),
+  });
 }
 
 // 내 신청 내역 (GET /api/welfare-requests/me)

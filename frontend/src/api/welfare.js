@@ -18,6 +18,28 @@ export async function getAllWelfarePolicies() {
   return res.data.data;
 }
 
+// ── 정책 관리 (SYSTEM_ADMIN 전용) ────────────────────────────────────────────
+// 생성·수정 모두 전체 필드를 다시 보내는 전체 갱신 방식이다(서버 WelfarePolicyRequest가 전 필드 필수).
+// 삭제는 없다 — 비활성화(소프트 삭제)만 있다. 기존 신청의 근거를 보존해야 하기 때문이다.
+
+// 정책 추가 (POST /api/welfare-policies) — 구분+대상 조합이 중복이면 서버가 409
+export async function createWelfarePolicy(body) {
+  const res = await api.post('/welfare-policies', body);
+  return res.data.data;
+}
+
+// 정책 수정 (PATCH /api/welfare-policies/{id})
+export async function updateWelfarePolicy(id, body) {
+  const res = await api.patch(`/welfare-policies/${id}`, body);
+  return res.data.data;
+}
+
+// 정책 비활성화 (DELETE /api/welfare-policies/{id}) — 목록에서 사라지지만 행은 남는다
+export async function deactivateWelfarePolicy(id) {
+  const res = await api.delete(`/welfare-policies/${id}`);
+  return res.data.data;
+}
+
 // 복리후생 신청 (POST /api/welfare-requests)
 // reason은 서버가 자동 생성하지 않고 그대로 저장하므로 필수(@NotBlank) — 빈 문자열을 보내면 400.
 export async function applyWelfare({ policyId, reason, subApproverId }) {

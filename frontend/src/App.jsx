@@ -15,6 +15,7 @@ import ApprovalsPage from './pages/ApprovalsPage.jsx';
 import AdminMembersPage from './pages/AdminMembersPage.jsx';
 import AdminDepartmentsPage from './pages/AdminDepartmentsPage.jsx';
 import AdminPolicyPage from './pages/AdminPolicyPage.jsx';
+import AdminWelfarePoliciesPage from './pages/AdminWelfarePoliciesPage.jsx';
 import AdminHistoryPage from './pages/AdminHistoryPage.jsx';
 
 // 결재 관리 접근 가능 역할 (팀장·총관리자)
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/admin" element={<AdminMembersPage />} />
         <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
         <Route path="/admin/policy" element={<AdminPolicyPage />} />
+        <Route path="/admin/welfare-policies" element={<AdminWelfarePoliciesPage />} />
       </Route>
 
       {/* 기본 진입·미정의 경로는 대시보드로 */}
