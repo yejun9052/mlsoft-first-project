@@ -61,12 +61,30 @@ $(Get-Content $agentFile -Raw)
 $taskText
 "@
 
+# 프롬프트도 UTF-8로 남긴다 — 나중에 "무엇을 물었는지" 확인할 때 읽혀야 한다
 $promptFile = Join-Path $outDir "$Agent-$stamp.prompt.md"
-Set-Content -Path $promptFile -Value $prompt -Encoding utf8
+$prompt | Out-File -FilePath $promptFile -Encoding utf8
 
 $codexArgs = @('exec', '--sandbox', $Sandbox, '-C', $repoRoot, '--skip-git-repo-check')
 if ($Model) { $codexArgs += @('-m', $Model) }
 
 Write-Host "[$Agent] 실행 → $outFile"
-Get-Content $promptFile -Raw | & codex @codexArgs - | Tee-Object -FilePath $outFile
+
+# 인코딩 — 산출물이 읽을 수 없게 저장되던 것을 고쳤다 (2026-08-10).
+# 두 가지가 겹쳐 있었다:
+#   ① Windows PowerShell 5.1은 네이티브 프로세스 stdout을 콘솔 코드페이지(949)로 해석한다.
+#      codex는 UTF-8로 내보내므로 한글이 그 자리에서 깨진다 → [Console]::OutputEncoding을 UTF-8로.
+#   ② Tee-Object는 5.1에서 UTF-16LE로 쓰고 -Encoding 파라미터가 없다.
+#      → 변수로 받아 화면에 출력하고, 파일은 Out-File -Encoding utf8로 따로 쓴다.
+# 이걸 고치지 않으면 Claude Code가 .codex/out/*.md를 기계적으로 읽을 수 없다(AGENTS.md의 전제).
+$previousOutputEncoding = [Console]::OutputEncoding
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $result = Get-Content $promptFile -Raw -Encoding utf8 | & codex @codexArgs -
+    $result | Write-Output
+    $result | Out-File -FilePath $outFile -Encoding utf8
+} finally {
+    [Console]::OutputEncoding = $previousOutputEncoding
+}
+
 Write-Host "[$Agent] 완료 → $outFile"

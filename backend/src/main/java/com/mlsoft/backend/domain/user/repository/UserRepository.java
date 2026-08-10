@@ -4,9 +4,11 @@ import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -39,12 +41,24 @@ public interface UserRepository extends JpaRepository<User, Long> {
             Role role, OnboardingStatus onboardingStatus, Long excludeId);
 
     /**
-     * 본인을 뺀 나머지 중 실제로 관리 화면을 쓸 수 있는 해당 권한 사원 수 (리뷰 S-2).
-     * <p>재직·온보딩 완료를 함께 본다 — 미완료 계정은 인터셉터가 {@code /api/auth/*} 밖을 막아
-     * 관리자가 남아 있어도 아무 조작을 못 한다.
+     * 재직 중 관리자 전체를 <b>행 잠금과 함께</b> 조회 (리뷰 S-2 — 동시성 결함 대응).
+     *
+     * <p>단순 {@code count}로는 막을 수 없다. 관리자 A와 B를 서로 다른 요청에서 동시에 강등하면
+     * 각 트랜잭션이 <b>상대를 세어</b> 검증을 통과하고, 서로 다른 {@code User} 행을 갱신하므로
+     * {@code @Version} 낙관적 락도 충돌하지 않는다 → 둘 다 커밋돼 관리자가 0명이 된다
+     * (쓰기 스큐). 그 뒤로는 권한 부여 엔드포인트가 SA 전용이라 DB 직접 UPDATE 외에 복구 수단이 없다.
+     *
+     * <p><b>대상 본인도 포함해</b> 잠근다. 대상을 제외하면 두 트랜잭션이 서로 다른 행을 잠가
+     * 직렬화되지 않는다 — A를 강등하는 쪽은 B만, B를 강등하는 쪽은 A만 잠그기 때문이다.
+     * 전체를 잠그면 두 요청이 같은 행 집합을 노려 뒤에 온 쪽이 기다렸다가 <b>갱신된 상태를 다시 읽는다</b>
+     * (잠금 읽기는 스냅샷이 아니라 최신 커밋을 본다).
+     *
+     * <p>{@code order by u.id}는 교착 방지다 — 잠금 순서가 요청마다 같아야 한다.
+     * 온보딩 완료 여부는 잠근 뒤 자바에서 걸러 조건을 한곳에 모은다.
      */
-    long countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-            Role role, OnboardingStatus onboardingStatus, Long excludeId);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.role = :role and u.isActive = true order by u.id")
+    List<User> findActiveByRoleForUpdate(@Param("role") Role role);
 
     /** 퇴직자 목록 (GET /api/users/retired, SA) */
     Page<User> findByIsActiveFalse(Pageable pageable);

@@ -268,14 +268,20 @@ public class UserService {
      * {@code OnboardingCheckInterceptor}가 {@code /api/auth/*} 밖을 막아 관리자 화면에 못 들어간다.
      * 게다가 그 계정의 입사일이 자동 승인 기간 밖이면 {@code PENDING_APPROVAL}로 들어가는데
      * 그걸 승인해 줄 관리자가 없어 교착이 된다 (리뷰 S-1).
+     *
+     * <p><b>조회에 행 잠금을 건다</b> — 단순 {@code count}는 동시 요청 두 개가 서로를 세어
+     * 함께 통과하는 쓰기 스큐를 막지 못했다. 근거는
+     * {@link UserRepository#findActiveByRoleForUpdate}의 주석에 있다.
      */
     private void validateNotLastSystemAdmin(User target) {
         if (target.getRole() != Role.SYSTEM_ADMIN) {
             return;
         }
-        long remaining = userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, target.getId());
-        if (remaining == 0) {
+        // 대상까지 포함해 잠근 뒤(직렬화) 자바에서 "본인 제외 + 온보딩 완료"를 센다
+        boolean usableAdminRemains = userRepository.findActiveByRoleForUpdate(Role.SYSTEM_ADMIN).stream()
+                .anyMatch(admin -> !admin.getId().equals(target.getId())
+                        && admin.getOnboardingStatus() == OnboardingStatus.COMPLETED);
+        if (!usableAdminRemains) {
             throw new BusinessException(ErrorCode.LAST_SYSTEM_ADMIN);
         }
     }

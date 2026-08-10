@@ -272,8 +272,7 @@ class UserServiceTest {
     void changeRole_lastSystemAdmin_throws() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+        givenOnlyAdminIsTarget(target);
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
@@ -288,8 +287,8 @@ class UserServiceTest {
     void changeRole_otherAdminRemains_succeeds() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(1L);
+        given(userRepository.findActiveByRoleForUpdate(Role.SYSTEM_ADMIN))
+                .willReturn(List.of(target, onboardedAdmin(9L)));
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
         givenNoReassignTargets(target);
 
@@ -299,7 +298,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("권한 변경 — SYSTEM_ADMIN을 SYSTEM_ADMIN으로 재지정하면 잔여 관리자 수를 세지 않는다")
+    @DisplayName("권한 변경 — SYSTEM_ADMIN을 SYSTEM_ADMIN으로 재지정하면 잠금 조회를 하지 않는다")
     void changeRole_toSameAdminRole_skipsLastAdminCheck() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
@@ -307,12 +306,11 @@ class UserServiceTest {
         userService.changeRole(1L, Role.SYSTEM_ADMIN, ACTOR_ID);
 
         assertEquals(Role.SYSTEM_ADMIN, target.getRole());
-        verify(userRepository, never())
-                .countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(any(), any(), any());
+        verify(userRepository, never()).findActiveByRoleForUpdate(any());
     }
 
     @Test
-    @DisplayName("권한 변경 — 대상이 관리자가 아니면 잔여 관리자 수를 세지 않는다")
+    @DisplayName("권한 변경 — 대상이 관리자가 아니면 잠금 조회를 하지 않는다")
     void changeRole_nonAdminTarget_skipsLastAdminCheck() {
         User target = activeUser(1L, Role.TEAM_LEADER);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
@@ -321,8 +319,7 @@ class UserServiceTest {
 
         userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID);
 
-        verify(userRepository, never())
-                .countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(any(), any(), any());
+        verify(userRepository, never()).findActiveByRoleForUpdate(any());
     }
 
     @Test
@@ -330,8 +327,7 @@ class UserServiceTest {
     void retire_lastSystemAdmin_throwsAndSkipsReassignment() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+        givenOnlyAdminIsTarget(target);
 
         BusinessException ex = assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
@@ -346,8 +342,7 @@ class UserServiceTest {
     void retire_lastSystemAdminWithNoPendingApprovals_stillBlocked() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+        givenOnlyAdminIsTarget(target);
 
         assertThrows(BusinessException.class, () -> userService.retire(1L, ACTOR_ID));
 
@@ -360,14 +355,13 @@ class UserServiceTest {
     void lastAdminCheck_countsOnlyOnboardedAdmins() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        // 온보딩 미완료 관리자는 인터셉터가 /api/auth/* 밖을 막아 실제로 아무 조작을 못 한다
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+        // givenOnlyAdminIsTarget이 온보딩 미완료 관리자 1명을 함께 돌려준다.
+        // 그 계정은 인터셉터가 /api/auth/* 밖을 막아 실제로 아무 조작을 못 하므로 세지 않는다.
+        givenOnlyAdminIsTarget(target);
 
         assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
 
-        verify(userRepository).countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L);
+        verify(userRepository).findActiveByRoleForUpdate(Role.SYSTEM_ADMIN);
     }
 
     // ============================ 연차 직접 설정 ============================
@@ -467,8 +461,7 @@ class UserServiceTest {
     void blockedOperation_recordsNothing() {
         User target = activeUser(1L, Role.SYSTEM_ADMIN);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
-        given(userRepository.countByRoleAndIsActiveTrueAndOnboardingStatusAndIdNot(
-                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, 1L)).willReturn(0L);
+        givenOnlyAdminIsTarget(target);
 
         assertThrows(BusinessException.class, () -> userService.changeRole(1L, Role.EMPLOYEE, ACTOR_ID));
 
@@ -476,6 +469,22 @@ class UserServiceTest {
     }
 
     // ============================ 헬퍼 ============================
+
+    /**
+     * 대상이 유일한 "쓸 수 있는" 관리자인 상황 — 잠금 조회가 대상 본인만 돌려준다 (리뷰 S-2).
+     * 온보딩 미완료 관리자가 함께 있어도 결과가 같아야 하므로 하나 끼워 둔다.
+     */
+    private void givenOnlyAdminIsTarget(User target) {
+        given(userRepository.findActiveByRoleForUpdate(Role.SYSTEM_ADMIN))
+                .willReturn(List.of(target, activeUser(77L, Role.SYSTEM_ADMIN)));
+    }
+
+    /** 온보딩까지 마쳐 실제로 관리 화면을 쓸 수 있는 관리자 */
+    private User onboardedAdmin(Long id) {
+        User admin = activeUser(id, Role.SYSTEM_ADMIN);
+        admin.completeOnboarding(LocalDate.now().minusYears(1), LocalDate.of(1990, 1, 1));
+        return admin;
+    }
 
     private void givenNoReassignTargets(User target) {
         given(leaveRequestRepository.findByPrimaryApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
