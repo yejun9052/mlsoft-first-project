@@ -257,7 +257,7 @@ public class DemoDataInitializer implements ApplicationRunner {
                                  String comment, int daysAgo) {
         findWelfarePolicy(category).ifPresent(policy -> {
             WelfareRequest request = welfareRequestRepository.save(
-                    WelfareRequest.create(policy, applicant, reason, approver.getId(), null));
+                    WelfareRequest.create(policy, applicant, reason, approver, null));
             backdate("welfare_requests",request.getId(), daysAgo);
             welfareHistory(request, applicant, RequestAction.PENDING, reason, daysAgo);
             request.approve();
@@ -270,7 +270,7 @@ public class DemoDataInitializer implements ApplicationRunner {
     private void pendingWelfare(User applicant, User approver, String category, String reason, int daysAgo) {
         findWelfarePolicy(category).ifPresent(policy -> {
             WelfareRequest request = welfareRequestRepository.save(
-                    WelfareRequest.create(policy, applicant, reason, approver.getId(), null));
+                    WelfareRequest.create(policy, applicant, reason, approver, null));
             backdate("welfare_requests",request.getId(), daysAgo);
             welfareHistory(request, applicant, RequestAction.PENDING, reason, daysAgo);
         });

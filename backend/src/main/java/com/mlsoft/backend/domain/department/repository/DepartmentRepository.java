@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.department.repository;
 
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.user.entity.User;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -9,6 +10,10 @@ import java.util.Optional;
 
 /**
  * 부서 저장소.
+ *
+ * <p>목록 조회는 {@code @EntityGraph}로 팀장을 함께 적재한다 — {@code DepartmentResponse}가
+ * 행마다 팀장 이름을 읽으므로 LAZY로 두면 부서 수만큼 추가 쿼리가 붙었다 (리뷰 D-2).
+ * 부서는 행이 수십 개라 아픈 정도는 작지만, 화면이 항상 전체를 받아 가므로 상시 발생한다.
  */
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
@@ -19,6 +24,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     Optional<Department> findByName(String name);
 
     /** 활성 부서 전체 — 플랫 목록/트리 조회 기반 (GET /api/departments, /tree) */
+    @EntityGraph(attributePaths = {"leader"})
     List<Department> findByActiveTrueOrderByIdAsc();
 
     /** 활성 부서 단건 조회 — 수정·비활성화·부서배정 시 대상 조회 */

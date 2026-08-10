@@ -316,10 +316,17 @@ CREATE TABLE `welfare_requests` (
   `policy_id` bigint NOT NULL,
   `user_id` bigint NOT NULL,
   PRIMARY KEY (`id`),
+  -- 2026-08-10 추가 (리뷰 D-2) — 연차 신청과 대칭. 목록 3종이 "누구의 + 어떤 상태" 조합이다
+  KEY `idx_welfare_requests_user_status` (`user_id`,`status`),
+  KEY `idx_welfare_requests_primary_status` (`primary_approver_id`,`status`),
+  KEY `idx_welfare_requests_sub_status` (`sub_approver_id`,`status`),
   KEY `FKc2s5m4i1dcs5v0r14b1n0421r` (`policy_id`),
   KEY `FKfubsoplr3raeot86n9n0nsjev` (`user_id`),
   CONSTRAINT `FKc2s5m4i1dcs5v0r14b1n0421r` FOREIGN KEY (`policy_id`) REFERENCES `welfare_policies` (`id`),
-  CONSTRAINT `FKfubsoplr3raeot86n9n0nsjev` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+  CONSTRAINT `FKfubsoplr3raeot86n9n0nsjev` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
+  -- 2026-08-10 추가 (리뷰 D-5) — 승인자가 FK 없는 raw BIGINT였다. 컬럼은 그대로고 제약만 붙었다
+  CONSTRAINT `FKn9oejajygjaj2rmrhg28c18l2` FOREIGN KEY (`primary_approver_id`) REFERENCES `users` (`id`),
+  CONSTRAINT `FK7yale7ten07ng9mnsa0v2c8w1` FOREIGN KEY (`sub_approver_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

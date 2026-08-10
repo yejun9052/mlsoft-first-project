@@ -312,8 +312,15 @@ class WelfareServiceTest {
         return policy;
     }
 
-    private WelfareRequest pendingWelfare(WelfarePolicy policy, User applicant, Long primaryApproverId, Long subApproverId) {
-        return WelfareRequest.create(policy, applicant, "사유", primaryApproverId, subApproverId);
+    /**
+     * 대기 중 복리후생 — 승인자를 <b>id로</b> 받아 엔티티로 감싼다 (리뷰 D-5).
+     * 이 테스트가 보는 것은 승인자 판별과 잔액 가산이라 승인자의 나머지 필드는 무관하다.
+     */
+    private WelfareRequest pendingWelfare(WelfarePolicy policy, User applicant,
+                                          Long primaryApproverId, Long subApproverId) {
+        User primary = user(primaryApproverId, Role.SYSTEM_ADMIN);
+        User sub = (subApproverId == null) ? null : user(subApproverId, Role.TEAM_LEADER);
+        return WelfareRequest.create(policy, applicant, "사유", primary, sub);
     }
 
     // 리플렉션으로 id 채우기 — @GeneratedValue 필드는 빌더로 직접 지정할 수 없는 정책 픽스처용 헬퍼

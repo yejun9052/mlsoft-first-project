@@ -137,7 +137,7 @@ class WelfareHistoryServiceTest {
     private static WelfareActionHistory history(User applicant, User actor, RequestAction action, String comment) {
         WelfarePolicy policy =
                 WelfarePolicy.create("결혼", WelfareTarget.SELF, new BigDecimal("7.0"), "청첩장", "본인 결혼");
-        WelfareRequest request = WelfareRequest.create(policy, applicant, "결혼합니다", actor.getId(), null);
+        WelfareRequest request = WelfareRequest.create(policy, applicant, "결혼합니다", actor, null);
         return WelfareActionHistory.create(request, actor, action, comment);
     }
 }

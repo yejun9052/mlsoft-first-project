@@ -63,8 +63,7 @@ public class WelfareService {
         User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant, primaryApprover);
 
         WelfareRequest welfare = WelfareRequest.create(
-                policy, applicant, request.reason(),
-                primaryApprover.getId(), subApprover != null ? subApprover.getId() : null);
+                policy, applicant, request.reason(), primaryApprover, subApprover);
         welfareRequestRepository.save(welfare);
 
         saveHistory(welfare, applicant, RequestAction.PENDING, request.reason());
@@ -163,10 +162,8 @@ public class WelfareService {
 
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (docs/03 approval 권한) */
     private void validateApprover(WelfareRequest welfare, User actor) {
-        Long actorId = actor.getId();
-        boolean isPrimary = welfare.getPrimaryApproverId().equals(actorId);
-        boolean isSub = welfare.getSubApproverId() != null && welfare.getSubApproverId().equals(actorId);
-        if (!isPrimary && !isSub) {
+        // 판별은 도메인 메서드에 있다 (리뷰 D-5) — 프록시에서 id를 꺼내는 코드가 흩어지지 않게
+        if (!welfare.isApprover(actor.getId())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);
         }
     }

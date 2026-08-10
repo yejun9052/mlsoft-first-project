@@ -32,8 +32,8 @@ public interface WelfareActionHistoryRepository extends JpaRepository<WelfareAct
      */
     @EntityGraph(attributePaths = {"actor", "user", "user.department", "welfareRequest"})
     @Query("select h from WelfareActionHistory h "
-            + "where (h.welfareRequest.primaryApproverId = :approverId "
-            + "or h.welfareRequest.subApproverId = :approverId) "
+            + "where (h.welfareRequest.primaryApprover.id = :approverId "
+            + "or h.welfareRequest.subApprover.id = :approverId) "
             + "and (:action is null or h.action = :action)")
     Page<WelfareActionHistory> findByApprover(@Param("approverId") Long approverId,
                                               @Param("action") RequestAction action,

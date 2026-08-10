@@ -21,7 +21,11 @@ import java.util.List;
  */
 public interface LeaveActionHistoryRepository extends JpaRepository<LeaveActionHistory, Long> {
 
-    /** 해당 신청의 처리 이력 — 발생 순서(오름차순) (GET /api/leaves/{id}/histories) */
+    /**
+     * 해당 신청의 처리 이력 — 발생 순서(오름차순) (GET /api/leaves/{id}/histories).
+     * 페이징 목록과 달리 여기엔 그래프가 없어 {@code actor} 이름을 행마다 조회했다 (리뷰 D-2).
+     */
+    @EntityGraph(attributePaths = {"actor"})
     List<LeaveActionHistory> findByLeaveRequestOrderByCreatedAtAsc(LeaveRequest leaveRequest);
 
     /** 전체 처리 로그 (GET /api/leave-histories, SA) */

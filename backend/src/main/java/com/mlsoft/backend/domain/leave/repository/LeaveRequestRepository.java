@@ -6,6 +6,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -20,13 +21,24 @@ import java.util.List;
  * 연차 신청 저장소.
  * - 상태 전이(승인·반려·취소)는 반드시 {@link #updateStatusIfCurrent}/{@link #updateStatusToCancelIfCurrent}의
  *   조건부 갱신(WHERE status = 기대상태)으로 처리해 primary/sub 동시 처리를 1행만 claim 시킨다 (검증 R-5).
+ *
+ * <h3>N+1 대책 (리뷰 D-2)</h3>
+ * 목록 조회는 {@code @EntityGraph}로 <b>to-one 연관만</b> 함께 적재한다 —
+ * 신청자·부서·승인자 2명. 응답 DTO({@code LeaveResponse}·{@code LeaveCalendarResponse})가
+ * 행마다 이 이름들을 읽으므로 LAZY로 두면 페이지 크기 20에서 추가 쿼리가 80회까지 붙었다.
+ *
+ * <p><b>{@code dates}는 그래프에 넣지 않는다.</b> 컬렉션을 {@code @EntityGraph}에 넣고
+ * {@code Pageable}을 쓰면 Hibernate가 전체를 메모리로 올려 페이징한다({@code HHH90003004}).
+ * 그래서 {@code dates}만 {@code @BatchSize(50)}로 분리했고, 페이지 크기 20이면 추가 조회 1회로 끝난다.
  */
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
 
     /** 내 신청 내역 (GET /api/leaves/me) */
+    @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     Page<LeaveRequest> findByUser(User user, Pageable pageable);
 
     /** 내 신청 내역 — status 필터 */
+    @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     Page<LeaveRequest> findByUserAndStatus(User user, RequestStatus status, Pageable pageable);
 
     /** 대기 중 사용 개수 합 — 요약의 "대기" 표기 (없으면 0) */
@@ -45,6 +57,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                        @Param("statuses") Collection<RequestStatus> statuses);
 
     /** 내가 승인자(primary 또는 sub)인 대기 목록 — PENDING + 소급취소대기 (GET /api/leaves/pending) */
+    @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     @Query("select lr from LeaveRequest lr "
             + "where (lr.primaryApprover = :approver or lr.subApprover = :approver) "
             + "and lr.status in :statuses")
@@ -56,6 +69,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
      * 캘린더 — 특정 상태 &amp; 날짜범위와 겹치는 전체 건 (GET /api/leaves/calendar).
      * keyword(신청자명 부분일치)·departmentId는 둘 다 선택 — null이면 조건이 무력화된다.
      */
+    @EntityGraph(attributePaths = {"user", "user.department"})
     @Query("select distinct lr from LeaveRequest lr join lr.dates d "
             + "where lr.status in :statuses and d between :start and :end "
             + "and (:keyword is null or lower(lr.user.name) like lower(concat('%', :keyword, '%'))) "
@@ -67,6 +81,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                        @Param("departmentId") Long departmentId);
 
     /** 팀 현황 — 특정 부서원의 날짜범위와 겹치는 건 (GET /api/leaves/team) */
+    @EntityGraph(attributePaths = {"user", "user.department"})
     @Query("select distinct lr from LeaveRequest lr join lr.dates d "
             + "where lr.user.department.id = :departmentId and lr.status in :statuses "
             + "and d between :start and :end")
@@ -76,6 +91,7 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                                    @Param("end") LocalDate end);
 
     /** 전체 신청 목록 — status·keyword(신청자명) 필터 (GET /api/leaves, SA) */
+    @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     @Query("select lr from LeaveRequest lr "
             + "where (:status is null or lr.status = :status) "
             + "and (:keyword is null or lr.user.name like concat('%', :keyword, '%'))")

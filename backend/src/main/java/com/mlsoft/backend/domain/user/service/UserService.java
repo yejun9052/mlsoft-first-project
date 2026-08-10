@@ -222,9 +222,9 @@ public class UserService {
         List<LeaveRequest> leavesAsSub =
                 leaveRequestRepository.findBySubApproverAndStatusIn(retiree, LEAVE_REASSIGN_STATUSES);
         List<WelfareRequest> welfaresAsPrimary =
-                welfareRequestRepository.findByPrimaryApproverIdAndStatus(retiree.getId(), RequestStatus.PENDING);
+                welfareRequestRepository.findByPrimaryApproverAndStatus(retiree, RequestStatus.PENDING);
         List<WelfareRequest> welfaresAsSub =
-                welfareRequestRepository.findBySubApproverIdAndStatus(retiree.getId(), RequestStatus.PENDING);
+                welfareRequestRepository.findBySubApproverAndStatus(retiree, RequestStatus.PENDING);
 
         if (leavesAsPrimary.isEmpty() && leavesAsSub.isEmpty()
                 && welfaresAsPrimary.isEmpty() && welfaresAsSub.isEmpty()) {
@@ -236,8 +236,8 @@ public class UserService {
 
         leavesAsPrimary.forEach(lr -> lr.reassignPrimaryApprover(fallback));
         leavesAsSub.forEach(lr -> lr.reassignSubApprover(fallback));
-        welfaresAsPrimary.forEach(wr -> wr.reassignPrimaryApprover(fallback.getId()));
-        welfaresAsSub.forEach(wr -> wr.reassignSubApprover(fallback.getId()));
+        welfaresAsPrimary.forEach(wr -> wr.reassignPrimaryApprover(fallback));
+        welfaresAsSub.forEach(wr -> wr.reassignSubApprover(fallback));
 
         log.info("[퇴직 이관] userId={}, fallbackId={}, leavePrimary={}, leaveSub={}, welfarePrimary={}, welfareSub={}",
                 retiree.getId(), fallback.getId(),

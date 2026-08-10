@@ -13,6 +13,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -31,7 +32,14 @@ import java.math.BigDecimal;
  * - 원문 오타 cetegory는 category로 바로잡아 구현 (docs/02 주석)
  */
 @Entity
-@Table(name = "welfare_requests")
+// 조회 인덱스 (리뷰 D-2) — 연차 신청과 대칭으로 빠져 있었다.
+// 목록 3종이 모두 "누구의 + 어떤 상태" 조합이다: 내 신청(user), 결재 대기(primary·sub 승인자).
+// FK가 만드는 단일 인덱스는 컬럼 하나뿐이라 상태까지 걸러 주지 못한다.
+@Table(name = "welfare_requests", indexes = {
+        @Index(name = "idx_welfare_requests_user_status", columnList = "user_id, status"),
+        @Index(name = "idx_welfare_requests_primary_status", columnList = "primary_approver_id, status"),
+        @Index(name = "idx_welfare_requests_sub_status", columnList = "sub_approver_id, status")
+})
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -52,13 +60,29 @@ public class WelfareRequest extends BaseTimeEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    /** 기본 승인자 id (docs/02 원문 기준 FK 없이 보관) */
-    @Column(name = "primary_approver_id", nullable = false)
-    private Long primaryApproverId;
+    /**
+     * 기본 승인자 (리뷰 D-5).
+     *
+     * <p>원래 FK 없는 raw {@code Long}이었다(docs/02 원문 기준). 컬럼은 그대로 두고 연관만 얹었으므로
+     * 스키마상 달라지는 것은 FK 제약뿐이다. 바꾼 이유:
+     * <ul>
+     *   <li>존재하지 않는 사원 id가 들어가도 DB가 막지 않았다 — 연차({@code LeaveRequest})는 FK가 있어
+     *       같은 자리에서 규칙이 갈려 있었다</li>
+     *   <li>승인자 이름을 응답에 담으려면 서비스가 별도 조회를 돌려야 했다.
+     *       이제 {@code @EntityGraph}로 합칠 수 있다</li>
+     * </ul>
+     *
+     * <p><b>LAZY 프록시의 {@code getId()}는 DB를 보지 않는다</b> — FK 값이 프록시에 이미 있다.
+     * 그래서 id만 쓰는 곳(응답 DTO·승인자 판별)은 연관으로 바꿔도 쿼리가 늘지 않는다.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "primary_approver_id", nullable = false)
+    private User primaryApprover;
 
-    /** 서브 승인자 id */
-    @Column(name = "sub_approver_id")
-    private Long subApproverId;
+    /** 서브 승인자 — 선택 사항이라 nullable */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sub_approver_id")
+    private User subApprover;
 
     /** 카테고리 (신청 시점 스냅샷) */
     @Column(nullable = false)
@@ -93,13 +117,13 @@ public class WelfareRequest extends BaseTimeEntity {
      * 복리후생 신청 생성 — 정책 값(구분·대상·제출자료·부여일수)을 스냅샷으로 복사, PENDING으로 시작.
      */
     public static WelfareRequest create(WelfarePolicy policy, User user, String reason,
-                                        Long primaryApproverId, Long subApproverId) {
+                                        User primaryApprover, User subApprover) {
         return WelfareRequest.builder()
                 .policy(policy)
                 .user(user)
                 .reason(reason)
-                .primaryApproverId(primaryApproverId)
-                .subApproverId(subApproverId)
+                .primaryApprover(primaryApprover)
+                .subApprover(subApprover)
                 .category(policy.getCategory())
                 .target(policy.getTarget())
                 .evidenceGuide(policy.getDefaultEvidence())
@@ -134,12 +158,22 @@ public class WelfareRequest extends BaseTimeEntity {
     }
 
     /** 기본 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
-    public void reassignPrimaryApprover(Long newApproverId) {
-        this.primaryApproverId = newApproverId;
+    public void reassignPrimaryApprover(User newApprover) {
+        this.primaryApprover = newApprover;
     }
 
     /** 서브 승인자 재배정 — 팀장 퇴직 시 결재 이관 (갭분석 B-4, docs/01 2-9) */
-    public void reassignSubApprover(Long newApproverId) {
-        this.subApproverId = newApproverId;
+    public void reassignSubApprover(User newApprover) {
+        this.subApprover = newApprover;
+    }
+
+    /**
+     * 이 사람이 결재할 수 있는가 — primary 또는 sub (병렬 선착순).
+     * 판별을 도메인에 두면 서비스마다 프록시에서 id를 꺼내는 코드가 흩어지지 않는다.
+     * LAZY 프록시의 {@code getId()}는 DB를 보지 않으므로 쿼리가 나가지 않는다.
+     */
+    public boolean isApprover(Long actorId) {
+        return primaryApprover.getId().equals(actorId)
+                || (subApprover != null && subApprover.getId().equals(actorId));
     }
 }

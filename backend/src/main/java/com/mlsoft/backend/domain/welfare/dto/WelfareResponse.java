@@ -9,8 +9,13 @@ import java.time.LocalDateTime;
 
 /**
  * 복리후생 신청 상세/목록 응답 (docs/03).
- * primary/subApprover는 엔티티 설계상 FK 연관 없이 id만 보관하므로(WelfareRequest 참고) 이름 없이 id만 노출한다.
- * LAZY 연관(신청자·부서·정책)을 접근하므로 트랜잭션 내에서 변환한다.
+ *
+ * <p>승인자는 <b>id만</b> 노출한다. 예전에는 FK가 없어서 이름을 담을 수 없었지만(리뷰 D-5로 해소),
+ * 지금도 id만 두는 이유는 다르다 — 이름을 담으면 목록 조회가 승인자까지 적재해야 하고
+ * ({@code @EntityGraph} 확장) 화면이 그 이름을 아직 쓰지 않는다. 필요해지면 그때 함께 넣는다.
+ *
+ * <p>LAZY 연관(신청자·부서·정책)을 접근하므로 트랜잭션 내에서 변환한다.
+ * 승인자 연관은 <b>{@code getId()}만 읽으므로 쿼리가 나가지 않는다</b> — FK 값이 프록시에 이미 있다.
  */
 public record WelfareResponse(
         Long id,
@@ -46,8 +51,8 @@ public record WelfareResponse(
                 welfare.getAddDays(),
                 welfare.getReason(),
                 welfare.getStatus().name(),
-                welfare.getPrimaryApproverId(),
-                welfare.getSubApproverId(),
+                welfare.getPrimaryApprover().getId(),
+                welfare.getSubApprover() != null ? welfare.getSubApprover().getId() : null,
                 welfare.getCreatedAt()
         );
     }

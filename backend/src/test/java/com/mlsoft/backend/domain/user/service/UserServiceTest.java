@@ -100,9 +100,9 @@ class UserServiceTest {
                 .willReturn(List.of(leave));
         given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findByPrimaryApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findBySubApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
@@ -130,9 +130,9 @@ class UserServiceTest {
                 .willReturn(List.of());
         given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
                 .willReturn(List.of(leave));
-        given(welfareRequestRepository.findByPrimaryApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findBySubApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
@@ -143,13 +143,13 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("퇴직 — primary 승인자 id로 걸린 PENDING WelfareRequest: fallback SA id로 재배정")
+    @DisplayName("퇴직 — primary 승인자로 걸린 PENDING WelfareRequest: fallback SA로 재배정")
     void retire_reassignsWelfarePrimaryApprover() {
         User target = activeUser(1L, Role.TEAM_LEADER);
         User applicant = activeUser(2L, Role.EMPLOYEE);
         User fallback = activeUser(9L, Role.SYSTEM_ADMIN);
         WelfarePolicy policy = WelfarePolicy.create("결혼", WelfareTarget.SELF, new BigDecimal("7.0"), "증빙", "설명");
-        WelfareRequest welfare = WelfareRequest.create(policy, applicant, "사유", target.getId(), null);
+        WelfareRequest welfare = WelfareRequest.create(policy, applicant, "사유", target, null);
 
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
         given(departmentRepository.findByLeader(target)).willReturn(List.of());
@@ -157,16 +157,17 @@ class UserServiceTest {
                 .willReturn(List.of());
         given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findByPrimaryApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of(welfare));
-        given(welfareRequestRepository.findBySubApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.of(fallback));
 
         userService.retire(1L, ACTOR_ID);
 
-        assertEquals(fallback.getId(), welfare.getPrimaryApproverId());
+        // 연차와 같은 방식으로 엔티티가 들어간다 (리뷰 D-5 — 예전에는 id만 보관했다)
+        assertEquals(fallback, welfare.getPrimaryApprover());
     }
 
     @Test
@@ -181,8 +182,8 @@ class UserServiceTest {
 
         verify(leaveRequestRepository).findByPrimaryApproverAndStatusIn(eq(target), eq(LEAVE_REASSIGN_STATUSES));
         verify(leaveRequestRepository).findBySubApproverAndStatusIn(eq(target), eq(LEAVE_REASSIGN_STATUSES));
-        verify(welfareRequestRepository).findByPrimaryApproverIdAndStatus(1L, RequestStatus.PENDING);
-        verify(welfareRequestRepository).findBySubApproverIdAndStatus(1L, RequestStatus.PENDING);
+        verify(welfareRequestRepository).findByPrimaryApproverAndStatus(target, RequestStatus.PENDING);
+        verify(welfareRequestRepository).findBySubApproverAndStatus(target, RequestStatus.PENDING);
     }
 
     @Test
@@ -197,8 +198,8 @@ class UserServiceTest {
         verify(departmentRepository, never()).findByLeader(any());
         verify(leaveRequestRepository, never()).findByPrimaryApproverAndStatusIn(any(), any());
         verify(leaveRequestRepository, never()).findBySubApproverAndStatusIn(any(), any());
-        verify(welfareRequestRepository, never()).findByPrimaryApproverIdAndStatus(any(), any());
-        verify(welfareRequestRepository, never()).findBySubApproverIdAndStatus(any(), any());
+        verify(welfareRequestRepository, never()).findByPrimaryApproverAndStatus(any(), any());
+        verify(welfareRequestRepository, never()).findBySubApproverAndStatus(any(), any());
     }
 
     @Test
@@ -213,9 +214,9 @@ class UserServiceTest {
                 .willReturn(List.of(leave));
         given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findByPrimaryApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findBySubApproverIdAndStatus(1L, RequestStatus.PENDING))
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
         given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
                 .willReturn(Optional.empty());
@@ -491,9 +492,9 @@ class UserServiceTest {
                 .willReturn(List.of());
         given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findByPrimaryApproverIdAndStatus(target.getId(), RequestStatus.PENDING))
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
-        given(welfareRequestRepository.findBySubApproverIdAndStatus(target.getId(), RequestStatus.PENDING))
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
                 .willReturn(List.of());
     }
 

@@ -5,6 +5,7 @@ import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -61,16 +62,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findActiveByRoleForUpdate(@Param("role") Role role);
 
     /** 퇴직자 목록 (GET /api/users/retired, SA) */
+    @EntityGraph(attributePaths = {"department"})
     Page<User> findByIsActiveFalse(Pageable pageable);
 
     /**
      * 서브 승인자 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (GET /api/users/approvers).
      * 온보딩이 확정되지 않은 사원은 지정돼도 결재를 못 하므로 후보에서 뺀다 (리뷰 I-5b·S-1).
      */
+    @EntityGraph(attributePaths = {"department"})
     List<User> findByRoleInAndIsActiveTrueAndOnboardingStatusAndIdNot(
             List<Role> roles, OnboardingStatus onboardingStatus, Long excludeId);
 
     /** 온보딩 승인 대기 목록 (GET /api/admin/onboardings, SA) — 오래 기다린 순 (리뷰 S-1) */
+    @EntityGraph(attributePaths = {"department"})
     Page<User> findByOnboardingStatusOrderByUpdateAtAsc(OnboardingStatus onboardingStatus, Pageable pageable);
 
     /** 내 부서 팀원 목록 — 재직 중만, 이름순 (GET /api/users/team-members) */
@@ -107,7 +111,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "and (u.lastBirthdayGrantYear is null or u.lastBirthdayGrantYear < :year)")
     List<Long> findIdsWithoutBirthdayLeave(@Param("year") int year);
 
-    /** 전체 목록 검색 — keyword(이름·이메일)·role 필터, 퇴직자 제외 (GET /api/users, SA) */
+    /**
+     * 전체 목록 검색 — keyword(이름·이메일)·role 필터, 퇴직자 제외 (GET /api/users, SA).
+     * {@code UserResponse}가 행마다 부서명을 읽으므로 함께 적재한다 (리뷰 D-2).
+     */
+    @EntityGraph(attributePaths = {"department"})
     @Query("select u from User u where u.isActive = true "
             + "and (:role is null or u.role = :role) "
             + "and (:keyword is null or u.name like concat('%', :keyword, '%') or u.email like concat('%', :keyword, '%'))")

@@ -278,7 +278,7 @@ class SecurityAccessMatrixTest {
         LeaveRequest leave = leaveRequestRepository.save(LeaveRequest.create(
                 applicant, LeaveType.ANNUAL, List.of(futureDate(10)), "휴식", approver, null));
         WelfareRequest welfare = welfareRequestRepository.save(WelfareRequest.create(
-                savedPolicy(), applicant, "경조사", approver.getId(), null));
+                savedPolicy(), applicant, "경조사", approver, null));
 
         String body = """
                 { "approved": true, "comment": "권한 검증" }
@@ -306,7 +306,7 @@ class SecurityAccessMatrixTest {
         LeaveRequest leave = leaveRequestRepository.save(LeaveRequest.create(
                 owner, LeaveType.ANNUAL, List.of(futureDate(20)), "휴식", approver, null));
         WelfareRequest welfare = welfareRequestRepository.save(WelfareRequest.create(
-                savedPolicy(), owner, "경조사", approver.getId(), null));
+                savedPolicy(), owner, "경조사", approver, null));
         ScheduleEntry schedule = scheduleEntryRepository.save(ScheduleEntry.create(
                 owner, ScheduleType.FIELD_WORK, List.of(futureDate(30)), "외근"));
 
