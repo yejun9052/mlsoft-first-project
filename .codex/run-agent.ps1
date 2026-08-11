@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Codex 서브 에이전트 실행기 — 역할 지시서(.codex/agents/*.md) + 작업 지시를 합쳐 codex exec에 넘긴다.
 
@@ -44,8 +44,11 @@ if (-not (Test-Path $agentFile)) {
     throw "역할 지시서를 찾을 수 없다: $agentFile`n사용 가능한 역할: $available"
 }
 
-# Task가 파일 경로면 내용을 읽어 쓴다
-$taskText = if (Test-Path $Task -PathType Leaf) { Get-Content $Task -Raw } else { $Task }
+# Task가 파일 경로면 내용을 읽어 쓴다.
+# -Encoding UTF8은 생략하면 안 된다 — PS 5.1의 Get-Content 기본값은 시스템 ANSI(여기선 cp949)라
+# BOM 없는 UTF-8 한글이 그 자리에서 깨진다. 출력 인코딩만 고쳐 뒀던 탓에(2026-08-10)
+# 역할 지시서가 모지바케로 Codex에 전달되고 있었다 (2026-08-11 발견).
+$taskText = if (Test-Path $Task -PathType Leaf) { Get-Content $Task -Raw -Encoding UTF8 } else { $Task }
 
 $outDir = Join-Path $PSScriptRoot 'out'
 if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
@@ -53,7 +56,7 @@ $stamp = Get-Date -Format 'MMdd-HHmmss'
 $outFile = Join-Path $outDir "$Agent-$stamp.md"
 
 $prompt = @"
-$(Get-Content $agentFile -Raw)
+$(Get-Content $agentFile -Raw -Encoding UTF8)
 
 ────────────────────────────────────────
 # 이번 작업 지시
