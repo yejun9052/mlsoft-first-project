@@ -11,10 +11,15 @@ import StatusBadge from '../components/ui/StatusBadge.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveCalendar, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import { useMyWelfareRequests } from '../hooks/useWelfare.js';
 import { useHolidays } from '../hooks/useHolidays.js';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 
-const TODAY = dayjs().format('YYYY-MM-DD');
+const TODAY_D = dayjs();
+const TODAY = TODAY_D.format('YYYY-MM-DD');
+
+// 남은 일수가 이 값 이하면 "다가오는 일정"에 다음 달 캘린더도 함께 조회한다
+const UPCOMING_LOOKAHEAD_DAYS = 7;
 
 // 날짜 목록 요약 — "7/20 (월)" 또는 "7/20 외 2일"
 function formatDates(dates) {
@@ -29,18 +34,32 @@ export default function DashboardPage() {
   const { data: me } = meQuery;
   const summaryQuery = useLeaveSummary();
   const myLeavesQuery = useMyLeaves();
-  // 이번 달 캘린더만 조회 — 월 경계 근처(말일)에는 다음 달 일정이 "다가오는 일정"에서 누락될 수 있음
-  // (TODO: 필요해지면 다음 달도 함께 조회해 병합)
-  const calendarQuery = useLeaveCalendar(dayjs().year(), dayjs().month() + 1);
+  // size는 연차(useMyLeaves 기본 100)와 맞춘다 — 상태 필터가 없는 API라 클라이언트에서 세므로,
+  // 한 페이지에 안 들어오면 대기 건이 누락된다
+  const myWelfareQuery = useMyWelfareRequests({ size: 100 });
+
+  // 캘린더는 이번 달을 조회하되, **월말에는 다음 달도 덧붙인다**. 이번 달만 보면 말일에 가까울수록
+  // "다가오는 일정"에 남는 항목이 줄어 마지막 날에는 사실상 비어 버린다 — 다음 달 일정이 없어서가
+  // 아니라 조회 범위 밖이라서다. 평소에는 두 번째 요청이 나가지 않는다(enabled=false).
+  const calendarQuery = useLeaveCalendar(TODAY_D.year(), TODAY_D.month() + 1);
+  const nextMonth = TODAY_D.add(1, 'month');
+  const nearMonthEnd = TODAY_D.daysInMonth() - TODAY_D.date() <= UPCOMING_LOOKAHEAD_DAYS;
+  const nextCalendarQuery = useLeaveCalendar(nextMonth.year(), nextMonth.month() + 1, {
+    enabled: nearMonthEnd,
+  });
 
   const summary = summaryQuery.data;
   const myLeaves = myLeavesQuery.data?.content ?? [];
-  const calendarLeaves = useMemo(() => calendarQuery.data ?? [], [calendarQuery.data]);
+  const myWelfareRequests = myWelfareQuery.data?.content ?? [];
+  const calendarLeaves = useMemo(
+    () => [...(calendarQuery.data ?? []), ...(nextCalendarQuery.data ?? [])],
+    [calendarQuery.data, nextCalendarQuery.data],
+  );
   // 공휴일 조회 실패는 화면을 막지 않는다 — 다가오는 일정에서 공휴일만 빠진다
   const holidaysQuery = useHolidays(dayjs().year());
   const holidays = useMemo(() => holidaysQuery.data ?? [], [holidaysQuery.data]);
 
-  // 다가오는 부재 일정 — 오늘 이후의 승인 연차(캘린더 API) + 공휴일(mock)을 날짜순으로 병합.
+  // 다가오는 부재 일정 — 오늘 이후의 승인 연차(캘린더 API) + 공휴일(공휴일 API)을 날짜순으로 병합.
   // 캘린더 API는 신청 건 단위(dates 배열 포함)라 날짜별 항목으로 펼쳐서(flatMap) 다룬다.
   const upcomingEvents = useMemo(() => {
     const leaveEvents = calendarLeaves.flatMap((leave) =>
@@ -62,9 +81,14 @@ export default function DashboardPage() {
 
   // 내 신청 중 결재 대기 건수 — 관리자 결재함이 아니라 '내' 대기 건 (검증 F2)
   // 신규 신청(PENDING)과 소급 취소 신청(CANCEL_PENDING) 모두 결재자 처리를 기다리는 건이라 합산.
-  // TODO(welfare API): 복리후생 신청까지 합산하려면 그쪽 API가 생긴 뒤 더해야 함.
+  //
+  // **연차와 복리후생을 함께 센다** — 사이드바 배지를 목록과 같은 기준으로 통일할 때(리뷰 F-8)
+  // 여기는 같이 고치지 못했다. 복리후생 API가 없던 시절의 주석이 남아 연차만 세고 있었고,
+  // 그래서 복리후생만 대기 중인 사람에게는 "내 결재 대기 0건"으로 보였다.
   const isAwaitingApproval = (r) => r.status === 'PENDING' || r.status === 'CANCEL_PENDING';
-  const myPendingCount = myLeaves.filter(isAwaitingApproval).length;
+  const myPendingCount =
+    myLeaves.filter(isAwaitingApproval).length +
+    myWelfareRequests.filter(isAwaitingApproval).length;
 
   // 실패를 로딩과 구분한다 — 아래 !summary 가드만 있으면 조회가 실패해도 계속 "불러오는 중"이
   // 표시돼 스피너가 영원히 돈다 (리뷰 F-6).
