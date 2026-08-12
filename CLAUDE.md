@@ -53,6 +53,8 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 - **`advance_days`는 파생값이다** — `advance_days = max(0, use_days − base_days − bonus_days)`.
   `User.syncAdvanceDays()` 하나만 이 필드에 쓰고, 잔액 3필드(base/bonus/use)를 바꾸는 도메인 메서드 6개가
   마지막에 이걸 호출한다 — **`resetAnnualLeave`까지 예외 없이**. 이 필드에 단독 대입하는 코드를 새로 만들지 말 것
+  (`@PrePersist`·`@PreUpdate`가 저장 직전에 한 번 더 재계산하지만 **그물이지 대체재가 아니다** —
+  도메인 메서드는 flush 전 메모리 상태도 맞아야 하므로 계속 직접 호출한다)
   (그게 리뷰 I-1·I-2·I-8의 원인이었다). `LeaveRequest.advanceUsedDays`는 감사 기록 전용이고 복구 계산에 쓰지 않는다.
   리셋도 재계산해야 하는 이유(빼면 빚이 면제된다)는 docs/09 §5 정정 블록에 검산이 있다.
 - `User`에 `@Version` 낙관적 락 — 동시 신청 초과 방지

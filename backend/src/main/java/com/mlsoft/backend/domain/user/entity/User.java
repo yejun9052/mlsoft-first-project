@@ -14,6 +14,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AccessLevel;
@@ -221,6 +223,25 @@ public class User extends BaseTimeEntity {
     private void syncAdvanceDays() {
         // getRemainingDays() = base + bonus − use 이므로 negate() = use − base − bonus
         this.advanceDays = getRemainingDays().negate().max(BigDecimal.ZERO);
+    }
+
+    /**
+     * 저장 직전 파생값 재계산 — <b>불변식이 깨진 채로는 DB에 들어갈 수 없게 하는 마지막 관문</b>
+     * (1차 테스트 J).
+     *
+     * <p>클래스 수준 {@code @Builder}가 공개돼 있어
+     * {@code User.builder().baseDays(10).useDays(13).advanceDays(0)}처럼 네 필드를 개별 지정하면
+     * 저장 전부터 (B)가 깨진다. 빌더를 막으면 호출부 27곳(대부분 테스트)을 다 고쳐야 해서,
+     * <b>영속화 경계에서 강제</b>하는 쪽을 택했다.
+     *
+     * <p>파생값을 다시 계산할 뿐이라 정상 경로에서는 값이 바뀌지 않는다(멱등).
+     * 도메인 메서드의 {@code syncAdvanceDays()} 호출을 대체하지 않는다 — 그쪽은 flush 전에도
+     * 메모리 상태가 맞아야 하기 때문이다. 이건 그물이지 대체재가 아니다.
+     */
+    @PrePersist
+    @PreUpdate
+    private void enforceAdvanceDaysInvariant() {
+        syncAdvanceDays();
     }
 
     /**

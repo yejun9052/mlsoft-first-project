@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.holiday.client;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 // Boot 4는 Jackson 3를 쓴다 — 패키지가 com.fasterxml.jackson.*이 아니라 tools.jackson.*이다.
@@ -9,6 +10,8 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -32,8 +35,29 @@ public class HolidayApiClient {
     private static final int NUM_OF_ROWS = 100;
     private static final DateTimeFormatter LOCDATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    private final RestClient restClient = RestClient.create();
+    /**
+     * 연결 5초 · 응답 10초 (1차 테스트 D).
+     *
+     * <p><b>{@code RestClient.create()}의 기본값은 '무제한'이다.</b> 예외가 나면 빈 목록으로
+     * degrade하는 설계는 맞지만, <b>예외가 날 때까지 기다리는 상한이 없으면</b> degrade가 발동하지
+     * 않는다 — data.go.kr가 연결만 맺고 응답하지 않으면 새해 동기화 스케줄러와
+     * {@code getByYear()} 요청 스레드가 그대로 묶인다. 그 사이 공휴일이 비어 있으면
+     * 연차 신청 검증이 공휴일을 평일로 통과시킨다.
+     */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    private final RestClient restClient = RestClient.builder()
+            .requestFactory(timeoutBoundRequestFactory())
+            .build();
     private final String apiKey;
+
+    private static JdkClientHttpRequestFactory timeoutBoundRequestFactory() {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
+        factory.setReadTimeout(READ_TIMEOUT);
+        return factory;
+    }
 
     public HolidayApiClient(@Value("${holiday.api-key:}") String apiKey) {
         this.apiKey = apiKey;
