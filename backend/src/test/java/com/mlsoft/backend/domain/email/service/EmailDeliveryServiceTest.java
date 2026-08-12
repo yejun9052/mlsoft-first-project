@@ -7,19 +7,19 @@ import com.mlsoft.backend.domain.email.entity.EmailType;
 import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
-import com.mlsoft.backend.domain.user.repository.UserRepository;
+import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -29,63 +29,73 @@ class EmailDeliveryServiceTest {
 
     @Mock
     private JavaMailSender mailSender;
-
     @Mock
     private EmailHistoryRepository emailHistoryRepository;
 
-    @Mock
-    private UserRepository userRepository;
-
     @Test
-    @DisplayName("메일 계정이 없어도 예외 없이 FAILED 이력과 시도 횟수를 기록한다")
-    void createAndSend_계정미설정_failed기록() {
-        User user = user();
-        given(emailHistoryRepository.save(org.mockito.ArgumentMatchers.any(EmailHistory.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("메일 계정이 없어도 예외 없이 FAILED와 시도 횟수를 기록한다")
+    void send_계정미설정_failed기록() {
+        EmailHistory history = pendingHistory(user(true));
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
 
-        EmailDeliveryService service = new EmailDeliveryService(
-                mailSender,
-                emailHistoryRepository,
-                userRepository,
-                new MailAppProperties(""),
-                "");
+        service("").send(1L);
 
-        service.createAndSend(
-                user,
-                EmailType.LEAVE,
-                new EmailMessage("제목", "본문"));
-
-        ArgumentCaptor<EmailHistory> captor = ArgumentCaptor.forClass(EmailHistory.class);
-        verify(emailHistoryRepository).save(captor.capture());
-        verify(mailSender, never()).send(org.mockito.ArgumentMatchers.any(jakarta.mail.internet.MimeMessage.class));
-
-        assertEquals(EmailStatus.FAILED, captor.getValue().getStatus());
-        assertEquals(1, captor.getValue().getRetryCount());
+        verify(mailSender, never()).send(any(MimeMessage.class));
+        assertEquals(EmailStatus.FAILED, history.getStatus());
+        assertEquals(1, history.getRetryCount());
     }
 
     @Test
-    @DisplayName("retry_count가 3 이상인 FAILED는 재시도 조회 대상에서 빠진다")
-    void findRetryTargetIds_상한은저장소조건으로제외() {
-        given(emailHistoryRepository.findTop100ByStatusAndRetryCountLessThanOrderByIdAsc(
-                EmailStatus.FAILED,
-                EmailDeliveryService.MAX_ATTEMPTS))
-                .willReturn(List.of());
+    @DisplayName("발송 직전 퇴직한 수신자에게는 보내지 않는다")
+    void send_퇴직자_발송안함() {
+        EmailHistory history = pendingHistory(user(false));
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
 
-        EmailDeliveryService service = new EmailDeliveryService(
-                mailSender,
-                emailHistoryRepository,
-                userRepository,
-                new MailAppProperties(""),
-                "sender@gmail.com");
+        service("sender@gmail.com").send(1L);
 
-        assertEquals(List.of(), service.findRetryTargetIds());
-        verify(emailHistoryRepository)
-                .findTop100ByStatusAndRetryCountLessThanOrderByIdAsc(
-                        EmailStatus.FAILED,
-                        3);
+        verify(mailSender, never()).send(any(MimeMessage.class));
+        assertEquals(EmailStatus.FAILED, history.getStatus());
     }
 
-    private User user() {
+    @Test
+    @DisplayName("이미 보낸 건은 다시 보내지 않는다 — 스케줄러와 비동기 리스너가 겹쳐도 중복 발송이 없다")
+    void send_이미SENT면_건너뛴다() {
+        EmailHistory history = pendingHistory(user(true));
+        history.markSent();
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
+
+        service("sender@gmail.com").send(1L);
+
+        verify(mailSender, never()).createMimeMessage();
+        assertEquals(EmailStatus.SENT, history.getStatus());
+    }
+
+    @Test
+    @DisplayName("재시도 상한에 도달한 건은 다시 시도하지 않는다 — 영구 실패 건 무한 재시도 방지 (D-4)")
+    void send_상한도달이면_건너뛴다() {
+        EmailHistory history = pendingHistory(user(true));
+        for (int i = 0; i < EmailDeliveryService.MAX_ATTEMPTS; i++) {
+            history.markFailed("실패 " + (i + 1));
+        }
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
+
+        service("sender@gmail.com").send(1L);
+
+        verify(mailSender, never()).createMimeMessage();
+        assertEquals(EmailDeliveryService.MAX_ATTEMPTS, history.getRetryCount(),
+                "상한 도달 후에는 시도 횟수가 더 늘지 않아야 한다");
+    }
+
+    private EmailDeliveryService service(String username) {
+        return new EmailDeliveryService(
+                mailSender, emailHistoryRepository, new MailAppProperties(""), username);
+    }
+
+    private EmailHistory pendingHistory(User recipient) {
+        return EmailHistory.create(recipient, null, EmailType.LEAVE, "제목", "본문");
+    }
+
+    private User user(boolean active) {
         return User.builder()
                 .id(1L)
                 .name("테스트 사원")
@@ -95,7 +105,7 @@ class EmailDeliveryServiceTest {
                 .useDays(BigDecimal.ZERO)
                 .bonusDays(BigDecimal.ZERO)
                 .advanceDays(BigDecimal.ZERO)
-                .isActive(true)
+                .isActive(active)
                 .build();
     }
 }

@@ -93,9 +93,12 @@ public class DepartmentService {
     // 내부 헬퍼
     // ---------------------------------------------------------------------
 
-    /** 상위 부서 검증 — 존재·활성 + 그 부서 자신도 루트(parentId null)여야 함 (2단계 계층 강제) */
     /**
      * 상위 부서 검증 — 2단계 계층만 허용.
+     *
+     * <p><b>양쪽을 다 봐야 2단계가 강제된다</b> (1차 테스트 F). 이전에는 "상위가 루트인가"만 봐서
+     * <b>자식이 있는 부서를 다른 루트 밑으로 옮기면 3단계가 만들어졌다</b> — 화면에서만 막고 있어서
+     * API를 직접 호출하면 뚫렸고, 관리자 화면은 depth 0·1만 렌더하므로 표시가 깨졌다.
      *
      * @param parentId 지정하려는 상위 부서
      * @param selfId   수정 중인 부서 id (생성 시 null). 자기 자신을 상위로 지정하면
@@ -108,9 +111,16 @@ public class DepartmentService {
         if (selfId != null && parentId.equals(selfId)) {
             throw new BusinessException(ErrorCode.SELF_PARENT_DEPARTMENT);
         }
+
+        // ① 올라갈 상위가 루트여야 한다 (상위의 상위가 생기면 3단계)
         Department parent = departmentRepository.findByIdAndActiveTrue(parentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
         if (parent.getParentId() != null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+
+        // ② 내려갈 자신에게 자식이 없어야 한다 (내 자식이 손자가 되면 3단계)
+        if (selfId != null && departmentRepository.existsByParentId(selfId)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
     }

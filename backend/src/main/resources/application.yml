@@ -50,6 +50,12 @@ spring:
           auth: true
           starttls:
             enable: true
+          # 타임아웃 3종은 생략하면 안 된다 — JavaMail 기본값이 '무제한'이다 (1차 테스트 C).
+          # SMTP가 반개방 상태로 응답하지 않으면 메일 스레드(최대 4개)가 영영 반환되지 않고,
+          # 큐가 차면서 이후 알림이 이력조차 없이 버려진다. 방아쇠가 여기다.
+          connectiontimeout: ${MAIL_CONNECT_TIMEOUT_MS:10000}  # TCP 연결
+          timeout: ${MAIL_READ_TIMEOUT_MS:10000}               # 응답 대기
+          writetimeout: ${MAIL_WRITE_TIMEOUT_MS:10000}         # 본문 전송
 
 # JWT (HttpOnly 쿠키 발급용 — SecurityConfig는 다음 단계)
 jwt:

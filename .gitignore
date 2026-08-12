@@ -9,6 +9,10 @@
 *-secret.properties
 application-local.yml
 application-local.properties
+# 키·인증서 (1차 테스트 G) — AGENTS.md가 시크릿으로 규정해 두고도 패턴이 빠져 있었다.
+# .dockerignore에도 같은 두 줄이 있어야 한다. git과 도커 빌드 컨텍스트는 별개다.
+*.key
+*.pem
 
 # ── Java / Gradle ──
 backend/build/

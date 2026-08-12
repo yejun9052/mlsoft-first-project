@@ -77,6 +77,28 @@ class DepartmentServiceTest {
         assertEquals(ErrorCode.INVALID_INPUT_VALUE, ex.getErrorCode());
     }
 
+    /**
+     * 1차 테스트 F — 2단계 강제의 나머지 반쪽.
+     *
+     * <p>"상위가 루트인가"만 보면, <b>자식이 있는 부서를 다른 루트 밑으로 옮겨</b> 3단계를 만들 수 있다.
+     * 화면에서만 막고 있어서 API를 직접 호출하면 뚫렸다.
+     */
+    @Test
+    @DisplayName("수정 — 자식이 있는 부서를 다른 루트의 하위로 옮기면 INVALID_INPUT_VALUE (3단계 방지)")
+    void update_selfHasChildren_throws() {
+        Department root = Department.create("본부", "설명", null);
+        Department movingParent = Department.create("개발팀", "설명", null); // 이 부서에 자식이 있다
+        given(departmentRepository.findByIdAndActiveTrue(7L)).willReturn(Optional.of(movingParent));
+        given(departmentRepository.findByIdAndActiveTrue(1L)).willReturn(Optional.of(root));
+        given(departmentRepository.existsByParentId(7L)).willReturn(true);
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest("개발팀", "설명", null, 1L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> departmentService.update(7L, request));
+
+        assertEquals(ErrorCode.INVALID_INPUT_VALUE, ex.getErrorCode());
+    }
+
     @Test
     @DisplayName("생성 — parentId가 존재하지 않거나 비활성 부서면 DEPARTMENT_NOT_FOUND")
     void create_parentNotFound_throws() {

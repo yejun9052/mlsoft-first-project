@@ -23,12 +23,12 @@ public class EmailRetryScheduler {
     /** 15분마다 최대 100건 — Gmail 장애 중 재접속 폭주와 무한 재시도를 막는다 */
     @Scheduled(cron = "0 */15 * * * *", zone = "Asia/Seoul")
     public void retryFailedEmails() {
-        var targetIds = emailDeliveryService.findRetryTargetIds();
+        var targetIds = emailDeliveryService.findDispatchTargetIds();
         int succeededOrHandled = 0;
 
         for (Long historyId : targetIds) {
             try {
-                emailDeliveryService.retry(historyId);
+                emailDeliveryService.send(historyId);
                 succeededOrHandled++;
             } catch (RuntimeException e) {
                 // 한 이력의 DB 오류가 나머지 재시도를 막지 않게 격리한다.

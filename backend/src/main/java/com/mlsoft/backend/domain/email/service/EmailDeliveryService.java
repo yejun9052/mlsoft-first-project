@@ -3,13 +3,12 @@ package com.mlsoft.backend.domain.email.service;
 import com.mlsoft.backend.config.MailAppProperties;
 import com.mlsoft.backend.domain.email.entity.EmailHistory;
 import com.mlsoft.backend.domain.email.entity.EmailStatus;
-import com.mlsoft.backend.domain.email.entity.EmailType;
 import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
 import com.mlsoft.backend.domain.user.entity.User;
-import com.mlsoft.backend.domain.user.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -17,11 +16,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * SMTP 발송과 email_history 상태 전이를 담당한다.
+ * SMTP 발송과 {@code email_history} 상태 전이를 담당한다.
  *
  * <p>모든 예외를 FAILED로 변환하고 밖으로 전파하지 않는다. 메일 장애가 업무 처리를 실패시키면
  * 안 되기 때문이다(검증 R-4).
@@ -32,86 +33,83 @@ public class EmailDeliveryService {
 
     public static final int MAX_ATTEMPTS = 3;
 
+    /**
+     * 이 시간이 지나도 {@code PENDING}이면 비동기 발송이 실행되지 못한 것으로 보고 스케줄러가 줍는다.
+     *
+     * <p>너무 짧으면 정상 발송 중인 건을 스케줄러가 중복으로 집는다. 리스너는 보통 수 초 안에
+     * 끝나므로 10분이면 안전하다.
+     */
+    private static final Duration PENDING_STALE_AFTER = Duration.ofMinutes(10);
+
+    private static final int BATCH_SIZE = 100;
     private static final String FROM_NAME = "MLsoft 연차관리";
     private static final String ERROR_MAIL_ACCOUNT_MISSING = "메일 발송 계정이 설정되지 않았습니다.";
     private static final String ERROR_RECIPIENT_EMAIL_MISSING = "수신자 이메일이 설정되지 않았습니다.";
-    private static final String ERROR_RECIPIENT_INACTIVE = "퇴직 처리된 수신자라 재발송하지 않았습니다.";
+    private static final String ERROR_RECIPIENT_INACTIVE = "퇴직 처리된 수신자라 발송하지 않았습니다.";
 
     private final JavaMailSender mailSender;
     private final EmailHistoryRepository emailHistoryRepository;
-    private final UserRepository userRepository;
     private final MailAppProperties mailAppProperties;
     private final String username;
 
     public EmailDeliveryService(
             JavaMailSender mailSender,
             EmailHistoryRepository emailHistoryRepository,
-            UserRepository userRepository,
             MailAppProperties mailAppProperties,
             @Value("${spring.mail.username:}") String username
     ) {
         this.mailSender = mailSender;
         this.emailHistoryRepository = emailHistoryRepository;
-        this.userRepository = userRepository;
         this.mailAppProperties = mailAppProperties;
         this.username = username == null ? "" : username.trim();
     }
 
     /**
-     * 새 발송 이력을 만들고 즉시 한 번 발송한다.
+     * 이력 한 건을 발송한다 — <b>건마다 독립 트랜잭션</b>이다 (1차 테스트 A).
      *
-     * <p>호출자는 반드시 커밋 후 시작한 새 트랜잭션이어야 한다.
-     */
-    public void createAndSend(
-            User recipient,
-            EmailType emailType,
-            EmailMessage message
-    ) {
-        EmailHistory history = emailHistoryRepository.save(
-                EmailHistory.create(recipient, null, emailType, message.title(), message.content()));
-        attempt(history);
-    }
-
-    /**
-     * FAILED 한 건을 별도 트랜잭션으로 재시도한다.
-     *
-     * <p>한 건의 DB·SMTP 오류가 다음 실패 건 처리를 막지 않게 건마다 트랜잭션을 끊는다.
+     * <p>이미 보낸 건(SENT)이나 재시도 상한에 도달한 건은 건너뛴다. 최초 발송과 재시도가
+     * 같은 경로를 쓰므로 상태 판정이 한 곳에만 있다.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void retry(Long historyId) {
-        Optional<EmailHistory> optionalHistory = emailHistoryRepository.findById(historyId);
-        if (optionalHistory.isEmpty()) {
+    public void send(Long historyId) {
+        Optional<EmailHistory> found = emailHistoryRepository.findById(historyId);
+        if (found.isEmpty()) {
             return;
         }
 
-        EmailHistory history = optionalHistory.get();
-        if (history.getStatus() != EmailStatus.FAILED
-                || history.getRetryCount() >= MAX_ATTEMPTS) {
+        EmailHistory history = found.get();
+        if (history.getStatus() == EmailStatus.SENT || history.getRetryCount() >= MAX_ATTEMPTS) {
             return;
         }
 
-        if (!history.getUser().isActive()) {
+        User recipient = history.getUser();
+        // 발행 시점에는 재직이었어도 발송 직전에 퇴직했을 수 있다.
+        if (!recipient.isActive()) {
+            log.info("[이메일] 퇴직자 수신 제외 — userId={}, historyId={}", recipient.getId(), historyId);
             history.markFailed(ERROR_RECIPIENT_INACTIVE);
             return;
         }
 
-        attempt(history);
+        attempt(history, recipient);
     }
 
+    /**
+     * 재시도 대상 id — FAILED(상한 미만) + <b>오래 묶여 있는 PENDING</b>.
+     *
+     * <p>PENDING을 포함하는 것이 1차 테스트 B의 안전망이다. 큐 포화나 강제 종료로 비동기 발송이
+     * 아예 시작되지 못한 건이 여기로 회수된다.
+     */
     @Transactional(readOnly = true)
-    public List<Long> findRetryTargetIds() {
-        return emailHistoryRepository
-                .findTop100ByStatusAndRetryCountLessThanOrderByIdAsc(
-                        EmailStatus.FAILED,
-                        MAX_ATTEMPTS)
-                .stream()
-                .map(EmailHistory::getId)
-                .toList();
+    public List<Long> findDispatchTargetIds() {
+        return emailHistoryRepository.findDispatchTargetIds(
+                MAX_ATTEMPTS,
+                EmailStatus.FAILED,
+                EmailStatus.PENDING,
+                LocalDateTime.now().minus(PENDING_STALE_AFTER),
+                PageRequest.of(0, BATCH_SIZE));
     }
 
-    private void attempt(EmailHistory history) {
-        User recipient = history.getUser();
-
+    private void attempt(EmailHistory history, User recipient) {
         if (recipient.getEmail() == null || recipient.getEmail().isBlank()) {
             log.warn("[이메일] 수신자 이메일 없음 — userId={}, historyId={}",
                     recipient.getId(), history.getId());

@@ -23,6 +23,11 @@ backend/src/main/resources/application-local.properties
 .env.*
 !.env.*.example
 
+# 키·인증서 (1차 테스트 G). backend/ 아래에 TLS 개인키나 서비스 계정 키를 두면
+# COPY backend/ ./ 가 그대로 가져가고 bootJar가 운영 이미지에 박는다.
+**/*.key
+**/*.pem
+
 # 빌드 산출물에도 시크릿 사본이 남는다 (build/resources/main/application-local.yml).
 # 아래 backend/build/ 제외가 이것까지 함께 막는다 — 그 줄을 지우지 말 것.
 

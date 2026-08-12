@@ -30,6 +30,12 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     /** 활성 부서 단건 조회 — 수정·비활성화·부서배정 시 대상 조회 */
     Optional<Department> findByIdAndActiveTrue(Long id);
 
+    /**
+     * 하위 부서 보유 여부 — 2단계 계층 강제의 나머지 반쪽 (1차 테스트 F).
+     * <p>비활성 자식도 센다: 되살리면 그대로 3단계가 되기 때문이다.
+     */
+    boolean existsByParentId(Long parentId);
+
     /** 이 사람이 팀장인 부서 전부 — 퇴직 이관 시 leader 해제 대상 (active 필터 없음, docs/01 2-9) */
     List<Department> findByLeader(User leader);
 }
