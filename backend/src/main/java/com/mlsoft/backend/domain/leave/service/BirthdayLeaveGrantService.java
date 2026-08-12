@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.leave.service;
 
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -34,6 +35,8 @@ public class BirthdayLeaveGrantService {
     private static final BigDecimal BIRTHDAY_LEAVE_DAYS = new BigDecimal("0.5");
 
     private final UserRepository userRepository;
+    // 지급 알림 — 사원 1명 = 1트랜잭션이므로 이 사원의 커밋 후에만 발송된다 (검증 R-4)
+    private final EmailNotificationPublisher emailNotificationPublisher;
 
     /** 올해 아직 생일 반차를 못 받은 사원 id — 생일 도래 여부는 {@link #grant}가 판정한다 */
     @Transactional(readOnly = true)
@@ -73,7 +76,7 @@ public class BirthdayLeaveGrantService {
         }
 
         user.grantBirthdayLeave(BIRTHDAY_LEAVE_DAYS, year);
-        // TODO(email): 생일 반차 지급 알림 — 당사자 + SYSTEM_ADMIN (docs/01 요구사항 11, docs/09 §10)
+        emailNotificationPublisher.publishBirthdayGranted(user, birthdayThisYear, BIRTHDAY_LEAVE_DAYS);
         log.info("[생일 반차] userId={}, 생일={}, 지급={}일, 보너스 누계={}",
                 userId, birthdayThisYear, BIRTHDAY_LEAVE_DAYS, user.getBonusDays());
         return true;

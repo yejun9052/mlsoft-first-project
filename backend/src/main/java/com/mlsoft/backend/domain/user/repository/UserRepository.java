@@ -31,6 +31,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** 재직 중인 해당 권한의 최초(id 오름차순) 사용자 — 퇴직 시 결재 이관 대상 조회 등 */
     Optional<User> findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role role);
 
+    /** 재직 중 특정 권한 사용자 전체 — 이메일 알림 수신자 결정 (검증 R-4) */
+    List<User> findByRoleAndIsActiveTrue(Role role);
+
     /**
      * primary 승인자 SYSTEM_ADMIN fallback (검증 Y-3, 리뷰 I-5b·I-5c).
      * <p>온보딩 미완료자는 인터셉터가 막아 결재를 못 하므로 제외하고, 신청자 본인도 제외한다

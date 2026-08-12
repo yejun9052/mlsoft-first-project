@@ -56,6 +56,9 @@ class WelfareServiceTest {
     // 승인자 결정은 연차와 같은 ApproverResolver를 쓴다 (리뷰 I-5)
     @Mock
     private ApproverResolver approverResolver;
+    /** 이메일 발행기 — 목이 없으면 @InjectMocks가 null을 넣어 신청·승인마다 NPE가 난다 */
+    @Mock
+    private com.mlsoft.backend.domain.email.service.EmailNotificationPublisher emailNotificationPublisher;
 
     @InjectMocks
     private WelfareService welfareService;

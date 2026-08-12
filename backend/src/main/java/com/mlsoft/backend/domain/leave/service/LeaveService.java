@@ -3,6 +3,7 @@ package com.mlsoft.backend.domain.leave.service;
 import com.mlsoft.backend.domain.common.RequestAction;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.leave.dto.ApprovalRequest;
 import com.mlsoft.backend.domain.leave.dto.CancelRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveCalendarResponse;
@@ -90,6 +91,9 @@ public class LeaveService {
     private final HolidayService holidayService;
     // 승인자 결정 — 연차·복리후생 공용 규칙 (리뷰 I-5)
     private final ApproverResolver approverResolver;
+    // 이메일 알림 — 이벤트만 발행하고 발송은 커밋 후 비동기로 일어난다.
+    // SMTP 장애가 이 서비스의 트랜잭션을 롤백시키지 않는다 (검증 R-4)
+    private final EmailNotificationPublisher emailNotificationPublisher;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -121,7 +125,7 @@ public class LeaveService {
         leaveRequestRepository.save(leave);
 
         saveHistory(leave, applicant, RequestAction.PENDING, request.reason());
-        // TODO(email): 신청 알림 — 당사자·primary·sub에게 @Async + AFTER_COMMIT 이벤트 발행 (docs/01 2-3, 다음 마일스톤)
+        emailNotificationPublisher.publishLeaveApplied(leave);
         log.info("[연차 신청] userId={}, leaveId={}, days={}, advanceUsed={}",
                 userId, leave.getId(), leave.getDays(), advanceUsed);
         return LeaveResponse.of(leave);
@@ -247,9 +251,9 @@ public class LeaveService {
         if (!approved) {
             restoreCurrentYearPortion(fresh);
         }
-        saveHistory(fresh, findUserOrThrow(actorId),
+        saveHistory(fresh, actor,
                 approved ? RequestAction.APPROVED : RequestAction.REJECTED, request.comment());
-        // TODO(email): 승인/반려 알림 (docs/01 2-3, 다음 마일스톤)
+        emailNotificationPublisher.publishLeaveProcessed(fresh, actor, approved);
         log.info("[연차 {}] leaveId={}, actorId={}", approved ? "승인" : "반려", leaveId, actorId);
     }
 
@@ -292,7 +296,8 @@ public class LeaveService {
         } else {
             throw new BusinessException(ErrorCode.ALREADY_PROCESSED); // REJECTED/CANCELLED/CANCEL_PENDING은 취소 불가
         }
-        // TODO(email): 취소 알림 (다음 마일스톤)
+        // 상태 전이가 벌크 갱신(clearAutomatically)이라 재조회해야 새 status·cancelReason이 보인다
+        emailNotificationPublisher.publishLeaveCancelled(findLeaveOrThrow(leaveId));
         log.info("[연차 취소] leaveId={}, ownerId={}, from={} → {}", leaveId, ownerId, status, result);
         return result;
     }
@@ -320,9 +325,9 @@ public class LeaveService {
         if (approved) {
             restoreCurrentYearPortion(fresh);
         }
-        saveHistory(fresh, findUserOrThrow(actorId),
+        saveHistory(fresh, actor,
                 approved ? RequestAction.CANCEL_APPROVED : RequestAction.CANCEL_REJECTED, request.comment());
-        // TODO(email): 소급취소 처리 알림 (다음 마일스톤)
+        emailNotificationPublisher.publishLeaveCancelProcessed(fresh, actor, approved);
         log.info("[소급취소 {}] leaveId={}, actorId={}", approved ? "승인" : "반려", leaveId, actorId);
     }
 

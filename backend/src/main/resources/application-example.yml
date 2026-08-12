@@ -13,8 +13,9 @@
 # | GOOGLE_CLIENT_SECRET| GOCSPX-xxxxxxxxxxxx                                 | Google OAuth 시크릿 (필수)             |
 # | MAIL_HOST           | smtp.gmail.com                                      | SMTP 호스트 (생략 시 Gmail)            |
 # | MAIL_PORT           | 587                                                 | SMTP 포트 (생략 시 587)                |
-# | MAIL_USERNAME       | noreply@mlsoft.com                                  | 발송 계정 (선결 조건 — docs/08 R-4)    |
-# | MAIL_PASSWORD       | your-mail-app-password                              | 발송 계정 비밀번호/앱 비밀번호         |
+# | MAIL_USERNAME       | mlsoft.noreply@gmail.com                            | 발송 Gmail 주소 (비워도 기동)          |
+# | MAIL_PASSWORD       | abcd efgh ijkl mnop                                 | Google 앱 비밀번호 16자리 (2FA 필수)   |
+# | MAIL_REPLY_TO       | leave@mlsoft.com                                    | 회신 주소 (비면 Reply-To 헤더 생략)    |
 # | JWT_SECRET          | base64-encoded-256bit-random-string                 | JWT 서명 키 (필수, 32byte 이상)        |
 # | JWT_EXPIRATION_MS   | 86400000                                            | 토큰 만료(ms), 생략 시 24h             |
 # | HOLIDAY_API_KEY     | data-go-kr-service-key                              | 공공데이터포털 특일 정보 API 키        |

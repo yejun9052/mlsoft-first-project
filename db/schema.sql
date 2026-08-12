@@ -89,6 +89,7 @@ CREATE TABLE `email_history` (
   `content` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `email_type` enum('LEAVE','NOTICE','REMINDER','WELFARE') COLLATE utf8mb4_unicode_ci NOT NULL,
   `error_message` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `retry_count` int NOT NULL DEFAULT '0',
   `sent_at` datetime(6) DEFAULT NULL,
   `status` enum('FAILED','PENDING','SENT') COLLATE utf8mb4_unicode_ci NOT NULL,
   `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -97,6 +98,7 @@ CREATE TABLE `email_history` (
   PRIMARY KEY (`id`),
   KEY `FKl5edhxdva8d6sdxa70a5cvdo4` (`from_id`),
   KEY `FKokrrh26v7faaux2a2mk7qbsec` (`user_id`),
+  KEY `idx_email_history_retry` (`status`,`retry_count`,`id`),
   CONSTRAINT `FKl5edhxdva8d6sdxa70a5cvdo4` FOREIGN KEY (`from_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKokrrh26v7faaux2a2mk7qbsec` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

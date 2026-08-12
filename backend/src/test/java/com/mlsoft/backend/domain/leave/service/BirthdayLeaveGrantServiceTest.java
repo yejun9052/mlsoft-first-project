@@ -31,6 +31,9 @@ class BirthdayLeaveGrantServiceTest {
 
     @Mock
     private UserRepository userRepository;
+    /** 이메일 발행기 — 목이 없으면 @InjectMocks가 null을 넣어 지급마다 NPE가 난다 */
+    @Mock
+    private com.mlsoft.backend.domain.email.service.EmailNotificationPublisher emailNotificationPublisher;
 
     @InjectMocks
     private BirthdayLeaveGrantService birthdayLeaveGrantService;

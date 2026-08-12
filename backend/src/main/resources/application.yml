@@ -37,11 +37,13 @@ spring:
               - profile
               - email
 
+  # 메일은 부가 기능이다 — 공휴일 API와 같은 정책으로, 계정이 없어도 기동하고 발송 시점에
+  # WARN + FAILED 이력을 남긴다 (검증 R-4). 기본값이 없으면 환경변수 미설정만으로 기동이 죽는다.
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -72,6 +74,10 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
   # JWT 쿠키 Secure 플래그 — 운영(HTTPS)에서 true
   cookie-secure: ${COOKIE_SECURE:false}
+  # 개인 Gmail은 From 주소를 발송 계정으로 강제한다(표시 이름만 바꿀 수 있다).
+  # 회신을 받을 주소는 Reply-To 헤더로만 분리 가능 — 비우면 헤더를 만들지 않는다.
+  mail:
+    reply-to: ${MAIL_REPLY_TO:}
 
 logging:
   level:

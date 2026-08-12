@@ -66,6 +66,15 @@ public class EmailHistory extends BaseTimeEntity {
     @Column(nullable = false)
     private EmailStatus status;
 
+    /**
+     * 실제 발송 시도 횟수 — <b>최초 발송 실패도 1회로 센다</b> (리뷰 D-4).
+     * 재시도 대상 조건이 {@code retry_count < 3}이므로 총 시도는 최초 1회 + 재시도 2회 = 3회다.
+     * 이 필드가 없으면 영구 실패 건(존재하지 않는 주소 등)을 스케줄러가 무한히 재시도한다.
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private int retryCount = 0;
+
     /** 실패 사유 */
     @Column(length = 500)
     private String errorMessage;
@@ -73,7 +82,7 @@ public class EmailHistory extends BaseTimeEntity {
     /** 실제 발송 시각 */
     private LocalDateTime sentAt;
 
-    /** 발송 이력 생성 — PENDING 상태로 시작 */
+    /** 발송 이력 생성 — PENDING, 시도 횟수 0으로 시작 */
     public static EmailHistory create(User user, User fromUser, EmailType emailType,
                                       String title, String content) {
         return EmailHistory.builder()
@@ -83,6 +92,7 @@ public class EmailHistory extends BaseTimeEntity {
                 .title(title)
                 .content(content)
                 .status(EmailStatus.PENDING)
+                .retryCount(0)
                 .build();
     }
 
@@ -93,9 +103,10 @@ public class EmailHistory extends BaseTimeEntity {
         this.errorMessage = null;
     }
 
-    /** 발송 실패 처리 — 실패 사유 기록 (500자 절단) */
+    /** 발송 실패 처리 — 시도 횟수를 올리고 실패 사유를 기록한다 (500자 절단) */
     public void markFailed(String errorMessage) {
         this.status = EmailStatus.FAILED;
+        this.retryCount += 1;
         this.errorMessage = errorMessage != null && errorMessage.length() > 500
                 ? errorMessage.substring(0, 500)
                 : errorMessage;

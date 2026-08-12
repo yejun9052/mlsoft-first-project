@@ -77,6 +77,9 @@ class LeaveServiceTest {
     // 자격 판정 규칙 자체는 ApproverResolverTest가 검증한다.
     @Mock
     private ApproverResolver approverResolver;
+    /** 이메일 발행기 — 목이 없으면 @InjectMocks가 null을 넣어 신청·승인마다 NPE가 난다 */
+    @Mock
+    private com.mlsoft.backend.domain.email.service.EmailNotificationPublisher emailNotificationPublisher;
 
     @InjectMocks
     private LeaveService leaveService;

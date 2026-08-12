@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.welfare.service;
 
 import com.mlsoft.backend.domain.common.RequestAction;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.user.entity.Role;
@@ -44,6 +45,8 @@ public class WelfareService {
     private final UserRepository userRepository;
     // 승인자 결정 — 연차와 같은 규칙 (리뷰 I-5)
     private final ApproverResolver approverResolver;
+    // 이메일 알림 — 발송은 커밋 후 비동기다 (검증 R-4)
+    private final EmailNotificationPublisher emailNotificationPublisher;
 
     // ---------------------------------------------------------------------
     // 신청
@@ -67,7 +70,7 @@ public class WelfareService {
         welfareRequestRepository.save(welfare);
 
         saveHistory(welfare, applicant, RequestAction.PENDING, request.reason());
-        // TODO(email): 신청 알림 — 당사자·primary·sub에게 @Async + AFTER_COMMIT 이벤트 발행 (다음 마일스톤)
+        emailNotificationPublisher.publishWelfareApplied(welfare);
         log.info("[복리후생 신청] userId={}, welfareId={}, addDays={}", userId, welfare.getId(), welfare.getAddDays());
         return WelfareResponse.of(welfare);
     }
@@ -125,7 +128,7 @@ public class WelfareService {
             fresh.getUser().addBonusDays(fresh.getAddDays());
         }
         saveHistory(fresh, actor, approved ? RequestAction.APPROVED : RequestAction.REJECTED, request.comment());
-        // TODO(email): 승인/반려 알림 (다음 마일스톤)
+        emailNotificationPublisher.publishWelfareProcessed(fresh, actor, approved);
         log.info("[복리후생 {}] welfareId={}, actorId={}", approved ? "승인" : "반려", welfareId, actorId);
     }
 
