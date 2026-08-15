@@ -140,6 +140,28 @@ body {
   @apply bg-navy-app font-sans text-ink-body antialiased;
 }
 
+/* 네이티브 select의 옵션 목록 — 브라우저가 페이지 밖 팝업으로 그리므로
+   닫힌 컨트롤에 준 스타일(반투명 배경·text-ink-hi)이 따라가지 않는다.
+
+   `[color-scheme:dark]`는 팝업 "패널"만 어둡게 할 뿐 글자색까지 정해 주지 않는다.
+   그래서 윈도우 크롬에서 어두운 패널 위에 어두운 글자가 얹혀 선택지가 거의 안 보였다
+   (2026-08-15, 부서 변경 모달). 커서가 얹힌 한 줄만 시스템 하이라이트로 읽혔다.
+
+   option에 **불투명** 색을 직접 주는 것이 유일하게 확실한 방법이다 —
+   select의 `bg-white/[0.04]` 같은 반투명 값은 팝업에 합성할 바탕이 없어 의도대로 나오지 않는다.
+   Select 컴포넌트가 아니라 여기에 두는 이유: 옵션은 컴포넌트 밖(OS 팝업)에서 그려지고,
+   앱의 모든 select가 같은 문제를 갖기 때문이다. */
+option {
+  background-color: var(--color-navy-card);
+  color: var(--color-ink-hi);
+}
+
+/* 플레이스홀더(`<option disabled>` — "부서 선택" 등)는 흐리되 읽을 수는 있어야 한다.
+   ink-dim(2.37:1)은 장식 전용이라 쓰면 안 된다. ink-faint는 navy-card 위에서 4.72:1이다. */
+option:disabled {
+  color: var(--color-ink-faint);
+}
+
 /* 스크롤바 — 미드나잇 서피스에 맞춘 얇은 다크 스크롤바 (기본 밝은 스크롤바가 글래스 톤을 깬다) */
 * {
   scrollbar-width: thin;
