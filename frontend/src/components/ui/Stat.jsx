@@ -3,7 +3,7 @@
 //
 // - Icon 또는 swatch를 주면: 가로형(아이콘/색점 + 라벨·값) — Team 아이콘 통계, 게이지 범례성 통계용.
 // - 둘 다 없으면: 세로형(라벨 위 / 값 아래, 박스 없음) — size로 강조도 조절.
-//   size='hero' → 대시보드 잔여 연차처럼 52px 그라데이션 강조(1페이지에 1개만 쓰는 용도, tone 무시).
+//   size='hero' → 대시보드 잔여 연차처럼 52px 강조(1페이지에 1개만 쓰는 용도, tone 무시).
 //   size='lg'(기본) → 28px, size='md' → 22px. tone은 값 텍스트 색 클래스(예: 'text-warn')로 오버라이드.
 // - caption: 값 아래 보조 설명 한 줄(History의 "확정 12일 · 대기 1일" 같은 선차감 구분 표기에 사용).
 //
@@ -34,7 +34,7 @@ export default function Stat({ label, value, unit, size = 'lg', tone, caption, I
 
   const valueClass =
     size === 'hero'
-      ? 'accent-gradient-text text-[52px] font-extrabold leading-none tracking-[-0.04em] tabular-nums'
+      ? 'text-accent-light text-[52px] font-extrabold leading-none tracking-[-0.04em] tabular-nums'
       : size === 'md'
         ? `text-[22px] font-bold leading-none tabular-nums ${tone ?? 'text-ink-hi'}`
         : `text-[28px] font-bold leading-none tabular-nums ${tone ?? 'text-ink-hi'}`;
@@ -42,8 +42,9 @@ export default function Stat({ label, value, unit, size = 'lg', tone, caption, I
   return (
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <span className="text-[12px] font-medium text-ink-mute">{label}</span>
-      {/* 단위는 값 span 밖에 형제로 둔다 — hero의 accent-gradient-text가 -webkit-text-fill-color:transparent를
-          쓰는데 이 속성은 상속되므로, 단위를 값 안에 중첩하면 단위 색까지 투명해져 버린다. */}
+      {/* 단위는 값 span 밖에 형제로 둔다 — 단위를 값 안에 중첩하면 hero의 52px·tracking을 함께 물려받아
+          크기·자간이 어긋난다. (그라데이션이던 시절에는 -webkit-text-fill-color 상속으로 단위까지
+          투명해지는 더 심한 문제가 있었다. 그건 사라졌지만 형제 구조를 유지할 이유는 남아 있다.) */}
       <span className="flex items-baseline">
         <span className={valueClass}>{value}</span>
         {unit && <span className="ml-1 text-[13px] font-medium text-ink-mute">{unit}</span>}
