@@ -76,6 +76,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRoleInAndIsActiveTrueAndOnboardingStatusAndIdNot(
             List<Role> roles, OnboardingStatus onboardingStatus, Long excludeId);
 
+    /**
+     * 팀장 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN (GET /api/users/leader-candidates, SA).
+     *
+     * <p>바로 위 승인자 후보와 조건이 같지만 <b>본인을 제외하지 않는다.</b> 관리자가 자기 자신을
+     * 부서 팀장으로 지정하는 것은 정상이기 때문이다. 셀프 배제는 "신청자가 정해진 시점"의 규칙이라
+     * {@code ApproverResolver.isEligibleFor}가 따로 들고 있고, 자격 판정({@code canApprove})과
+     * 분리돼 있다 — 그 분리를 여기서 도로 합치지 말 것.
+     */
+    @EntityGraph(attributePaths = {"department"})
+    List<User> findByRoleInAndIsActiveTrueAndOnboardingStatus(
+            List<Role> roles, OnboardingStatus onboardingStatus);
+
     /** 온보딩 승인 대기 목록 (GET /api/admin/onboardings, SA) — 오래 기다린 순 (리뷰 S-1) */
     @EntityGraph(attributePaths = {"department"})
     Page<User> findByOnboardingStatusOrderByUpdateAtAsc(OnboardingStatus onboardingStatus, Pageable pageable);

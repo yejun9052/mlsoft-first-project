@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getApprovers,
+  getLeaderCandidates,
   getRetiredUsers,
   getTeamMembers,
   getUsers,
@@ -14,13 +15,13 @@ import {
 // 쿼리 키 규칙: ['users', 서브리소스, ...파라미터]. 접두사(['users'])로 invalidate하면
 // list/retired/team-members가 한 번에 무효화된다 (leaves/welfare와 동일한 전략).
 // 단, 내 정보(PATCH /me)는 이 목록들의 리소스가 아니라 '로그인 유저(auth)' 리소스라 별도로 다룬다.
-// size도 키에 넣는다 (리뷰 F-1) — AdminDepartmentsPage는 팀장 후보를 size=200으로,
-// AdminMembersPage는 목록을 기본 size=50으로 조회한다. size가 키에 없으면 검색어·역할·페이지가
-// 같을 때 두 화면이 같은 캐시를 공유해 **팀장 후보가 50명에서 잘린다.**
+// size도 키에 넣는다 (리뷰 F-1) — 같은 검색어·역할·페이지라도 size가 다르면 다른 결과다.
+// size가 키에 없으면 크기가 다른 두 화면이 같은 캐시를 공유해 뒤쪽 목록이 조용히 잘린다.
 const userKeys = {
   list: (keyword, role, page, size) => ['users', 'list', keyword || 'ALL', role || 'ALL', page, size],
   teamMembers: ['users', 'team-members'],
   approvers: ['users', 'approvers'],
+  leaderCandidates: ['users', 'leader-candidates'],
   retired: (page, size) => ['users', 'retired', page, size],
 };
 
@@ -33,6 +34,18 @@ export function useApprovers() {
     queryKey: userKeys.approvers,
     queryFn: getApprovers,
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+// 팀장 후보 (GET /api/users/leader-candidates, SYSTEM_ADMIN 전용) — 부서 관리의 팀장 드롭다운.
+// useApprovers와 조건이 같지만 본인을 제외하지 않아 별도 훅이다. 서버가 지정 가능 여부를
+// 같은 기준으로 검증하므로, 여기 담긴 사람은 전부 실제로 팀장이 될 수 있다.
+export function useLeaderCandidates({ enabled = true } = {}) {
+  return useQuery({
+    queryKey: userKeys.leaderCandidates,
+    queryFn: getLeaderCandidates,
+    staleTime: 1000 * 60 * 5,
+    enabled,
   });
 }
 

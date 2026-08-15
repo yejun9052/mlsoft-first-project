@@ -14,6 +14,14 @@ export async function getApprovers() {
   return res.data.data;
 }
 
+// 팀장 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN (GET /api/users/leader-candidates, SYSTEM_ADMIN 전용)
+// 승인자 후보와 달리 본인도 포함된다 — 관리자가 자기 부서의 팀장을 겸하는 것은 정상이다.
+// 페이징이 없다: 예전에 getUsers({ size: 200 })로 받다가 상한(100)에 걸려 부서 관리 화면이 통째로 400을 받았다.
+export async function getLeaderCandidates() {
+  const res = await api.get('/users/leader-candidates');
+  return res.data.data; // UserSummaryResponse[]
+}
+
 export async function getTeamMembers() {
   const res = await api.get('/users/team-members');
   return res.data.data; // UserSummaryResponse[] — 잔여 연차 등 민감 정보 미포함(의도된 설계)

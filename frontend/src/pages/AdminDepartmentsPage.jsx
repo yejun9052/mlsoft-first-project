@@ -19,10 +19,7 @@ import {
   useDepartments,
   useUpdateDepartment,
 } from '../hooks/useDepartments.js';
-import { useUsers } from '../hooks/useUsers.js';
-
-// 팀장 후보 드롭다운에 담을 최대 인원 — 사내 규모(수십 명)를 넘어서면 검색형 선택으로 바꿔야 한다.
-const LEADER_CANDIDATE_SIZE = 200;
+import { useLeaderCandidates } from '../hooks/useUsers.js';
 
 const EMPTY_FORM = { name: '', description: '', leaderId: '', parentId: '' };
 
@@ -31,16 +28,18 @@ const EMPTY_FORM = { name: '', description: '', leaderId: '', parentId: '' };
 // fallback 되므로(검증 Y-3) 결재 흐름을 정상화하려면 여기서 팀장을 채워야 한다.
 export default function AdminDepartmentsPage() {
   const departmentsQuery = useDepartments();
-  // 팀장 후보 — 재직 중인 전 구성원. 부서 배정은 구성원 관리에서 하므로, 신설 부서에도 팀장을
-  // 지정할 수 있도록 소속으로 후보를 좁히지 않는다.
-  const usersQuery = useUsers({ size: LEADER_CANDIDATE_SIZE });
+  // 팀장 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN. 부서 배정은 구성원 관리에서 하므로,
+  // 신설 부서에도 팀장을 지정할 수 있도록 소속으로 후보를 좁히지 않는다.
+  // 전 사원 목록(useUsers)을 쓰지 않는 이유: 서버가 결재 자격자만 팀장으로 받으므로
+  // EMPLOYEE를 후보에 담으면 고른 뒤 저장 단계에서 거부된다.
+  const usersQuery = useLeaderCandidates();
 
   const createMutation = useCreateDepartment();
   const updateMutation = useUpdateDepartment();
   const deactivateMutation = useDeactivateDepartment();
 
   const departments = useMemo(() => departmentsQuery.data ?? [], [departmentsQuery.data]);
-  const users = usersQuery.data?.content ?? [];
+  const users = usersQuery.data ?? []; // 페이징 없는 배열 응답
 
   // 모달 — 생성/수정 폼 하나를 공유한다. editing이 null이면 생성 모드.
   const [formOpen, setFormOpen] = useState(false);

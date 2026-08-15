@@ -93,6 +93,27 @@ public class UserService {
                 .toList();
     }
 
+    /**
+     * 팀장 후보 (GET /api/users/leader-candidates, SA).
+     *
+     * <p><b>후보 조건이 서버 검증과 같아야 한다.</b> 팀장 지정은
+     * {@link com.mlsoft.backend.domain.user.service.ApproverResolver#canApprove}로 검증하는데,
+     * 화면이 전 사원을 후보로 주면 EMPLOYEE를 골랐을 때 저장 단계에서 거부된다.
+     *
+     * <p><b>페이징하지 않는다.</b> 결재 자격자는 전체 사원의 일부라 한 번에 내려도 된다.
+     * 페이징하면 상한(100)에 걸려 뒷사람이 사라지는데, 부서 관리 화면이 이 목록을
+     * {@code size=200}으로 요청하다 {@code PAGE_SIZE_EXCEEDED}로 화면 전체가 열리지 않은 것이
+     * 이 메서드를 만든 이유다.
+     */
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> getLeaderCandidates() {
+        return userRepository
+                .findByRoleInAndIsActiveTrueAndOnboardingStatus(
+                        List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN), OnboardingStatus.COMPLETED).stream()
+                .map(UserSummaryResponse::of)
+                .toList();
+    }
+
     /** 퇴직자 목록 (GET /api/users/retired, SA) */
     @Transactional(readOnly = true)
     public Page<UserResponse> getRetiredUsers(Pageable pageable) {

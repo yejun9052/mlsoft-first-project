@@ -72,6 +72,14 @@ public class UserController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_INFO_FETCHED, response));
     }
 
+    /** 팀장 후보 (재직 중 TEAM_LEADER·SYSTEM_ADMIN — 승인자 후보와 달리 본인도 포함) */
+    @GetMapping("/leader-candidates")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<List<UserSummaryResponse>>> getLeaderCandidates() {
+        List<UserSummaryResponse> response = userService.getLeaderCandidates();
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_INFO_FETCHED, response));
+    }
+
     /** 퇴직자 목록 (페이징) */
     @GetMapping("/retired")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
