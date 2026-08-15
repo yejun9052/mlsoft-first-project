@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CornerDownRight, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CornerDownRight, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
@@ -20,6 +20,11 @@ import {
   useUpdateDepartment,
 } from '../hooks/useDepartments.js';
 import { useLeaderCandidates } from '../hooks/useUsers.js';
+import {
+  buildDepartmentMoveBody,
+  canDropDepartment,
+  resolveDropParentId,
+} from '../utils/departmentDrop.js';
 
 const EMPTY_FORM = { name: '', description: '', leaderId: '', parentId: '' };
 
@@ -123,6 +128,74 @@ export default function AdminDepartmentsPage() {
     closeForm();
   }
 
+  // ── 드래그로 상위 부서 옮기기 ──────────────────────────────────────────
+  // 모달의 "상위 부서" 드롭다운과 **같은 일**을 한다. 드래그는 마우스 전용이라 이것만 두면
+  // 키보드로는 계층을 못 바꾸므로, 드롭다운을 없애지 않고 나란히 둔다.
+  const [draggingId, setDraggingId] = useState(null);
+  const [dropTargetId, setDropTargetId] = useState(null); // null이면서 dragging이면 '최상위 영역'
+  const [rootZoneActive, setRootZoneActive] = useState(false);
+
+  const dragging = departments.find((d) => d.id === draggingId) ?? null;
+
+  function handleDragStart(event, department) {
+    setDraggingId(department.id);
+    setDropTargetId(null);
+    setRootZoneActive(false);
+    event.dataTransfer.effectAllowed = 'move';
+    // Firefox는 데이터가 없으면 드래그를 시작하지 않는다
+    event.dataTransfer.setData('text/plain', String(department.id));
+  }
+
+  function handleDragEnd() {
+    setDraggingId(null);
+    setDropTargetId(null);
+    setRootZoneActive(false);
+  }
+
+  // 놓을 수 있는 자리에서만 preventDefault를 부른다 — 안 부르면 브라우저가 드롭을 거부하고
+  // 커서가 '금지'로 바뀐다. 즉 이 한 줄이 곧 시각 피드백이다.
+  function handleDragOver(event, target) {
+    if (!canDropDepartment(dragging, target, hasChildren)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (target) {
+      setDropTargetId(target.id);
+      setRootZoneActive(false);
+    } else {
+      setDropTargetId(null);
+      setRootZoneActive(true);
+    }
+  }
+
+  function handleDrop(event, target) {
+    event.preventDefault();
+    if (!canDropDepartment(dragging, target, hasChildren)) {
+      handleDragEnd();
+      return;
+    }
+    const moved = dragging;
+    const nextParentId = resolveDropParentId(target);
+    const parentName = nextParentId
+      ? (departments.find((d) => d.id === nextParentId)?.name ?? '상위 부서')
+      : null;
+
+    updateMutation.mutate(buildDepartmentMoveBody(moved, nextParentId), {
+      onSuccess: () =>
+        toast.success(
+          nextParentId
+            ? `${moved.name}을(를) ${parentName} 하위로 옮겼습니다.`
+            : `${moved.name}을(를) 최상위 부서로 옮겼습니다.`,
+        ),
+    });
+    handleDragEnd();
+  }
+
+  function rowDropTone(department) {
+    if (draggingId === department.id) return 'opacity-40';
+    if (dropTargetId === department.id) return 'bg-accent/[0.12] ring-1 ring-inset ring-accent';
+    return '';
+  }
+
   function handleDeactivate() {
     if (!deactivateTarget) return;
     deactivateMutation.mutate(deactivateTarget.id, {
@@ -163,9 +236,22 @@ export default function AdminDepartmentsPage() {
           </THead>
           <tbody>
             {orderedRows.map((d) => (
-              <TR key={d.id}>
+              <TR
+                key={d.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, d)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, d)}
+                onDrop={(e) => handleDrop(e, d)}
+                className={`group cursor-grab active:cursor-grabbing ${rowDropTone(d)}`}
+              >
                 <Td className="font-medium text-ink-hi">
                   <span className={`inline-flex items-center gap-1.5 ${d.depth === 1 ? 'pl-5' : ''}`}>
+                    <GripVertical
+                      size={13}
+                      className="text-ink-dim opacity-0 transition-opacity group-hover:opacity-100"
+                      aria-hidden="true"
+                    />
                     {d.depth === 1 && <CornerDownRight size={13} className="text-ink-dim" />}
                     {d.name}
                   </span>
@@ -193,8 +279,25 @@ export default function AdminDepartmentsPage() {
             ))}
           </tbody>
         </Table>
+        {/* 최상위로 빼기 — 드래그 중에만 나타난다. 평소에 두면 빈 영역이 늘 자리를 차지한다 */}
+        {dragging && (
+          <div
+            onDragOver={(e) => handleDragOver(e, null)}
+            onDrop={(e) => handleDrop(e, null)}
+            className={`mx-5 mb-3 rounded-card border border-dashed px-5 py-4 text-center text-[12px] transition-colors ${
+              rootZoneActive
+                ? 'border-accent bg-accent/[0.12] text-ink-hi'
+                : 'border-white/20 text-ink-faint'
+            }`}
+          >
+            여기에 놓으면 <span className="font-medium text-ink-body">최상위 부서</span>가 됩니다
+          </div>
+        )}
+
         <p className="border-t border-white/[0.12] px-5 py-3 text-[11px] text-ink-faint">
-          * 팀장이 공석이면 해당 부서원의 연차·복리후생 결재는 총관리자에게 넘어갑니다.
+          * 부서를 <span className="text-ink-mute">끌어서 다른 부서 위에 놓으면</span> 그 부서의 하위로
+          들어갑니다. 계층은 2단계까지라, 하위 부서를 가진 부서는 다른 부서 아래로 옮길 수 없습니다.
+          <br />* 팀장이 공석이면 해당 부서원의 연차·복리후생 결재는 총관리자에게 넘어갑니다.
         </p>
       </TableCard>
 
