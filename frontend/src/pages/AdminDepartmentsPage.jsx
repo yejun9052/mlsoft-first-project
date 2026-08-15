@@ -62,8 +62,9 @@ export default function AdminDepartmentsPage() {
   }, [departments]);
 
   const rootDepartments = departments.filter((d) => d.parentId == null);
-  // 자식이 있는 부서는 스스로 하위 부서가 될 수 없다 — 3단계가 되기 때문. 서버는 "상위가 루트인가"만
-  // 검증하므로(2단계 강제의 반쪽) 이 방향은 화면에서 막는다.
+  // 자식이 있는 부서는 스스로 하위 부서가 될 수 없다 — 내 자식이 손자가 돼 3단계가 되기 때문.
+  // 서버도 같은 검사를 한다(DepartmentService.validateParent ②, 1차 테스트 F) — 여기서 막는 건
+  // 왕복 없이 이유를 보여주기 위한 것이지 유일한 방어선이 아니다.
   const hasChildren = (id) => departments.some((d) => d.parentId === id);
 
   function openCreate() {
