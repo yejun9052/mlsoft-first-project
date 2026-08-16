@@ -140,6 +140,17 @@ body {
   @apply bg-navy-app font-sans text-ink-body antialiased;
 }
 
+/* 버튼 커서 — Tailwind v4 preflight에는 v3에 있던 `button { cursor: pointer }`가 없다.
+   그래서 브라우저 기본값(default, 화살표)이 그대로 적용돼 앱의 모든 버튼에서 손 모양이 뜨지 않았다.
+   글자가 있는 버튼은 생김새로 버튼인 줄 알지만, 아이콘만 있는 작은 버튼은 눌리는 것인지
+   장식인지 구분할 단서가 커서뿐이라 여기서 티가 났다 (2026-08-16 지적).
+
+   `:not(:disabled)`가 핵심이다 — 이 규칙은 레이어 밖이라 유틸리티(@layer utilities)보다 세고,
+   조건 없이 쓰면 각 컴포넌트의 `disabled:cursor-not-allowed`를 덮어 비활성 버튼에도 손이 뜬다. */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 /* 네이티브 select의 옵션 목록 — 브라우저가 페이지 밖 팝업으로 그리므로
    닫힌 컨트롤에 준 스타일(반투명 배경·text-ink-hi)이 따라가지 않는다.
 

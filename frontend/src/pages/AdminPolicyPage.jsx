@@ -187,16 +187,20 @@ export default function AdminPolicyPage() {
                             autoFocus
                             className="w-20 !py-1.5 text-right tabular-nums"
                           />
+                          {/* 저장은 초록 타일이지만 취소는 빨간 "윤곽선"이다 — 채우면 반려 버튼과
+                              같은 무게가 되는데, 여기 X는 편집을 접는 것일 뿐 파괴적이지 않다.
+                              채워진 타일은 되돌리기 어려운 이지선다에만 쓴다 (IconButton 주석) */}
                           <IconButton
                             Icon={Check}
                             label="저장"
-                            tone="accent"
+                            tone="confirm"
                             disabled={updatePolicyMutation.isPending}
                             onClick={() => saveEdit(p)}
                           />
                           <IconButton
                             Icon={X}
                             label="취소"
+                            tone="danger"
                             disabled={updatePolicyMutation.isPending}
                             onClick={cancelEdit}
                           />
