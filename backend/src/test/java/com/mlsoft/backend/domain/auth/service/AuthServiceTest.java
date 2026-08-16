@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.auth.service;
 
 import com.mlsoft.backend.domain.auth.dto.OnboardingRequest;
+import com.mlsoft.backend.domain.auth.dto.UserMeResponse;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
@@ -231,6 +232,220 @@ class AuthServiceTest {
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> authService.completeOnboarding(12L, new OnboardingRequest(BIRTH_DAY, LocalDate.now())));
         assertEquals(ErrorCode.ALREADY_ONBOARDED, exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("온보딩 미시작 사원이 수정 요청하면 ONBOARDING_NOT_PENDING")
+    void reviseOnboarding_미시작_대기상태아님예외() {
+        User user = givenUser(20L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.reviseOnboarding(
+                        20L,
+                        new OnboardingRequest(BIRTH_DAY, LocalDate.now(KST).minusDays(10))));
+
+        // reviseOnboarding의 PENDING_APPROVAL 상태 검사 줄을 지우면 이 테스트가 깨진다.
+        assertEquals(ErrorCode.ONBOARDING_NOT_PENDING, exception.getErrorCode());
+        assertEquals(OnboardingStatus.NOT_STARTED, user.getOnboardingStatus());
+        assertFalse(user.isOnboardingRevised());
+    }
+
+    @Test
+    @DisplayName("입사일 수정 설정이 꺼져 있으면 ONBOARDING_REVISION_DISABLED")
+    void reviseOnboarding_설정꺼짐_수정비활성화예외() {
+        User user = givenUser(21L);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.reviseOnboarding(
+                        21L,
+                        new OnboardingRequest(BIRTH_DAY, LocalDate.now(KST).minusDays(10))));
+
+        // ONBOARDING_REVISION_ENABLED 설정 검사 줄을 지우면 이 테스트가 깨진다.
+        assertEquals(ErrorCode.ONBOARDING_REVISION_DISABLED, exception.getErrorCode());
+        assertEquals(LocalDate.of(1990, 1, 1), user.getHireDate());
+        assertFalse(user.isOnboardingRevised());
+    }
+
+    @Test
+    @DisplayName("수정권을 이미 사용한 사원은 ONBOARDING_REVISION_EXHAUSTED")
+    void reviseOnboarding_수정권사용완료_수정권소진예외() {
+        User user = givenUser(22L);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        user.markOnboardingRevised();
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.reviseOnboarding(
+                        22L,
+                        new OnboardingRequest(BIRTH_DAY, LocalDate.now(KST).minusDays(10))));
+
+        // onboardingRevised 수정권 검사 줄을 지우면 이 테스트가 깨진다.
+        assertEquals(ErrorCode.ONBOARDING_REVISION_EXHAUSTED, exception.getErrorCode());
+        assertEquals(LocalDate.of(1990, 1, 1), user.getHireDate());
+    }
+
+    @Test
+    @DisplayName("미래 입사일 수정은 거부되고 수정권은 소진되지 않는다")
+    void reviseOnboarding_미래입사일_수정권유지() {
+        User user = givenUser(23L);
+        LocalDate originalHireDate = LocalDate.of(1990, 1, 1);
+        user.requestOnboardingApproval(originalHireDate, BIRTH_DAY);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.reviseOnboarding(
+                        23L,
+                        new OnboardingRequest(BIRTH_DAY, LocalDate.now(KST).plusDays(1))));
+
+        // 미래일 검증을 markOnboardingRevised 호출 뒤로 옮기면 이 테스트가 깨진다.
+        assertEquals(ErrorCode.FUTURE_HIRE_DATE, exception.getErrorCode());
+        assertFalse(user.isOnboardingRevised());
+        assertEquals(originalHireDate, user.getHireDate());
+        assertEquals(OnboardingStatus.PENDING_APPROVAL, user.getOnboardingStatus());
+    }
+
+    @Test
+    @DisplayName("자동 승인 범위 밖으로 수정하면 새 입사일로 승인 대기를 유지한다")
+    void reviseOnboarding_자동승인범위밖_승인대기유지() {
+        User user = givenUser(24L);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        LocalDate revisedHireDate = LocalDate.of(2000, 1, 1);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+        given(policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS))
+                .willReturn(90);
+
+        authService.reviseOnboarding(
+                24L,
+                new OnboardingRequest(BIRTH_DAY, revisedHireDate));
+
+        // 공유 판정의 requestOnboardingApproval 호출 줄을 지우면 새 입사일 단정이 깨진다.
+        assertEquals(OnboardingStatus.PENDING_APPROVAL, user.getOnboardingStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(user.getBaseDays()));
+        assertTrue(user.isOnboardingRevised());
+        assertEquals(revisedHireDate, user.getHireDate());
+        assertNull(user.getLastResetDate());
+    }
+
+    @Test
+    @DisplayName("자동 승인 범위 안으로 수정하면 온보딩을 확정하고 연차를 부여한다")
+    void reviseOnboarding_자동승인범위안_온보딩확정() {
+        User user = givenUser(25L);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        LocalDate today = LocalDate.now(KST);
+        LocalDate revisedHireDate = today.minusDays(30);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+        given(policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS))
+                .willReturn(90);
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS))
+                .willReturn(11);
+        given(leavePolicyService.calculateRetroactiveMonthlyDays(revisedHireDate, today))
+                .willReturn(new BigDecimal("1.0"));
+
+        authService.reviseOnboarding(
+                25L,
+                new OnboardingRequest(BIRTH_DAY, revisedHireDate));
+
+        // 공유 판정의 grantInitialLeave 호출 줄을 지우면 완료 상태와 연차 단정이 깨진다.
+        assertEquals(OnboardingStatus.COMPLETED, user.getOnboardingStatus());
+        assertEquals(0, new BigDecimal("1.0").compareTo(user.getBaseDays()));
+        assertEquals(revisedHireDate, user.getLastResetDate());
+        assertEquals(revisedHireDate, user.getHireDate());
+        assertTrue(user.isOnboardingRevised());
+    }
+
+    @Test
+    @DisplayName("같은 사원이 연속 두 번 수정하면 두 번째 요청은 거부된다")
+    void reviseOnboarding_연속두번수정_두번째수정권소진예외() {
+        User user = givenUser(26L);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        LocalDate firstRevisedHireDate = LocalDate.of(2000, 1, 1);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+        given(policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS))
+                .willReturn(90);
+
+        authService.reviseOnboarding(
+                26L,
+                new OnboardingRequest(BIRTH_DAY, firstRevisedHireDate));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.reviseOnboarding(
+                        26L,
+                        new OnboardingRequest(BIRTH_DAY, LocalDate.of(2001, 1, 1))));
+
+        // 첫 수정의 markOnboardingRevised 호출 줄을 지우면 두 번째 요청이 거부되지 않아 이 테스트가 깨진다.
+        assertEquals(ErrorCode.ONBOARDING_REVISION_EXHAUSTED, exception.getErrorCode());
+        assertEquals(firstRevisedHireDate, user.getHireDate());
+        assertTrue(user.isOnboardingRevised());
+    }
+
+    @Test
+    @DisplayName("승인 대기이며 설정이 켜지고 수정권을 쓰지 않았으면 수정 가능하다")
+    void getMe_대기설정켜짐수정권미사용_수정가능() {
+        User user = givenUser(27L);
+        user.requestOnboardingApproval(LocalDate.of(2000, 1, 1), BIRTH_DAY);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+
+        UserMeResponse response = authService.getMe(27L);
+
+        // UserMeResponse.from의 PENDING_APPROVAL·설정 ON·미사용 AND 판정 줄을 지우면 이 테스트가 깨진다.
+        assertTrue(response.onboardingRevisable());
+        assertFalse(response.onboardingRevised());
+    }
+
+    @Test
+    @DisplayName("승인 대기 중이어도 설정이 꺼져 있으면 수정할 수 없다")
+    void getMe_대기설정꺼짐_수정불가() {
+        User user = givenUser(28L);
+        user.requestOnboardingApproval(LocalDate.of(2000, 1, 1), BIRTH_DAY);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(false);
+
+        UserMeResponse response = authService.getMe(28L);
+
+        // UserMeResponse.from의 revisionEnabled 조건 줄을 지우면 이 테스트가 깨진다.
+        assertFalse(response.onboardingRevisable());
+        assertFalse(response.onboardingRevised());
+    }
+
+    @Test
+    @DisplayName("승인 대기 중 수정권을 이미 사용했으면 수정할 수 없다")
+    void getMe_대기수정권사용완료_수정불가() {
+        User user = givenUser(29L);
+        user.requestOnboardingApproval(LocalDate.of(2000, 1, 1), BIRTH_DAY);
+        user.markOnboardingRevised();
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+
+        UserMeResponse response = authService.getMe(29L);
+
+        // UserMeResponse.from의 !user.isOnboardingRevised 조건 줄을 지우면 이 테스트가 깨진다.
+        assertFalse(response.onboardingRevisable());
+        assertTrue(response.onboardingRevised());
+    }
+
+    @Test
+    @DisplayName("온보딩 완료 사원은 설정이 켜져 있어도 수정할 수 없다")
+    void getMe_온보딩완료_수정불가() {
+        User user = givenUser(30L);
+        LocalDate hireDate = LocalDate.now(KST).minusYears(1);
+        user.completeOnboarding(hireDate, BIRTH_DAY);
+        given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
+                .willReturn(true);
+
+        UserMeResponse response = authService.getMe(30L);
+
+        // UserMeResponse.from의 PENDING_APPROVAL 상태 조건 줄을 지우면 이 테스트가 깨진다.
+        assertFalse(response.onboardingRevisable());
+        assertFalse(response.onboardingRevised());
     }
 
     // 온보딩 전 신규 가입 유저 목킹 헬퍼

@@ -19,6 +19,12 @@ export async function submitOnboarding({ birthDay, hireDate }) {
   return res.data.data;
 }
 
+// 승인 대기 중 입사일·생일 수정 — 1회만 허용 (PATCH /api/auth/onboarding).
+export async function reviseOnboarding({ birthDay, hireDate }) {
+  const res = await api.patch('/auth/onboarding', { birthDay, hireDate });
+  return res.data.data;
+}
+
 // 온보딩 승인 대기 목록 (GET /api/admin/onboardings, SYSTEM_ADMIN 전용)
 export async function getPendingOnboardings({ page = 0, size = 20 } = {}) {
   const res = await api.get('/admin/onboardings', { params: { page, size } });

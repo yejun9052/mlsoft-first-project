@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.auth.dto;
 
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 
 import java.math.BigDecimal;
@@ -27,12 +28,24 @@ public record UserMeResponse(
         LocalDate birthDay,
         boolean onboarded,
         /** NOT_STARTED / PENDING_APPROVAL / COMPLETED (리뷰 S-1) */
-        String onboardingStatus
+        String onboardingStatus,
+        /** 상태·설정·사용 이력을 서버에서 함께 판정한 현재 수정 가능 여부 */
+        boolean onboardingRevisable,
+        /** 수정권을 이미 사용했는지 화면 안내 문구를 구분하기 위한 값 */
+        boolean onboardingRevised
 ) {
 
-    /** User 엔티티 → 응답 변환 (부서 LAZY 접근 — 트랜잭션 내 호출 필수) */
-    public static UserMeResponse from(User user) {
+    /**
+     * User 엔티티 → 응답 변환 (부서 LAZY 접근 — 트랜잭션 내 호출 필수).
+     * 수정 가능 여부는 프론트가 정책을 재구현하지 않도록 여기서 최종 판정한다.
+     */
+    public static UserMeResponse from(User user, boolean revisionEnabled) {
         boolean hasDepartment = user.getDepartment() != null;
+        boolean onboardingRevisable =
+                user.getOnboardingStatus() == OnboardingStatus.PENDING_APPROVAL
+                        && revisionEnabled
+                        && !user.isOnboardingRevised();
+
         return new UserMeResponse(
                 user.getId(),
                 user.getName(),
@@ -47,7 +60,9 @@ public record UserMeResponse(
                 user.getHireDate(),
                 user.getBirthDay(),
                 user.isOnboardingCompleted(),
-                user.getOnboardingStatus().name()
+                user.getOnboardingStatus().name(),
+                onboardingRevisable,
+                user.isOnboardingRevised()
         );
     }
 }

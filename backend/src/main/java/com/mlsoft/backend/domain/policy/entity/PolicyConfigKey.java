@@ -80,6 +80,13 @@ public enum PolicyConfigKey {
                     + "0으로 두면 모든 온보딩이 승인을 거친다.",
             PolicyConfigStatus.ACTIVE),
 
+    ONBOARDING_REVISION_ENABLED(
+            "onboarding_revision_enabled", "true",
+            "승인 대기 중 입사일 수정 허용",
+            "관리자 승인을 기다리는 사원이 신고한 입사일·생일을 1회에 한해 스스로 고칠 수 있게 한다. "
+                    + "끄면 잘못 입력한 사원은 관리자 반려를 기다려야 한다.",
+            PolicyConfigStatus.ACTIVE),
+
     // ── 소진 안내 메일 (docs/01 2-8 — 이메일 발송 구현 시 ACTIVE로 전환) ──────
 
     REMINDER_LIST_DAYS(

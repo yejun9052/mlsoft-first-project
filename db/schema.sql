@@ -252,6 +252,8 @@ CREATE TABLE `users` (
   `last_reset_date` date DEFAULT NULL,
   `monthly_granted_count` int NOT NULL DEFAULT '0',
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  -- 2026-08-16 추가 — 승인 대기 중 입사일 1회 수정 (backfill-2026-08-16-onboarding-revision.sql)
+  `onboarding_revised` bit(1) NOT NULL DEFAULT b'0',
   `onboarding_status` enum('COMPLETED','NOT_STARTED','PENDING_APPROVAL') COLLATE utf8mb4_unicode_ci NOT NULL,
   `position` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `retired_at` date DEFAULT NULL,

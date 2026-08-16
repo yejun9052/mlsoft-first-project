@@ -33,7 +33,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final LeavePolicyService leavePolicyService;
-    /** 월차 상한 — 온보딩 소급분과 스케줄러가 같은 값을 봐야 한다 */
+    /** 월차 상한·온보딩 판정은 설정 카탈로그의 타입별 접근자로만 읽는다 */
     private final PolicyConfigReader policyConfigReader;
 
     /**
@@ -41,7 +41,10 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public UserMeResponse getMe(Long userId) {
-        return UserMeResponse.from(findUserOrThrow(userId));
+        User user = findUserOrThrow(userId);
+        boolean revisionEnabled =
+                policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED);
+        return UserMeResponse.from(user, revisionEnabled);
     }
 
     /**
@@ -65,25 +68,80 @@ public class AuthService {
             throw new BusinessException(ErrorCode.ALREADY_ONBOARDED);
         }
 
-        LocalDate hireDate = request.hireDate();
         LocalDate today = LocalDate.now(KST);
+        processOnboarding(user, request, today, false);
+
+        boolean revisionEnabled =
+                policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED);
+        return UserMeResponse.from(user, revisionEnabled);
+    }
+
+    /**
+     * 승인 대기 중 입사일·생일 1회 수정.
+     *
+     * <p>상태 → 기능 설정 → 수정권 순서로 검사해야 호출자가 실제로 취할 수 있는 조치를
+     * 정확한 오류로 알려 줄 수 있다. 미래일은 공유 판정 경로에서 검사하며, 통과하기 전에는
+     * 수정권을 차감하지 않는다.
+     */
+    @Transactional
+    public UserMeResponse reviseOnboarding(Long userId, OnboardingRequest request) {
+        User user = findUserOrThrow(userId);
+        if (user.getOnboardingStatus() != OnboardingStatus.PENDING_APPROVAL) {
+            throw new BusinessException(ErrorCode.ONBOARDING_NOT_PENDING);
+        }
+
+        boolean revisionEnabled =
+                policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED);
+        if (!revisionEnabled) {
+            throw new BusinessException(ErrorCode.ONBOARDING_REVISION_DISABLED);
+        }
+        if (user.isOnboardingRevised()) {
+            throw new BusinessException(ErrorCode.ONBOARDING_REVISION_EXHAUSTED);
+        }
+
+        LocalDate previousHireDate = user.getHireDate();
+        processOnboarding(user, request, LocalDate.now(KST), true);
+
+        log.info("[온보딩 수정] userId={}, {} → {}, 결과={}",
+                userId, previousHireDate, request.hireDate(), user.getOnboardingStatus());
+        return UserMeResponse.from(user, revisionEnabled);
+    }
+
+    /**
+     * 최초 제출과 수정에 공통으로 적용하는 온보딩 판정.
+     *
+     * <p>수정권은 미래일 검증을 통과한 뒤, 자동 승인 여부를 판단하기 전에 사용 처리한다.
+     * 따라서 확정·대기 어느 결과가 나오더라도 유효한 수정 요청 한 번은 동일하게 소진된다.
+     */
+    private void processOnboarding(
+            User user,
+            OnboardingRequest request,
+            LocalDate today,
+            boolean revision
+    ) {
+        LocalDate hireDate = request.hireDate();
+
         // 미래 입사일 차단 (리뷰 I-7) — DTO 애노테이션이 아니라 여기서 KST로 판정한다.
         // 통과시키면 last_reset_date가 미래가 되어 그 사원이 기산일 스케줄러 대상에서
         // 그만큼 제외되고(조건이 last_reset_date + 1년 <= 오늘), 월차 소급도 음수 개월로 계산된다.
         if (hireDate.isAfter(today)) {
             throw new BusinessException(ErrorCode.FUTURE_HIRE_DATE);
         }
-        int autoApproveDays = policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
 
+        if (revision) {
+            user.markOnboardingRevised();
+        }
+
+        int autoApproveDays =
+                policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
         if (hireDate.isBefore(today.minusDays(autoApproveDays))) {
             user.requestOnboardingApproval(hireDate, request.birthDay());
             log.info("[온보딩] 자동 승인 범위({}일) 밖 — 승인 대기: userId={}, hireDate={}",
-                    autoApproveDays, userId, hireDate);
-            return UserMeResponse.from(user);
+                    autoApproveDays, user.getId(), hireDate);
+            return;
         }
 
         grantInitialLeave(user, hireDate, request.birthDay(), today);
-        return UserMeResponse.from(user);
     }
 
     /**

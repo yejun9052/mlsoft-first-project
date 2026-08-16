@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -81,6 +82,22 @@ class OnboardingApprovalServiceTest {
         assertNull(user.getHireDate());
         assertNull(user.getBirthDay());
         verify(authService, never()).grantInitialLeave(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("수정권을 사용한 대기 사원을 반려하면 수정권도 복구된다")
+    void reject_수정권사용한대기사원_수정권복구() {
+        User user = pendingUser(LocalDate.of(1990, 1, 1));
+        user.markOnboardingRevised();
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+
+        onboardingApprovalService.reject(1L, 99L);
+
+        // User.rejectOnboarding의 onboardingRevised=false 대입 줄을 지우면 이 테스트가 깨진다.
+        assertFalse(user.isOnboardingRevised());
+        assertEquals(OnboardingStatus.NOT_STARTED, user.getOnboardingStatus());
+        assertNull(user.getHireDate());
+        assertNull(user.getBirthDay());
     }
 
     @Test

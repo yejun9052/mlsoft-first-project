@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +51,18 @@ public class AuthController {
     ) {
         UserMeResponse response = authService.completeOnboarding(authUser.id(), request);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.ONBOARDING_COMPLETED, response));
+    }
+
+    /**
+     * 승인 대기 중 온보딩 수정 — 기존 요청 자원을 한 번 변경하므로 PATCH를 사용한다.
+     */
+    @PatchMapping("/onboarding")
+    public ResponseEntity<CommonResponse<UserMeResponse>> reviseOnboarding(
+            @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody OnboardingRequest request
+    ) {
+        UserMeResponse response = authService.reviseOnboarding(authUser.id(), request);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.ONBOARDING_REVISED, response));
     }
 
     /**

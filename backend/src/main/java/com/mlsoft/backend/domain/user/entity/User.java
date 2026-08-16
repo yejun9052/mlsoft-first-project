@@ -61,6 +61,11 @@ public class User extends BaseTimeEntity {
      */
     private LocalDate hireDate;
 
+    /** 승인 대기 중 입사일을 스스로 고쳤는가 — 수정은 1회뿐이다 */
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean onboardingRevised = false;
+
     /** 온보딩 확정 여부 (리뷰 S-1) — 연차 부여·인터셉터·스케줄러가 모두 이 값을 본다 */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -196,13 +201,24 @@ public class User extends BaseTimeEntity {
     }
 
     /**
+     * 승인 대기 중 수정권 사용 표시.
+     * 서비스가 상태·설정·미래일을 먼저 검증한 뒤 호출해야 거부된 요청이 수정권을 소모하지 않는다.
+     */
+    public void markOnboardingRevised() {
+        this.onboardingRevised = true;
+    }
+
+    /**
      * 온보딩 승인 반려 — 입력값을 지우고 처음으로 되돌린다 (리뷰 S-1).
      * 되돌리지 않으면 사원이 올바른 입사일로 다시 낼 방법이 없다 — 그게 S-1에서 관리자가
      * DB를 직접 고쳐야 했던 이유다.
+     *
+     * <p>반려는 새 제출 사이클을 여는 동작이므로 이전 사이클에서 사용한 수정권도 함께 되돌린다.
      */
     public void rejectOnboarding() {
         this.hireDate = null;
         this.birthDay = null;
+        this.onboardingRevised = false;
         this.onboardingStatus = OnboardingStatus.NOT_STARTED;
     }
 

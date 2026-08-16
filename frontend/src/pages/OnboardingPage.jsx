@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { CalendarCheck2, Loader2, ShieldCheck } from 'lucide-react';
-import { logout, submitOnboarding } from '../api/auth.js';
+import { logout, reviseOnboarding, submitOnboarding } from '../api/auth.js';
 import GlowShell from '../components/ui/GlowShell.jsx';
+import { useCurrentUser } from '../hooks/useAuth.js';
 
 // 승인 대기 상태 — 자동 승인 범위를 벗어난 입사일을 신고한 경우 (리뷰 S-1)
 const STATUS_PENDING_APPROVAL = 'PENDING_APPROVAL';
@@ -23,27 +25,36 @@ const DATE_INPUT_CLASS =
 // 온보딩 — 최초 로그인 시 생일·입사일만 입력, 연차는 서버가 자동 계산 (docs/01 §2-1)
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useCurrentUser();
   const [birthDay, setBirthDay] = useState('');
   const [hireDate, setHireDate] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [revising, setRevising] = useState(false);
 
-  // 로그인 유저 정보 (환영 문구·승인 대기 판별, RequireAuth 통과 후 렌더되므로 방어적 파싱만)
-  let storedUser = null;
-  try {
-    storedUser = JSON.parse(localStorage.getItem('userInfo'));
-  } catch {
-    storedUser = null;
+  const userName = currentUser?.name ?? '';
+  const pendingApproval =
+    currentUser?.onboardingStatus === STATUS_PENDING_APPROVAL;
+
+  // 응답을 캐시와 저장소에 함께 반영해야 현재 렌더와 새로고침 직후 렌더가 같은 상태를 본다.
+  function storeCurrentUser(user) {
+    localStorage.setItem('userInfo', JSON.stringify(user));
+    queryClient.setQueryData(['auth', 'me'], user);
   }
-  const userName = storedUser?.name ?? '';
 
-  // 제출 결과가 승인 대기면 폼 대신 안내를 띄운다. 새로고침해도 유지되도록 localStorage 값도 함께 본다 —
-  // 폼을 다시 보여주면 제출할 때마다 ALREADY_ONBOARDED만 맞고 무엇을 해야 할지 알 수 없다 (리뷰 S-1)
-  const [pendingApproval, setPendingApproval] = useState(
-    storedUser?.onboardingStatus === STATUS_PENDING_APPROVAL,
-  );
+  function startRevision() {
+    setBirthDay(currentUser?.birthDay ?? '');
+    setHireDate(currentUser?.hireDate ?? '');
+    setRevising(true);
+  }
 
-  // 제출 — 온보딩 응답(UserMeResponse)을 바로 userInfo에 저장 (onboarded=true 반영).
-  // me() 재조회를 끼우면 그 호출이 실패했을 때 onboarded=false가 남아 탈출 불가 루프가 됨 (검증 F1)
+  function cancelRevision() {
+    setBirthDay('');
+    setHireDate('');
+    setRevising(false);
+  }
+
+  // 최초 제출과 수정은 같은 입력 검증·폼을 쓰되 서버 메서드만 POST와 PATCH로 구분한다.
   async function handleSubmit(event) {
     event.preventDefault();
     if (!birthDay || !hireDate) {
@@ -53,14 +64,31 @@ export default function OnboardingPage() {
 
     setSubmitting(true);
     try {
-      const data = await submitOnboarding({ birthDay, hireDate });
-      localStorage.setItem('userInfo', JSON.stringify(data));
+      const data = revising
+        ? await reviseOnboarding({ birthDay, hireDate })
+        : await submitOnboarding({ birthDay, hireDate });
+
+      storeCurrentUser(data);
+
       if (data.onboardingStatus === STATUS_PENDING_APPROVAL) {
+        // 수정했지만 여전히 자동 승인 범위 밖 — 대기 카드에서 대기 카드로 돌아오므로 날짜 한 줄만
+        // 달라진다. 최초 제출은 폼→카드로 화면이 통째로 바뀌어 그 자체가 피드백이지만
+        // 수정에는 그게 없어서, 토스트가 없으면 제출이 된 건지 알 수 없다.
+        if (revising) {
+          toast.success('입사일을 수정했습니다. 관리자 확인을 기다려 주세요.');
+        }
+        setRevising(false);
         setSubmitting(false);
-        setPendingApproval(true);
         return;
       }
-      toast.success('온보딩이 완료되었습니다. 환영합니다!');
+
+      // 대기가 아니면 확정이다. COMPLETED로 좁혀 비교하지 않는 이유 — 서버가 예상 밖의 상태를 주면
+      // 그 분기가 통째로 빠져 버튼이 '등록 중…'에 멈춘 채 남고, 사용자에게는 무응답으로 보인다.
+      toast.success(
+        revising
+          ? '입사일을 수정했습니다. 온보딩이 완료되었습니다!'
+          : '온보딩이 완료되었습니다. 환영합니다!',
+      );
       navigate('/dashboard', { replace: true });
     } catch {
       // 에러 toast는 api 인터셉터에서 일괄 처리 — 여기선 버튼만 복구
@@ -68,41 +96,82 @@ export default function OnboardingPage() {
     }
   }
 
-  // 승인 대기 중에는 할 수 있는 일이 로그아웃뿐이라 그 경로만 남긴다
+  // 승인 대기 중에도 세션을 끝낼 수 있어야 하므로 로그아웃 경로는 항상 남긴다.
   async function handleLogout() {
     try {
       await logout();
     } finally {
       localStorage.removeItem('userInfo');
+      queryClient.removeQueries({ queryKey: ['auth', 'me'] });
       navigate('/login', { replace: true });
     }
   }
 
-  if (pendingApproval) {
+  if (pendingApproval && !revising) {
     return (
       <GlowShell>
         <div className="glass glass-edge w-full max-w-[440px] rounded-card border border-white/[0.15] p-8 text-center shadow-card">
           <span className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-card bg-accent/15 ring-1 ring-accent/30">
             <ShieldCheck size={24} className="text-accent" />
           </span>
+
           <h1 className="mb-3 text-[22px] font-bold tracking-[-0.02em] text-ink-hi">
             관리자 확인을 기다리는 중입니다
           </h1>
-          <p className="mb-2 text-[13px] leading-relaxed text-ink-mute">
+
+          <p className="mb-5 text-[13px] leading-relaxed text-ink-mute">
             입력하신 입사일이 최근 기간을 벗어나 관리자 확인이 필요합니다.
             <br />
             승인되면 근속 기간에 맞는 연차가 부여됩니다.
           </p>
-          <p className="mb-7 text-[12px] leading-relaxed text-ink-faint">
-            입사일을 잘못 입력하셨다면 관리자에게 반려를 요청해 주세요. 반려되면 다시 입력할 수 있습니다.
-          </p>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full rounded-btn border border-white/[0.15] px-4 py-3 text-[14px] font-semibold text-ink-body transition-colors hover:bg-white/[0.06]"
-          >
-            로그아웃
-          </button>
+
+          <dl className="mb-5 grid grid-cols-[88px_1fr] gap-x-3 gap-y-2 rounded-btn border border-white/[0.1] bg-white/[0.04] px-4 py-3 text-left text-[13px]">
+            <dt className="text-ink-faint">입사일</dt>
+            <dd className="font-medium text-ink-body">
+              {currentUser?.hireDate ?? '-'}
+            </dd>
+            <dt className="text-ink-faint">생년월일</dt>
+            <dd className="font-medium text-ink-body">
+              {currentUser?.birthDay ?? '-'}
+            </dd>
+          </dl>
+
+          {currentUser?.onboardingRevisable === true ? (
+            <p className="mb-5 text-[12px] leading-relaxed text-ink-faint">
+              입력한 정보가 잘못되었다면 승인 전에 한 번 수정할 수 있습니다.
+            </p>
+          ) : currentUser?.onboardingRevised === true ? (
+            <p className="mb-5 text-[12px] leading-relaxed text-ink-faint">
+              수정은 1회만 가능하며 이미 사용하셨습니다.
+              <br />
+              더 고치려면 관리자에게 반려를 요청해 주세요.
+            </p>
+          ) : (
+            <p className="mb-5 text-[12px] leading-relaxed text-ink-faint">
+              입사일을 잘못 입력하셨다면 관리자에게 반려를 요청해 주세요.
+              반려되면 다시 입력할 수 있습니다.
+            </p>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {currentUser?.onboardingRevisable === true && (
+              <button
+                type="button"
+                onClick={startRevision}
+                className="w-full rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-navy-app shadow-btn transition-colors hover:bg-accent-light"
+              >
+                입사일 수정
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full rounded-btn border border-white/[0.15] px-4 py-3 text-[14px] font-semibold text-ink-body transition-colors hover:bg-white/[0.06]"
+            >
+              로그아웃
+            </button>
+          </div>
         </div>
       </GlowShell>
     );
@@ -111,23 +180,38 @@ export default function OnboardingPage() {
   return (
     <GlowShell>
       <div className="glass glass-edge w-full max-w-[440px] rounded-card border border-white/[0.15] p-8 shadow-card">
-        {/* 환영 헤더 */}
         <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-card bg-accent shadow-btn">
             <CalendarCheck2 size={24} className="text-navy-app" />
           </span>
+
           <h1 className="text-[22px] font-bold tracking-[-0.02em] text-ink-hi">
-            {userName ? `${userName}님, 환영합니다!` : '환영합니다!'}
+            {revising
+              ? '입력한 정보를 수정해 주세요'
+              : userName
+                ? `${userName}님, 환영합니다!`
+                : '환영합니다!'}
           </h1>
+
           <p className="text-[13px] leading-relaxed text-ink-mute">
-            서비스 이용을 위해 아래 정보를 입력해 주세요.
+            {revising
+              ? '관리자가 확인하기 전에 생년월일과 입사일을 바로잡을 수 있습니다.'
+              : '서비스 이용을 위해 아래 정보를 입력해 주세요.'}
           </p>
+
+          {revising && (
+            <p className="w-full rounded-btn border border-accent/30 bg-accent/10 px-3 py-2 text-[12px] font-semibold text-accent">
+              수정은 1회만 가능합니다.
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-          {/* 생년월일 */}
           <div>
-            <label htmlFor="birthDay" className="mb-1.5 block text-[13px] font-medium text-ink-body">
+            <label
+              htmlFor="birthDay"
+              className="mb-1.5 block text-[13px] font-medium text-ink-body"
+            >
               생년월일
             </label>
             <input
@@ -141,9 +225,11 @@ export default function OnboardingPage() {
             />
           </div>
 
-          {/* 입사일 — 오늘 이후 선택 불가 */}
           <div>
-            <label htmlFor="hireDate" className="mb-1.5 block text-[13px] font-medium text-ink-body">
+            <label
+              htmlFor="hireDate"
+              className="mb-1.5 block text-[13px] font-medium text-ink-body"
+            >
               입사일
             </label>
             <input
@@ -160,15 +246,31 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          {/* 제출 (Primary) */}
           <button
             type="submit"
             disabled={submitting}
             className="mt-1 flex w-full items-center justify-center gap-2 rounded-btn bg-accent px-4 py-3 text-[14px] font-semibold text-navy-app shadow-btn transition-colors hover:bg-accent-light disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting && <Loader2 size={16} className="animate-spin" />}
-            {submitting ? '등록 중…' : '시작하기'}
+            {submitting
+              ? revising
+                ? '수정 중…'
+                : '등록 중…'
+              : revising
+                ? '수정 제출'
+                : '시작하기'}
           </button>
+
+          {revising && (
+            <button
+              type="button"
+              onClick={cancelRevision}
+              disabled={submitting}
+              className="w-full rounded-btn border border-white/[0.15] px-4 py-3 text-[14px] font-semibold text-ink-body transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              취소
+            </button>
+          )}
         </form>
       </div>
     </GlowShell>

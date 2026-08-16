@@ -16,6 +16,7 @@ public enum ErrorCode {
     ALREADY_PROCESSED(400, "이미 처리된 신청입니다."),
     ALREADY_ONBOARDED(400, "이미 온보딩이 완료된 계정입니다."),
     ONBOARDING_NOT_PENDING(400, "승인 대기 중인 온보딩이 아닙니다."),
+    ONBOARDING_REVISION_EXHAUSTED(400, "승인 대기 중 입사일 수정은 한 번만 가능합니다."),
     PAGE_SIZE_EXCEEDED(400, "한 번에 조회할 수 있는 건수를 초과했습니다."),
     DATE_RANGE_TOO_WIDE(400, "조회 기간이 너무 깁니다."),
     INVALID_INPUT_VALUE(400, "입력값이 올바르지 않습니다."),
@@ -44,6 +45,7 @@ public enum ErrorCode {
     ONBOARDING_NOT_COMPLETED(403, "온보딩(생일·입사일 입력)을 먼저 완료해야 합니다."),
     // 승인 대기와 미시작을 구분한다 — 같은 메시지를 주면 사원이 온보딩을 다시 내려다 ALREADY_ONBOARDED를 맞는다 (S-1)
     ONBOARDING_PENDING_APPROVAL(403, "입력하신 입사일은 관리자 확인이 필요합니다. 승인 후 이용할 수 있습니다."),
+    ONBOARDING_REVISION_DISABLED(403, "관리자가 승인 대기 중 입사일 수정 기능을 비활성화했습니다."),
 
     // 404 Not Found
     USER_NOT_FOUND(404, "사용자를 찾을 수 없습니다."),

@@ -47,7 +47,19 @@
 | — | `/oauth2/authorization/google` | Google 로그인 진입 (Spring 제공) | 공개 |
 | GET | `/api/auth/me` | 내 정보 조회 (id, name, email, role, department, 일수, hireDate, birthDay, 온보딩 여부) | 전체 |
 | POST | `/api/auth/onboarding` | 최초 온보딩 — `{birthDay, hireDate}` → base_days 정책 자동 계산 | 전체(미온보딩) |
+| PATCH | `/api/auth/onboarding` | 승인 대기 중 입사일·생일 **1회** 수정 — `{birthDay, hireDate}` | 전체(승인 대기) |
 | POST | `/api/auth/logout` | 쿠키 만료 | 전체 |
+
+**PATCH가 `/api/auth/` 아래인 것은 취향이 아니다.** 승인 대기 사원은 `OnboardingCheckInterceptor`가
+`/api/auth/*` 밖을 전부 403으로 막으므로 다른 경로에 두면 본인이 호출할 수 없다. 같은 이유로
+"수정해도 되는가"를 설정 API로 물어볼 수 없어서, `GET /api/auth/me`가 서버에서 판정한
+`onboardingRevisable`(상태 == PENDING_APPROVAL && `onboarding_revision_enabled` && 미사용)과
+`onboardingRevised`를 함께 내려준다. 프론트가 세 조건을 재조합하지 않는다.
+
+거부 응답: 대기 상태 아님 `ONBOARDING_NOT_PENDING`(400) → 설정 꺼짐 `ONBOARDING_REVISION_DISABLED`(403)
+→ 수정권 소진 `ONBOARDING_REVISION_EXHAUSTED`(400) → 미래 입사일 `FUTURE_HIRE_DATE`(400) 순으로 판정한다.
+미래일 검증을 통과해야 수정권이 소진된다 — 앞에 두면 날짜를 잘못 찍은 사원이 수정권만 잃는다.
+수정한 입사일이 자동 승인 범위 **안**이면 최초 제출과 같은 경로로 그 자리에서 확정된다.
 
 OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입이면 자동 가입(EMPLOYEE, 미배정) → ADMIN_EMAILS면 SYSTEM_ADMIN → is_active=false면 `/login?error=retired` → JWT 쿠키 발급 후 `/oauth-callback` 리다이렉트. 실패 시 `/login?error=...&message=...`
 
