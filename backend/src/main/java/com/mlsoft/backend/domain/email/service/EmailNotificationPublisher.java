@@ -178,7 +178,8 @@ public class EmailNotificationPublisher {
                         kind,
                         leave.getId(),
                         leave.getUser().getName(),
-                        leave.getLeaveType().name(),
+                        // name()을 쓰면 수신자가 "구분: ANNUAL"을 받는다 (2026-08-16 실제 발송)
+                        leave.getLeaveType().getLabel(),
                         dates,
                         leave.getDays().toPlainString(),
                         leave.getStatus() == RequestStatus.CANCEL_PENDING

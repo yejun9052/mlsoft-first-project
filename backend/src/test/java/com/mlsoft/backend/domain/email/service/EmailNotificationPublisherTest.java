@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.email.service;
 
+import com.mlsoft.backend.config.AppProperties;
 import com.mlsoft.backend.domain.email.entity.EmailHistory;
 import com.mlsoft.backend.domain.email.event.EmailDispatchEvent;
 import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
@@ -37,7 +38,9 @@ class EmailNotificationPublisherTest {
     @Mock
     private EmailHistoryRepository emailHistoryRepository;
 
-    private final EmailTemplateFactory emailTemplateFactory = new EmailTemplateFactory();
+    // 실제 팩토리를 쓴다 — 본문이 무엇으로 채워지는지가 이 테스트의 관심사이기도 하다
+    private final EmailTemplateFactory emailTemplateFactory = new EmailTemplateFactory(
+            new AppProperties("mlsoft.com", java.util.List.of(), "http://localhost:5173", false));
 
     @Test
     @DisplayName("퇴직한 승인자는 수신자에서 빠진다 — 이력도 만들지 않는다")
@@ -109,6 +112,30 @@ class EmailNotificationPublisherTest {
         assertEquals(List.of(1L, 2L), captor.getValue().historyIds());
         assertTrue(captureSaved().stream().allMatch(h -> h.getContent() != null && !h.getContent().isBlank()),
                 "본문은 발행 전에 확정돼 있어야 한다 (수신자별 마스킹이 다르므로)");
+    }
+
+    // 2026-08-16에 수신자가 "구분: ANNUAL"을 받았다. LeaveType에만 라벨이 없어
+    // publishLeave가 name()을 그대로 넘겼기 때문이다.
+    @Test
+    @DisplayName("연차 종류는 enum 이름이 아니라 한글 라벨로 나간다")
+    void publish_연차종류_한글라벨() {
+        User applicant = user(1L, "신청자", Role.EMPLOYEE, true);
+        User approver = user(2L, "팀장", Role.TEAM_LEADER, true);
+        LeaveRequest leave = LeaveRequest.create(
+                applicant,
+                LeaveType.HALF_AM,
+                List.of(LocalDate.of(2026, 8, 20)),
+                "개인 사유",
+                approver,
+                null);
+        givenSavedHistoriesGetIds();
+
+        publisher().publishLeaveApplied(leave);
+
+        assertTrue(captureSaved().stream().allMatch(h -> h.getContent().contains("오전 반차")),
+                "한글 라벨이 본문에 없다");
+        assertTrue(captureSaved().stream().noneMatch(h -> h.getContent().contains("HALF_AM")),
+                "enum 이름이 그대로 새어 나갔다");
     }
 
     private EmailNotificationPublisher publisher() {

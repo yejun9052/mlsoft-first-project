@@ -137,7 +137,10 @@ public class EmailDeliveryService {
                 helper.setReplyTo(mailAppProperties.replyTo());
             }
             helper.setSubject(history.getTitle());
-            helper.setText(history.getContent(), false);
+            // 본문은 HTML이다 (EmailTemplateFactory) — false로 보내면 태그가 글자 그대로 노출된다.
+            // email_history.content에 HTML이 그대로 들어 있어, 그 값을 브라우저에 붙이면
+            // 수신자가 받은 화면을 그대로 재현할 수 있다(감사용).
+            helper.setText(history.getContent(), true);
 
             mailSender.send(mimeMessage);
             history.markSent();

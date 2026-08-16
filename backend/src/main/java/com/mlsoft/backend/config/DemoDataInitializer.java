@@ -76,8 +76,25 @@ public class DemoDataInitializer implements ApplicationRunner {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    /**
+     * 시연 계정의 이메일 도메인.
+     *
+     * <p><b>실재하는 회사 도메인을 쓰면 안 된다.</b> 시연 계정은 결재·복리후생 이력을 갖고 있어
+     * 이메일 알림의 실제 수신자가 된다 — {@code EmailDeliveryService}는 {@code users.email}로
+     * 그대로 발송한다. 2026-08-16에 이 값이 {@code mlsoft.com}이라 시연 계정 앞으로 메일이
+     * 실제로 나갔다(3건). 그 뒤 소유 도메인으로 바꿨다.
+     *
+     * <p>도메인을 다시 바꿀 때는 <b>이미 시딩된 DB의 기존 행도 함께 UPDATE</b>해야 한다.
+     * 여기만 고치면 재기동해도 MARKER_EMAIL이 안 보여 새 계정이 추가로 생길 뿐,
+     * 옛 주소를 가진 행은 그대로 남아 계속 발송 대상이 된다
+     * (보정 SQL: {@code db/backfill-2026-08-16-demo-email-domain.sql}).
+     */
+    // package-private인 것은 의도다 — 같은 패키지의 DemoDataInitializerTest가 이 값을 참조한다.
+    // 테스트가 도메인 문자열을 따로 갖고 있으면 도메인을 바꿀 때마다 테스트가 깨진다(실제로 깨졌다).
+    static final String DEMO_EMAIL_DOMAIN = "@yedevjun.com";
+
     /** 시연 데이터 존재 판별 기준 계정 — 이 계정이 있으면 이미 시딩된 것으로 본다 */
-    private static final String MARKER_EMAIL = "dohyun.kim@mlsoft.com";
+    private static final String MARKER_EMAIL = "dohyun.kim" + DEMO_EMAIL_DOMAIN;
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
@@ -160,7 +177,7 @@ public class DemoDataInitializer implements ApplicationRunner {
         LocalDate hire = LocalDate.parse(hireDate);
         User user = User.builder()
                 .name(name)
-                .email(emailLocalPart + "@mlsoft.com")
+                .email(emailLocalPart + DEMO_EMAIL_DOMAIN)
                 .role(role)
                 .position(position)
                 .baseDays(BigDecimal.ZERO)

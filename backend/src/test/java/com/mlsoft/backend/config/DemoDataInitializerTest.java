@@ -143,25 +143,27 @@ class DemoDataInitializerTest {
         demoDataInitializer.run(null);
 
         // 반려 건의 신청자 — 다른 신청이 없으므로 사용 일수가 0이어야 한다
-        User rejectedApplicant = userRepository.findByEmail("minseok.jung@mlsoft.com").orElseThrow();
+        User rejectedApplicant = userRepository
+                .findByEmail("minseok.jung" + DemoDataInitializer.DEMO_EMAIL_DOMAIN).orElseThrow();
         assertEquals(0, BigDecimal.ZERO.compareTo(rejectedApplicant.getUseDays()),
                 "반려된 신청의 선차감이 복구되지 않았다");
 
         // 즉시 취소 건의 신청자
-        User cancelledApplicant = userRepository.findByEmail("jihoon.oh@mlsoft.com").orElseThrow();
+        User cancelledApplicant = userRepository
+                .findByEmail("jihoon.oh" + DemoDataInitializer.DEMO_EMAIL_DOMAIN).orElseThrow();
         assertEquals(0, BigDecimal.ZERO.compareTo(cancelledApplicant.getUseDays()),
                 "취소된 신청의 선차감이 복구되지 않았다");
     }
 
     /**
      * 시더가 만든 계정만 골라낸다.
-     * <p>`@mlsoft.com`으로만 거르면 같은 H2를 쓰는 다른 테스트가 만든 계정까지 섞여
+     * <p>도메인으로만 거르면 같은 H2를 쓰는 다른 테스트가 만든 계정까지 섞여
      * <b>실행 순서에 따라 개수 단언이 흔들린다.</b> 시더는 온보딩까지 마친 계정만 만들고,
-     * 이름이 고정돼 있으므로 이름으로 판별한다.
+     * 이름이 고정돼 있으므로 이름으로도 함께 판별한다.
      */
     private List<User> demoUsers() {
         return userRepository.findAll().stream()
-                .filter(user -> user.getEmail().endsWith("@mlsoft.com"))
+                .filter(user -> user.getEmail().endsWith(DemoDataInitializer.DEMO_EMAIL_DOMAIN))
                 .filter(user -> DEMO_NAMES.contains(user.getName()))
                 .toList();
     }
