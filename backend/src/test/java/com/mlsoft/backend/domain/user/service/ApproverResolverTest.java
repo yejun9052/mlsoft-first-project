@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -9,6 +10,7 @@ import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -26,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -43,6 +46,9 @@ class ApproverResolverTest {
 
     @Mock
     private UserRepository userRepository;
+    // 상위 부서로 올라갈 때만 쓰인다 (2026-08-16)
+    @Mock
+    private DepartmentRepository departmentRepository;
 
     @InjectMocks
     private ApproverResolver approverResolver;
@@ -56,6 +62,89 @@ class ApproverResolverTest {
         User applicant = userInDepartment(1L, leader);
 
         assertEquals(leader, approverResolver.resolvePrimary(applicant));
+    }
+
+    // ── 상위 부서 승격 (2026-08-16) ──────────────────────────────────────────
+    // 예전에는 자기 부서 팀장이 없으면 곧바로 SYSTEM_ADMIN으로 갔다. 조직도상 바로 위에
+    // 본부장이 있는데 시스템만 모르는 상태였다.
+
+    @Test
+    @DisplayName("기본 승인자 — 하위 부서가 공석이면 상위 부서 팀장이 지정된다")
+    void resolvePrimary_공석이면_상위부서팀장() {
+        User parentLeader = user(3L, Role.TEAM_LEADER, true, true);
+        User applicant = userInNestedDepartment(1L, null, parentLeader);
+
+        assertEquals(parentLeader, approverResolver.resolvePrimary(applicant));
+    }
+
+    @Test
+    @DisplayName("기본 승인자 — 하위 부서에 팀장이 있으면 상위로 올라가지 않는다")
+    void resolvePrimary_하위팀장있으면_그대로() {
+        User leader = user(2L, Role.TEAM_LEADER, true, true);
+        User parentLeader = user(3L, Role.TEAM_LEADER, true, true);
+        User applicant = userInNestedDepartment(1L, leader, parentLeader);
+
+        assertEquals(leader, approverResolver.resolvePrimary(applicant));
+        verify(departmentRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("기본 승인자 — 하위 팀장이 자격을 잃었으면 상위 부서 팀장으로 올라간다")
+    void resolvePrimary_하위팀장_자격미달_상위로() {
+        // 팀장으로 지정돼 있지만 강등된 사람 — 결재할 수 없다 (리뷰 I-5a)
+        User demotedLeader = user(2L, Role.EMPLOYEE, true, true);
+        User parentLeader = user(3L, Role.TEAM_LEADER, true, true);
+        User applicant = userInNestedDepartment(1L, demotedLeader, parentLeader);
+
+        assertEquals(parentLeader, approverResolver.resolvePrimary(applicant));
+    }
+
+    @Test
+    @DisplayName("기본 승인자 — 상위 부서 팀장이 신청자 본인이면 건너뛰고 SYSTEM_ADMIN으로 간다")
+    void resolvePrimary_상위팀장이본인_fallback() {
+        User applicant = user(3L, Role.TEAM_LEADER, true, true);
+        User fallbackAdmin = user(9L, Role.SYSTEM_ADMIN, true, true);
+        Department parent = Department.builder()
+                .id(100L).name("개발본부").description("본부").active(true).build();
+        parent.assignLeader(applicant); // 본부장이 자기 신청을 올린 경우
+        Department child = Department.builder()
+                .id(101L).name("개발 1팀").description("팀").active(true).parentId(100L).build();
+        applicant.assignDepartment(child);
+        given(departmentRepository.findById(100L)).willReturn(Optional.of(parent));
+        given(userRepository.findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, applicant.getId()))
+                .willReturn(Optional.of(fallbackAdmin));
+
+        // 셀프 결재는 어느 단계에서도 허용하지 않는다
+        assertEquals(fallbackAdmin, approverResolver.resolvePrimary(applicant));
+    }
+
+    // @Timeout이 이 테스트의 핵심이다. 순환 가드를 지우면 이 메서드는 실패가 아니라
+    // **영원히 매달린다** — 시간 제한이 없으면 빌드가 멈춘 것처럼 보이고 원인도 안 보인다.
+    // (2026-08-16 뮤테이션 검증 중 실제로 6분 40초를 태우고서야 알았다)
+    //
+    // SEPARATE_THREAD여야 한다. 기본값(SAME_THREAD)은 테스트가 **끝난 뒤에** 경과 시간을 볼 뿐이라
+    // 끼어들 수 없는 CPU 루프는 못 끊는다 — 그 모드로 붙였다가 또 타임아웃을 태웠다.
+    @Test
+    @Timeout(value = 5, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    @DisplayName("기본 승인자 — 부서 계층이 순환이어도 무한 루프에 빠지지 않는다")
+    void resolvePrimary_순환계층_중단() {
+        User fallbackAdmin = user(9L, Role.SYSTEM_ADMIN, true, true);
+        // DB를 직접 고쳐야 만들 수 있는 상태다. 그래도 신청 한 건이 스레드를 물면 안 된다
+        Department a = Department.builder()
+                .id(200L).name("A").description("A").active(true).parentId(201L).build();
+        Department b = Department.builder()
+                .id(201L).name("B").description("B").active(true).parentId(200L).build();
+        given(departmentRepository.findById(201L)).willReturn(Optional.of(b));
+        given(departmentRepository.findById(200L)).willReturn(Optional.of(a));
+
+        User applicant = user(1L, Role.EMPLOYEE, true, true);
+        applicant.assignDepartment(a);
+        given(userRepository.findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, applicant.getId()))
+                .willReturn(Optional.of(fallbackAdmin));
+
+        assertEquals(fallbackAdmin, approverResolver.resolvePrimary(applicant));
     }
 
     @Test
@@ -235,6 +324,30 @@ class ApproverResolverTest {
     }
 
     /** 지정한 팀장을 가진 부서에 속한 신청자 */
+    /**
+     * 하위 부서(팀장 leader) 소속 사원. 상위 부서는 parentLeader가 팀장이다.
+     * leader에 null을 주면 하위 부서는 공석이 된다.
+     */
+    private User userInNestedDepartment(Long applicantId, User leader, User parentLeader) {
+        Department parent = Department.builder()
+                .id(100L).name("개발본부").description("본부").active(true).build();
+        if (parentLeader != null) {
+            parent.assignLeader(parentLeader);
+        }
+        Department child = Department.builder()
+                .id(101L).name("개발 1팀").description("팀").active(true).parentId(100L).build();
+        if (leader != null) {
+            child.assignLeader(leader);
+        }
+        // lenient — 하위 팀장이 있는 경우엔 이 조회가 일어나지 않는 것이 정상이고,
+        // 그 "일어나지 않음"은 해당 테스트의 verify(never())가 직접 단정한다
+        lenient().when(departmentRepository.findById(100L)).thenReturn(Optional.of(parent));
+
+        User applicant = user(applicantId, Role.EMPLOYEE, true, true);
+        applicant.assignDepartment(child);
+        return applicant;
+    }
+
     private static User userInDepartment(Long applicantId, User leader) {
         Department department = Department.builder()
                 .id(10L).name("개발팀").description("설명").active(true).build();

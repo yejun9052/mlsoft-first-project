@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.user.service.ApproverResolver;
+import com.mlsoft.backend.domain.user.service.UserService;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,8 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class DepartmentServiceTest {
 
+    private static final Long ACTOR_ID = 99L;
+
     @Mock
     private DepartmentRepository departmentRepository;
     @Mock
@@ -44,6 +47,9 @@ class DepartmentServiceTest {
     // 팀장 자격 판정 — 승인자 자격과 같은 기준 (리뷰 I-5a)
     @Mock
     private ApproverResolver approverResolver;
+    // 팀장 교체 불변식은 UserService가 갖는다 — 여기서는 "그쪽에 맡겼는가"만 본다
+    @Mock
+    private UserService userService;
 
     @InjectMocks
     private DepartmentService departmentService;
@@ -94,7 +100,7 @@ class DepartmentServiceTest {
         DepartmentUpdateRequest request = new DepartmentUpdateRequest("개발팀", "설명", null, 1L);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> departmentService.update(7L, request));
+                () -> departmentService.update(7L, request, ACTOR_ID));
 
         assertEquals(ErrorCode.INVALID_INPUT_VALUE, ex.getErrorCode());
     }
@@ -120,7 +126,7 @@ class DepartmentServiceTest {
         given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
         DepartmentUpdateRequest request = new DepartmentUpdateRequest("개발팀(수정)", "설명 수정", null, null);
 
-        DepartmentResponse response = departmentService.update(10L, request);
+        DepartmentResponse response = departmentService.update(10L, request, ACTOR_ID);
 
         assertNull(response.leaderId());
         assertNull(department.getLeader());
@@ -133,7 +139,7 @@ class DepartmentServiceTest {
         DepartmentUpdateRequest request = new DepartmentUpdateRequest("개발팀", "설명", null, null);
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> departmentService.update(10L, request));
+                () -> departmentService.update(10L, request, ACTOR_ID));
 
         assertEquals(ErrorCode.DEPARTMENT_NOT_FOUND, ex.getErrorCode());
         verify(userRepository, never()).findById(any());

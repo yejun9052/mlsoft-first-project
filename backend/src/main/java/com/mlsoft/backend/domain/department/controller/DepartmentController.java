@@ -7,6 +7,8 @@ import com.mlsoft.backend.domain.department.dto.DepartmentUpdateRequest;
 import com.mlsoft.backend.domain.department.service.DepartmentService;
 import com.mlsoft.backend.global.response.CommonResponse;
 import com.mlsoft.backend.global.response.ResponseMessage;
+import com.mlsoft.backend.security.AuthUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -64,9 +66,11 @@ public class DepartmentController {
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
     public ResponseEntity<CommonResponse<DepartmentResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody DepartmentUpdateRequest request
+            @Valid @RequestBody DepartmentUpdateRequest request,
+            // 팀장 교체는 이전 팀장의 역할까지 바꾸므로 누가 했는지가 감사 이력에 남아야 한다
+            @AuthenticationPrincipal AuthUser authUser
     ) {
-        DepartmentResponse response = departmentService.update(id, request);
+        DepartmentResponse response = departmentService.update(id, request, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.DEPARTMENT_UPDATED, response));
     }
 

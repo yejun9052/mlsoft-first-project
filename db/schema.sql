@@ -52,7 +52,9 @@ USE `mlsoft_leave`;
 CREATE TABLE `admin_audit_log` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
-  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  -- 2026-08-16 USER_RESTORED 추가 (backfill-2026-08-16-user-restore.sql)
+  -- AdminAction enum에 상수를 넣으면 이 목록도 함께 늘려야 한다 — ddl-auto: update는 기존 ENUM을 넓히지 않는다
+  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `after_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `before_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `target_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,

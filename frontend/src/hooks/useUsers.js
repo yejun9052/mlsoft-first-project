@@ -5,6 +5,7 @@ import {
   getRetiredUsers,
   getTeamMembers,
   getUsers,
+  restoreUser,
   retireUser,
   updateMyProfile,
   updateUserBaseDays,
@@ -129,6 +130,19 @@ export function useRetireUser() {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
       queryClient.invalidateQueries({ queryKey: ['welfare'] });
       queryClient.invalidateQueries({ queryKey: ['departments'] });
+    },
+  });
+}
+
+// 퇴직 복구 뮤테이션 — 재직 상태로 되돌린다 (POST /api/users/{id}/restore).
+// 무효화 범위가 퇴직보다 좁다: 복구는 is_active·retired_at만 되돌리고 팀장직·결재 이관은
+// 손대지 않으므로 부서·결재함 캐시는 낡지 않는다. 대신 재직·퇴직 두 목록이 함께 바뀐다.
+export function useRestoreUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: restoreUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
 }

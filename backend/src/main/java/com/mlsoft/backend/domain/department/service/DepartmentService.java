@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.user.service.ApproverResolver;
+import com.mlsoft.backend.domain.user.service.UserService;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,8 @@ public class DepartmentService {
     private final UserRepository userRepository;
     // 팀장 자격 판정 — 승인자 자격과 같은 기준이어야 한다 (리뷰 I-5a)
     private final ApproverResolver approverResolver;
+    // 팀장 교체 불변식(부서당 1명 + 이전 팀장 정리)의 단일 구현처. 여기서 다시 만들지 말 것
+    private final UserService userService;
 
     /** 전체 목록 (GET /api/departments) — 활성 부서만, 드롭다운용 플랫 목록 */
     @Transactional(readOnly = true)
@@ -69,14 +72,18 @@ public class DepartmentService {
     /**
      * 부서 수정 (PUT /api/departments/{id}, SA) — 전체 갱신.
      * leaderId 미포함(null) 시 팀장 공석으로 처리한다 — PUT은 전체 갱신 의미론을 따른다.
+     *
+     * <p>팀장 지정은 {@code UserService.assignDepartmentLeader}에 맡긴다 — 여기서 직접
+     * {@code assignLeader}만 부르면 <b>이전 팀장이 역할만 팀장인 채 그 부서에 남는다</b>.
+     * 부서당 팀장 1명 불변식이 한쪽 경로에서만 지켜지면 지켜지지 않는 것과 같다 (2026-08-16).
      */
     @Transactional
-    public DepartmentResponse update(Long id, DepartmentUpdateRequest request) {
+    public DepartmentResponse update(Long id, DepartmentUpdateRequest request, Long actorId) {
         Department department = findActiveDepartmentOrThrow(id);
         validateParent(request.parentId(), id);
         department.update(request.name().trim(), request.description(), request.parentId());
         if (request.leaderId() != null) {
-            department.assignLeader(findEligibleLeaderOrThrow(request.leaderId()));
+            userService.assignDepartmentLeader(department, findEligibleLeaderOrThrow(request.leaderId()), actorId);
         } else {
             department.clearLeader();
         }

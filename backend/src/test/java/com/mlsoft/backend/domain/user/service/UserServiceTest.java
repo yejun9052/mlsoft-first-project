@@ -202,6 +202,144 @@ class UserServiceTest {
         verify(welfareRequestRepository, never()).findBySubApproverAndStatus(any(), any());
     }
 
+    // ── 팀장 승격 = 부서 팀장 지정 (2026-08-16) ──────────────────────────────
+    // 예전에는 역할만 바뀌어서 부서는 "공석"인 채였고, 그 부서 신청의 승인자가
+    // SYSTEM_ADMIN fallback으로 갔다. 같은 단어를 쓰는 두 값이 따로 놀았던 것이 원인이다.
+
+    @Test
+    @DisplayName("팀장 승격 — 소속 부서의 팀장 자리까지 함께 채운다")
+    void changeRole_팀장승격_부서팀장까지지정() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.assignDepartment(department);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID);
+
+        // assignDepartmentLeader 호출을 지우면 부서가 공석으로 남아 이 단정이 깨진다
+        assertEquals(target, department.getLeader());
+        assertEquals(Role.TEAM_LEADER, target.getRole());
+    }
+
+    @Test
+    @DisplayName("팀장 승격 — 소속 부서가 없으면 거부한다 (앉힐 자리가 없다)")
+    void changeRole_부서없는팀장승격_예외() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID));
+
+        assertEquals(ErrorCode.DEPARTMENT_REQUIRED_FOR_LEADER, ex.getErrorCode());
+        assertEquals(Role.EMPLOYEE, target.getRole(), "거부됐는데 역할이 바뀌었다");
+    }
+
+    @Test
+    @DisplayName("팀장 승격 — 그 부서에 팀장이 이미 있으면 사원으로 내리고 교체한다 (부서당 1명)")
+    void changeRole_기존팀장_강등후교체() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User previous = activeUser(2L, Role.TEAM_LEADER);
+        previous.assignDepartment(department);
+        department.assignLeader(previous);
+
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.assignDepartment(department);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID);
+
+        // 자리에서만 빼고 역할을 남기면 "그 부서에 역할이 팀장인 사람 2명"이 된다
+        assertEquals(target, department.getLeader());
+        assertEquals(Role.EMPLOYEE, previous.getRole(), "이전 팀장이 팀장 역할로 남았다");
+    }
+
+    @Test
+    @DisplayName("팀장 교체 — 내려온 이전 팀장의 대기 결재를 이관한다 (영구 PENDING 방지)")
+    void changeRole_기존팀장_대기결재이관() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User previous = activeUser(2L, Role.TEAM_LEADER);
+        previous.assignDepartment(department);
+        department.assignLeader(previous);
+
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.assignDepartment(department);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID);
+
+        // 이관 조회 자체가 일어나야 한다 — 결재할 수 없는 사람이 승인자로 남으면 선차감이 묶인다
+        verify(leaveRequestRepository).findByPrimaryApproverAndStatusIn(previous, LEAVE_REASSIGN_STATUSES);
+    }
+
+    @Test
+    @DisplayName("팀장 교체 — 이미 그 사람이 팀장이면 아무것도 건드리지 않는다")
+    void changeRole_같은사람재지정_무변화() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        target.assignDepartment(department);
+        department.assignLeader(target);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.changeRole(1L, Role.TEAM_LEADER, ACTOR_ID);
+
+        assertEquals(target, department.getLeader());
+        verify(leaveRequestRepository, never()).findByPrimaryApproverAndStatusIn(any(), any());
+    }
+
+    @Test
+    @DisplayName("퇴직 복구 — 재직 상태로 되돌리고 퇴사일을 지운다")
+    void restore_retiredUser_becomesActive() {
+        User target = retiredUser(1L);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.restore(1L, ACTOR_ID);
+
+        // User.restore의 두 대입 중 하나라도 지우면 이 테스트가 깨진다
+        assertTrue(target.isActive());
+        assertNull(target.getRetiredAt());
+    }
+
+    @Test
+    @DisplayName("퇴직 복구 — 재직 중인 사용자를 복구하려 하면 NOT_RETIRED")
+    void restore_activeUser_throws() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> userService.restore(1L, ACTOR_ID));
+
+        // 이 검사를 빼면 재직자에게 복구를 걸어도 통과해 감사 이력에 없는 변경이 남는다
+        assertEquals(ErrorCode.NOT_RETIRED, ex.getErrorCode());
+        verify(adminAuditService, never()).recordUserChange(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("퇴직 복구 — 퇴직일을 감사 이력에 남긴다 (복구하면 retired_at이 지워지므로 여기 말고는 안 남는다)")
+    void restore_recordsPreviousRetiredDate() {
+        User target = retiredUser(1L);
+        LocalDate retiredAt = target.getRetiredAt();
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.restore(1L, ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.USER_RESTORED, target, "퇴직 (" + retiredAt + ")", "재직");
+    }
+
+    @Test
+    @DisplayName("퇴직 복구 — 팀장직·결재 이관은 되살리지 않는다 (퇴직의 완전한 역연산이 아니다)")
+    void restore_doesNotUndoLeadershipOrReassignment() {
+        User target = retiredUser(1L);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.restore(1L, ACTOR_ID);
+
+        // 되살리는 코드를 넣으면 현재 팀장을 말없이 밀어내고 이미 처리된 결재를 되돌린다.
+        // 그 유혹을 막는 것이 이 테스트의 목적이다 (UserService.restore 주석)
+        verify(departmentRepository, never()).findByLeader(any());
+        verify(leaveRequestRepository, never()).findByPrimaryApproverAndStatusIn(any(), any());
+        verify(welfareRequestRepository, never()).findByPrimaryApproverAndStatus(any(), any());
+    }
+
     @Test
     @DisplayName("퇴직 — 이관 대상은 있는데 fallback SYSTEM_ADMIN이 없으면 INVALID_APPROVER (전체 롤백 유도)")
     void retire_noFallbackAdmin_throwsInvalidApprover() {

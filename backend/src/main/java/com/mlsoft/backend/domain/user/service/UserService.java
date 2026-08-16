@@ -143,10 +143,23 @@ public class UserService {
         if (role != Role.SYSTEM_ADMIN) {
             validateNotLastSystemAdmin(target);
         }
+        // 팀장 승격은 소속 부서가 있어야 성립한다 — 아래에서 그 부서의 leader_id에 앉히기 때문이다
+        if (role == Role.TEAM_LEADER && target.getDepartment() == null) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_REQUIRED_FOR_LEADER);
+        }
+
         Role before = target.getRole();
         target.changeRole(role);
         adminAuditService.recordUserChange(actorId, AdminAction.ROLE_CHANGED, target,
                 before.getLabel(), role.getLabel());
+
+        // 팀장 승격이면 **부서 팀장 자리까지 함께 옮긴다** (2026-08-16).
+        // 예전에는 역할만 바뀌어서, 관리자가 구성원 관리에서 팀장으로 올려도 부서는 "공석"인 채였고
+        // 그 부서 신청의 승인자가 SYSTEM_ADMIN fallback으로 갔다. 같은 단어를 쓰는 두 값이
+        // 따로 놀았던 것이 원인이다 — 이제 역할이 단일 출처고 leader_id가 그걸 따라온다.
+        if (role == Role.TEAM_LEADER) {
+            assignDepartmentLeader(target.getDepartment(), target, actorId);
+        }
 
         // 강등이면 팀장직과 대기 결재를 함께 정리한다 (리뷰 I-5a).
         // department.leader_id를 그대로 두면 결재할 수 없는 사람이 primary로 지정돼
@@ -157,6 +170,44 @@ public class UserService {
             reassignPendingApprovals(target);
         }
         return UserResponse.of(target);
+    }
+
+    /**
+     * 부서 팀장 교체 — <b>부서마다 팀장은 한 명</b>이라는 불변식을 지키는 유일한 자리.
+     *
+     * <p>이미 팀장이 있으면 그 사람을 사원으로 내린다. 자리에서만 빼고 역할을 남기면
+     * "그 부서에 역할이 팀장인 사람 2명"이 되어, 관리자 화면에서 누가 실제 결재자인지 알 수 없다 —
+     * 그 혼선이 이번 문제의 절반이었다.
+     *
+     * <p>내려온 사람의 대기 결재는 반드시 이관한다. 결재할 수 없는 사람이 승인자로 남으면
+     * 그 신청은 선차감이 걸린 채 영구 PENDING이 된다 (리뷰 I-5a).
+     *
+     * <p>구성원 관리(역할 변경)와 부서 관리(팀장 지정) 두 경로가 이 메서드를 함께 쓴다.
+     * 각자 구현하면 한쪽에서만 불변식이 깨진다.
+     */
+    @Transactional
+    public void assignDepartmentLeader(Department department, User newLeader, Long actorId) {
+        User previousLeader = department.getLeader();
+        if (previousLeader != null && previousLeader.getId().equals(newLeader.getId())) {
+            return; // 이미 이 사람이 팀장이다
+        }
+
+        if (previousLeader != null) {
+            Role before = previousLeader.getRole();
+            // SYSTEM_ADMIN은 내리지 않는다 — 팀장 자리에서 빠질 뿐 관리자 권한은 부서와 무관하다
+            if (before == Role.TEAM_LEADER) {
+                previousLeader.changeRole(Role.EMPLOYEE);
+                adminAuditService.recordUserChange(actorId, AdminAction.ROLE_CHANGED, previousLeader,
+                        before.getLabel(), Role.EMPLOYEE.getLabel());
+                reassignPendingApprovals(previousLeader);
+                log.info("[팀장 교체] 이전 팀장 강등 — departmentId={}, userId={}",
+                        department.getId(), previousLeader.getId());
+            }
+        }
+
+        department.assignLeader(newLeader);
+        log.info("[팀장 교체] departmentId={}, newLeaderId={}, actorId={}",
+                department.getId(), newLeader.getId(), actorId);
     }
 
     /** 강등·퇴직 시 맡고 있던 부서의 팀장직 해제 — 공석이면 SYSTEM_ADMIN fallback이 받는다 (검증 Y-3) */
@@ -231,6 +282,42 @@ public class UserService {
         adminAuditService.recordUserChange(actorId, AdminAction.USER_RETIRED, target,
                 "재직", "퇴직 (" + target.getRetiredAt() + ")");
         log.info("[퇴직 처리] userId={}, retiredAt={}, actorId={}", targetId, target.getRetiredAt(), actorId);
+    }
+
+    /**
+     * 퇴직 복구 (POST /api/users/{id}/restore, SA) — 잘못 처리한 퇴직을 되돌린다.
+     *
+     * <p><b>퇴직의 완전한 역연산이 아니다.</b> {@code is_active}·{@code retired_at} 두 플래그만
+     * 되돌리고, 퇴직이 함께 수행한 <b>팀장직 해제와 대기 결재 이관은 그대로 둔다</b>:
+     * <ul>
+     *   <li>팀장직 — 그사이 다른 사람이 그 부서 팀장이 됐을 수 있다. 되살리면 현재 팀장을 말없이
+     *       밀어낸다. 필요하면 관리자가 부서 관리에서 다시 지정하면 되고, 그건 눈에 보이는 조작이다</li>
+     *   <li>이관된 결재 — 이미 승인·반려됐을 수 있다. 되돌릴 대상이 남아 있는지 확인하려면
+     *       퇴직 시점 스냅샷이 필요한데 그런 기록이 없고, 만들면 퇴직 트랜잭션이 더 무거워진다</li>
+     * </ul>
+     * 즉 <b>복구는 "다시 로그인하고 신청할 수 있게 만드는 것"까지</b>다. 그 범위를 화면 확인
+     * 문구에도 그대로 적는다 — 관리자가 팀장직까지 돌아온다고 착각하면 그 부서 결재선이 어긋난다.
+     *
+     * <p>연차 잔액·기산일·역할·부서는 퇴직이 건드리지 않았으므로 손댈 것이 없다. 다만 퇴직 기간이
+     * 길었다면 스케줄러가 {@code is_active = true}만 보고 대상을 고르므로, 다음 실행에서 밀린
+     * 기산일이 catch-up으로 정산된다(docs/09 §6). 그게 맞는 동작이다 — 재직자로 되돌린 이상
+     * 그 사람의 연차는 현재 연도 기준이어야 한다.
+     *
+     * @throws BusinessException 퇴직자가 아니면 NOT_RETIRED
+     */
+    @Transactional
+    public void restore(Long targetId, Long actorId) {
+        User target = findUserOrThrow(targetId);
+        if (target.isActive()) {
+            throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+        // 복구하면 retired_at이 지워지므로 언제 퇴직했던 계정인지가 감사 이력 말고는 남지 않는다
+        LocalDate retiredAt = target.getRetiredAt();
+        target.restore();
+
+        adminAuditService.recordUserChange(actorId, AdminAction.USER_RESTORED, target,
+                "퇴직 (" + retiredAt + ")", "재직");
+        log.info("[퇴직 복구] userId={}, 퇴직일이었던 값={}, actorId={}", targetId, retiredAt, actorId);
     }
 
     /**

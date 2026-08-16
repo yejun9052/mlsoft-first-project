@@ -144,4 +144,19 @@ public class UserController {
         userService.retire(id, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_RETIRED));
     }
+
+    /**
+     * 퇴직 복구 — 재직 상태로 되돌린다. 팀장직·이관된 결재는 되살리지 않는다 (서비스 주석).
+     * 경로를 {@code /restoration}이 아니라 {@code /restore}로 둔 것은 바로 위 {@code /retire}와
+     * 짝을 이루게 하기 위함이다 — 역연산 두 개가 다른 규칙으로 쓰여 있으면 찾을 때 헷갈린다.
+     */
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<Void>> restore(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        userService.restore(id, authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_RESTORED));
+    }
 }

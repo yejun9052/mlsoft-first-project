@@ -438,6 +438,19 @@ public class User extends BaseTimeEntity {
         this.retiredAt = retiredAt;
     }
 
+    /**
+     * 퇴직 복구 (SYSTEM_ADMIN 전용) — 잘못 처리한 퇴직을 되돌린다.
+     *
+     * <p><b>두 플래그만 되돌린다.</b> 연차 잔액·기산일·역할·부서는 퇴직이 건드리지 않았으므로
+     * 그대로 살아 있고, 반대로 퇴직이 함께 수행한 <b>팀장직 해제와 대기 결재 이관은 되살리지 않는다</b>
+     * — 그사이 다른 사람이 팀장이 됐거나 이관된 결재가 이미 처리됐을 수 있어서, 되돌리면
+     * 그쪽을 덮어쓴다. 자세한 이유는 {@code UserService.restore} 주석에 있다.
+     */
+    public void restore() {
+        this.isActive = true;
+        this.retiredAt = null;
+    }
+
     /** 권한 변경 (SYSTEM_ADMIN 전용) */
     public void changeRole(Role role) {
         this.role = role;

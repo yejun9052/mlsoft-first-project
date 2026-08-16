@@ -147,6 +147,14 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 1. `db/schema.sql` 갱신 — **빈 DB를 처음 만들 때만** 쓰인다
 2. `db/backfill-<날짜>-<주제>.sql`에 `ALTER TABLE` 추가 — **이미 데이터가 있는 DB는 이쪽으로만 컬럼을 받는다.** MySQL 8에는 `ADD COLUMN IF NOT EXISTS`가 없으므로 `information_schema`로 존재 여부를 보고 건너뛰게 쓴다(예: `db/backfill-2026-08-08-scheduler.sql`). 값 보정 UPDATE도 같은 파일에 이어 붙이고 전체를 멱등하게 유지한다
 
+**`@Enumerated(STRING)` enum에 상수를 추가하는 것도 스키마 변경이다** (2026-08-16에 겪음). DB 컬럼이 MySQL `ENUM(...)` 타입이라 값 목록을 넓히지 않으면 저장 시점에 `Data truncated for column '...'`로 터진다 — **`ddl-auto: update`는 컬럼을 추가만 하고 기존 컬럼 정의는 바꾸지 않는다.** 그래서 `MODIFY COLUMN`을 backfill에 함께 써야 한다(예: `db/backfill-2026-08-16-user-restore.sql`).
+
+두 가지를 특히 조심할 것:
+- **테스트가 절대 못 잡는다.** H2는 매번 엔티티에서 스키마를 새로 만들어 새 상수가 항상 포함된다
+- **운영에서 fail-fast도 안 걸린다.** `ddl-auto: validate`는 ENUM 값 목록까지 검사하지 않아 기동은 정상이고, 그 값을 처음 저장하는 요청에서 500이 난다 — 컬럼 누락보다 더 조용히 터진다
+
+현재 ENUM 컬럼을 갖는 enum 10개(`AdminAction`·`RequestStatus`·`RequestAction`·`LeaveType`·`ScheduleType`·`Role`·`OnboardingStatus`·`WelfareTarget`·`EmailType`·`EmailStatus`)는 2026-08-16에 `db/schema.sql`과 전수 대조해 일치를 확인했다.
+
 기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
 ## 문서

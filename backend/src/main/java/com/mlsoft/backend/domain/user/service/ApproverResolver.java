@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.department.entity.Department;
+import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -11,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 승인자 결정 규칙 — 연차·복리후생이 <b>같은 규칙</b>을 쓴다 (리뷰 I-5).
@@ -40,27 +43,83 @@ public class ApproverResolver {
     private static final List<Role> APPROVER_ROLES = List.of(Role.TEAM_LEADER, Role.SYSTEM_ADMIN);
 
     private final UserRepository userRepository;
+    // 상위 부서로 올라가기 위해 필요하다 — Department.parentId가 관계가 아니라 raw id다
+    private final DepartmentRepository departmentRepository;
 
     /**
-     * 기본 승인자 = 소속 부서 팀장. 조건을 못 갖추면 SYSTEM_ADMIN fallback (검증 Y-3).
-     * 둘 다 없으면 {@code INVALID_APPROVER}.
+     * 기본 승인자 결정 — <b>가까운 곳부터 위로 올라가며</b> 결재할 수 있는 팀장을 찾는다.
+     *
+     * <pre>
+     * ① 소속 부서 팀장          자격 있으면 → 확정
+     * ② 상위 부서 팀장 (2026-08-16 추가)  자격 있으면 → 확정
+     *    └ 그 위에 또 부모가 있으면 계속 (현재 계층은 2단계라 실제로는 한 번만 올라간다)
+     * ③ SYSTEM_ADMIN 중 id가 가장 작은 계정 (신청자 본인 제외)
+     * ④ 그마저 없으면 INVALID_APPROVER
+     * </pre>
+     *
+     * <p><b>②를 넣은 이유</b>: 예전에는 자기 부서 팀장이 없으면 곧바로 ③으로 갔다. 그래서
+     * "개발본부(팀장 있음) → 개발 1팀(공석)" 구조에서 개발 1팀 신청이 <b>바로 위 본부장을 건너뛰고</b>
+     * 총관리자에게 갔다. 조직도상 결재선이 있는데 시스템만 모르는 상태였다.
+     *
+     * <p><b>각 단계에서 무엇을 "자격"으로 보는가</b>는 {@link #isEligibleFor} 하나뿐이다 —
+     * 재직 + TEAM_LEADER/SYSTEM_ADMIN + 온보딩 완료 + 신청자 본인이 아닐 것. 단계마다 기준이
+     * 다르면 "왜 이 사람이 승인자인지" 설명할 수 없게 된다.
+     *
+     * <p><b>팀장이 지정돼 있는데 자격이 없으면 WARN을 남기고 위로 올라간다.</b> 조용히 넘어가면
+     * 관리자는 그 부서 결재선이 비어 있다는 것을 영원히 모른다.
      */
     public User resolvePrimary(User applicant) {
-        Department department = applicant.getDepartment();
-        if (department != null && department.getLeader() != null) {
-            User leader = department.getLeader();
-            if (isEligibleFor(leader, applicant)) {
-                return leader;
-            }
-            // 강등·퇴직·온보딩 미완료로 팀장이 결재할 수 없는 상태 — 조용히 넘어가지 않고 남긴다.
-            // 부서에 팀장이 지정돼 있는데 fallback을 타는 건 관리자가 정리해야 할 신호다.
-            log.warn("[승인자] 부서 팀장이 결재 불가 상태라 SYSTEM_ADMIN으로 대체 — departmentId={}, leaderId={}",
-                    department.getId(), leader.getId());
+        User leader = findLeaderUpwards(applicant);
+        if (leader != null) {
+            return leader;
         }
         return userRepository
                 .findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
                         Role.SYSTEM_ADMIN, OnboardingStatus.COMPLETED, applicant.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_APPROVER));
+    }
+
+    /**
+     * 소속 부서에서 시작해 상위 부서로 올라가며 결재 가능한 팀장을 찾는다. 없으면 {@code null}.
+     *
+     * <p>현재 부서 계층은 2단계로 제한돼 있어(생성·수정 시 검증) 실제로는 한 번만 올라간다.
+     * 그래도 반복으로 쓴 이유는 계층이 깊어져도 규칙이 그대로 성립하기 때문이다.
+     *
+     * <p><b>방문한 부서를 기억하는 것은 방어 코드다.</b> 계층 검증이 순환(A→B→A)을 막지만,
+     * DB를 직접 고치면 만들 수 있다. 그때 이 루프가 영원히 돌면 연차 신청 한 건이 스레드를 물고
+     * 늘어진다 — 잘못된 데이터의 대가를 신청자가 치르게 하지 않는다.
+     */
+    private User findLeaderUpwards(User applicant) {
+        Department department = applicant.getDepartment();
+        Set<Long> visited = new HashSet<>();
+
+        while (department != null) {
+            if (department.getId() != null && !visited.add(department.getId())) {
+                log.warn("[승인자] 부서 계층에 순환이 있어 탐색을 멈춘다 — departmentId={}", department.getId());
+                return null;
+            }
+
+            User leader = department.getLeader();
+            if (leader != null) {
+                if (isEligibleFor(leader, applicant)) {
+                    // visited가 2개 이상이면 한 번 이상 위로 올라왔다는 뜻이다.
+                    // 왜 이 사람이 승인자인지 나중에 설명할 수 있어야 한다
+                    if (visited.size() > 1) {
+                        log.info("[승인자] 하위 부서 팀장이 없어 상위 부서 팀장으로 결정 — "
+                                        + "applicantId={}, departmentId={}, leaderId={}",
+                                applicant.getId(), department.getId(), leader.getId());
+                    }
+                    return leader;
+                }
+                // 강등·퇴직·온보딩 미완료로 팀장이 결재할 수 없는 상태 — 관리자가 정리해야 할 신호다
+                log.warn("[승인자] 부서 팀장이 결재 불가 상태라 상위 부서로 올라간다 — departmentId={}, leaderId={}",
+                        department.getId(), leader.getId());
+            }
+
+            Long parentId = department.getParentId();
+            department = parentId == null ? null : departmentRepository.findById(parentId).orElse(null);
+        }
+        return null;
     }
 
     /**

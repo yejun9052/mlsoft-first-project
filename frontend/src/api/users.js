@@ -62,3 +62,10 @@ export async function retireUser(id) {
   const res = await api.post(`/users/${id}/retire`);
   return res.data.data;
 }
+
+// 퇴직 복구 — 재직 상태로 되돌린다 (POST /api/users/{id}/restore, SYSTEM_ADMIN 전용).
+// 팀장직 해제·결재 이관은 되살아나지 않는다 (UserService.restore 주석).
+export async function restoreUser(id) {
+  const res = await api.post(`/users/${id}/restore`);
+  return res.data.data;
+}

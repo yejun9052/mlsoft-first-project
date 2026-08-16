@@ -76,6 +76,12 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | PATCH | `/api/users/{id}/department` | 부서 변경 | SA |
 | PATCH | `/api/users/{id}/base-days` | 연차 직접 설정 `{baseDays}` | SA |
 | POST | `/api/users/{id}/retire` | 퇴직 처리 (leader 해제·결재 이관 포함) | SA |
+| POST | `/api/users/{id}/restore` | 퇴직 복구 — 재직 상태로 되돌린다 | SA |
+
+**복구는 퇴직의 완전한 역연산이 아니다.** `is_active`·`retired_at` 두 플래그만 되돌리고,
+퇴직이 함께 수행한 **팀장직 해제와 대기 결재 이관은 그대로 둔다** — 그사이 다른 사람이 팀장이
+됐거나 이관된 결재가 이미 처리됐을 수 있어, 되살리면 그쪽을 말없이 덮어쓴다. 팀장은 부서 관리에서
+다시 지정한다. 퇴직자가 아닌 대상이면 `NOT_RETIRED`(400).
 
 ## 부서 (departments)
 

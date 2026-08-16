@@ -22,6 +22,7 @@ public enum AdminAction {
     DEPARTMENT_CHANGED("부서 변경"),
     BASE_DAYS_CHANGED("연차 직접 설정"),
     USER_RETIRED("퇴직 처리"),
+    USER_RESTORED("퇴직 복구"),
     ONBOARDING_APPROVED("온보딩 승인"),
     ONBOARDING_REJECTED("온보딩 반려"),
     CONFIG_CHANGED("시스템 설정 변경");
