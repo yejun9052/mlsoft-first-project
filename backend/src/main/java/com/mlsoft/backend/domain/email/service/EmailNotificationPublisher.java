@@ -56,8 +56,12 @@ public class EmailNotificationPublisher {
     /**
      * 수신자 후보 — 업무 트랜잭션 안에서만 쓰이므로 엔티티를 그대로 들고 있어도 안전하다.
      * (커밋 경계를 넘는 것은 {@link EmailDispatchEvent}의 id뿐이다.)
+     *
+     * @param reasonVisible 사유를 볼 권한이 있는가 (검증 Y-4)
+     * @param applicant     이 사람이 <b>신청 당사자</b>인가 — 바로가기 버튼의 행선지가 갈린다.
+     *                      신청자에게 "결재하러 가기"를 보내면 자기 신청을 자기가 결재하러 가게 된다
      */
-    private record Recipient(User user, boolean reasonVisible) {
+    private record Recipient(User user, boolean reasonVisible, boolean applicant) {
     }
 
     public void publishLeaveApplied(LeaveRequest leave) {
@@ -66,7 +70,7 @@ public class EmailNotificationPublisher {
                 EmailTemplateKind.LEAVE_APPLIED,
                 "",
                 recipients -> {
-                    addRecipient(recipients, leave.getUser(), true);
+                    addApplicant(recipients, leave.getUser());
                     addRecipient(recipients, leave.getPrimaryApprover(), true);
                     addRecipient(recipients, leave.getSubApprover(), true);
                 });
@@ -78,7 +82,7 @@ public class EmailNotificationPublisher {
                 approved ? EmailTemplateKind.LEAVE_APPROVED : EmailTemplateKind.LEAVE_REJECTED,
                 actor.getName(),
                 recipients -> {
-                    addRecipient(recipients, leave.getUser(), true);
+                    addApplicant(recipients, leave.getUser());
                     addRecipient(recipients, leave.getPrimaryApprover(), true);
                     addRecipient(recipients, leave.getSubApprover(), true);
                     addSystemAdmins(recipients);
@@ -94,7 +98,7 @@ public class EmailNotificationPublisher {
                 kind,
                 leave.getUser().getName(),
                 recipients -> {
-                    addRecipient(recipients, leave.getUser(), true);
+                    addApplicant(recipients, leave.getUser());
                     addRecipient(recipients, leave.getPrimaryApprover(), true);
                     addRecipient(recipients, leave.getSubApprover(), true);
                 });
@@ -107,7 +111,7 @@ public class EmailNotificationPublisher {
                         : EmailTemplateKind.LEAVE_CANCEL_REJECTED,
                 actor.getName(),
                 recipients -> {
-                    addRecipient(recipients, leave.getUser(), true);
+                    addApplicant(recipients, leave.getUser());
                     addRecipient(recipients, leave.getPrimaryApprover(), true);
                     addRecipient(recipients, leave.getSubApprover(), true);
                     addSystemAdmins(recipients);
@@ -120,7 +124,7 @@ public class EmailNotificationPublisher {
                 EmailTemplateKind.WELFARE_APPLIED,
                 "",
                 recipients -> {
-                    addRecipient(recipients, welfare.getUser(), true);
+                    addApplicant(recipients, welfare.getUser());
                     addRecipient(recipients, welfare.getPrimaryApprover(), true);
                     addRecipient(recipients, welfare.getSubApprover(), true);
                 });
@@ -132,7 +136,7 @@ public class EmailNotificationPublisher {
                 approved ? EmailTemplateKind.WELFARE_APPROVED : EmailTemplateKind.WELFARE_REJECTED,
                 actor.getName(),
                 recipients -> {
-                    addRecipient(recipients, welfare.getUser(), true);
+                    addApplicant(recipients, welfare.getUser());
                     addRecipient(recipients, welfare.getPrimaryApprover(), true);
                     addRecipient(recipients, welfare.getSubApprover(), true);
                     addSystemAdmins(recipients);
@@ -228,7 +232,8 @@ public class EmailNotificationPublisher {
 
         List<Long> historyIds = new ArrayList<>(recipients.size());
         for (Recipient recipient : recipients.values()) {
-            EmailMessage message = emailTemplateFactory.create(templateData, recipient.reasonVisible());
+            EmailMessage message = emailTemplateFactory.create(
+                    templateData, recipient.reasonVisible(), recipient.applicant());
             EmailHistory history = emailHistoryRepository.save(EmailHistory.create(
                     recipient.user(), null, emailType, message.title(), message.content()));
             historyIds.add(history.getId());
@@ -242,21 +247,39 @@ public class EmailNotificationPublisher {
                 .forEach(admin -> addRecipient(recipients, admin, true));
     }
 
+    /** 신청 당사자 — 사유는 당연히 보이고, 버튼은 결재선이 아니라 자기 내역으로 간다 */
+    private void addApplicant(Map<Long, Recipient> recipients, User user) {
+        addRecipient(recipients, user, true, true);
+    }
+
     private void addRecipient(
             Map<Long, Recipient> recipients,
             User user,
             boolean reasonVisible
+    ) {
+        addRecipient(recipients, user, reasonVisible, false);
+    }
+
+    private void addRecipient(
+            Map<Long, Recipient> recipients,
+            User user,
+            boolean reasonVisible,
+            boolean applicant
     ) {
         if (user == null || !user.isActive()) {
             return;
         }
         // 같은 사람이 신청자·승인자·SYSTEM_ADMIN을 겸할 수 있다. 한 역할이라도 사유 열람
         // 권한이 있으면 보여야 하므로 OR로 병합한다.
+        //
+        // 신청자 여부도 OR다 — 겸직이면 "내가 낸 신청"이라는 사실이 이긴다. 자기 신청을 자기가
+        // 결재할 수는 없으므로 결재선으로 보내는 버튼은 그 사람에게 쓸모가 없다.
         recipients.merge(
                 user.getId(),
-                new Recipient(user, reasonVisible),
+                new Recipient(user, reasonVisible, applicant),
                 (existing, added) -> new Recipient(
                         existing.user(),
-                        existing.reasonVisible() || added.reasonVisible()));
+                        existing.reasonVisible() || added.reasonVisible(),
+                        existing.applicant() || added.applicant()));
     }
 }

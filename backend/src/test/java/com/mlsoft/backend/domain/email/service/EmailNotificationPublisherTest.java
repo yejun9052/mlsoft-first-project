@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
@@ -136,6 +137,45 @@ class EmailNotificationPublisherTest {
                 "한글 라벨이 본문에 없다");
         assertTrue(captureSaved().stream().noneMatch(h -> h.getContent().contains("HALF_AM")),
                 "enum 이름이 그대로 새어 나갔다");
+    }
+
+    // 2026-08-17: 신청자에게도 "결재하러 가기" 버튼이 갔다. 본문은 원래 수신자별로 만들고
+    // 있었는데(사유 마스킹) 버튼만 그 갈래를 안 타서, 신청자가 자기 신청을 결재하러 가는
+    // 링크를 받았다. 팩토리 단위 테스트와 별개로 **발행부가 신청자를 실제로 구분해 넘기는지**를
+    // 여기서 본다 — 팩토리만 고치고 이 배선을 빠뜨리면 증상이 그대로 남는다.
+    @Test
+    @DisplayName("같은 신청의 메일이라도 신청자에게는 결재 링크가 가지 않는다")
+    void publishLeaveApplied_신청자에게는결재링크없음() {
+        User applicant = user(1L, "신청자", Role.EMPLOYEE, true);
+        User approver = user(2L, "팀장", Role.TEAM_LEADER, true);
+        LeaveRequest leave = LeaveRequest.create(
+                applicant,
+                LeaveType.ANNUAL,
+                List.of(LocalDate.of(2026, 8, 20)),
+                "개인 사유",
+                approver,
+                null);
+        givenSavedHistoriesGetIds();
+
+        publisher().publishLeaveApplied(leave);
+
+        List<EmailHistory> saved = captureSaved();
+        String toApplicant = contentFor(saved, applicant);
+        String toApprover = contentFor(saved, approver);
+
+        assertFalse(toApplicant.contains("결재하러 가기"), "신청자에게 결재 버튼이 갔다");
+        assertFalse(toApplicant.contains("/approvals"), "신청자를 결재 화면으로 보냈다");
+        // 결재자 쪽은 그대로여야 한다 — 신청자를 고치면서 결재자 링크까지 없애면 알림이 무용해진다
+        assertTrue(toApprover.contains("결재하러 가기"), "결재자에게 결재 버튼이 사라졌다");
+        assertTrue(toApprover.contains("/approvals"));
+    }
+
+    private String contentFor(List<EmailHistory> saved, User recipient) {
+        return saved.stream()
+                .filter(h -> h.getUser().equals(recipient))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(recipient.getName() + "에게 갈 이력이 없다"))
+                .getContent();
     }
 
     private EmailNotificationPublisher publisher() {

@@ -23,6 +23,10 @@ class EmailTemplateFactoryTest {
 
     private static final String FRONTEND_URL = "https://leave.example.com";
 
+    /** 바로가기 버튼의 행선지는 수신자가 신청 당사자인지에 따라 갈린다 (2026-08-17) */
+    private static final boolean AS_APPLICANT = true;
+    private static final boolean AS_APPROVER = false;
+
     private final EmailTemplateFactory factory = factoryWith(FRONTEND_URL);
 
     private static EmailTemplateFactory factoryWith(String frontendUrl) {
@@ -33,7 +37,7 @@ class EmailTemplateFactoryTest {
     @Test
     @DisplayName("본문은 HTML 표이고 항목이 라벨/값 한 행으로 들어간다")
     void create_rendersRowsAsTable() {
-        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true);
+        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true, AS_APPROVER);
 
         assertTrue(message.content().contains("<table"), "표가 없다");
         assertTrue(message.content().contains(">구분<"), "라벨이 표 셀로 들어가지 않았다");
@@ -44,7 +48,7 @@ class EmailTemplateFactoryTest {
     @Test
     @DisplayName("값이 없는 항목은 행 자체를 만들지 않는다 — 빈 칸이 남으면 누락처럼 보인다")
     void create_omitsEmptyRows() {
-        EmailMessage message = factory.create(leaveData("연차", "김도현", ""), true);
+        EmailMessage message = factory.create(leaveData("연차", "김도현", ""), true, AS_APPROVER);
 
         assertFalse(message.content().contains(">사유<"), "사유가 비었는데 행이 남았다");
     }
@@ -52,7 +56,7 @@ class EmailTemplateFactoryTest {
     @Test
     @DisplayName("사유 열람 권한이 없으면 값이 마스킹된다 (검증 Y-4)")
     void create_masksReasonWithoutPermission() {
-        EmailMessage message = factory.create(leaveData("연차", "김도현", "개인 사정"), false);
+        EmailMessage message = factory.create(leaveData("연차", "김도현", "개인 사정"), false, AS_APPROVER);
 
         assertTrue(message.content().contains(">사유<"), "사유 행은 있어야 한다");
         assertFalse(message.content().contains("개인 사정"), "권한이 없는데 사유가 그대로 나갔다");
@@ -67,7 +71,7 @@ class EmailTemplateFactoryTest {
     @DisplayName("사용자 입력의 꺾쇠는 태그가 되지 않는다")
     void create_escapesUserInput() {
         EmailMessage message = factory.create(
-                leaveData("연차", "김도현", "<a href=\"http://evil\">클릭</a>"), true);
+                leaveData("연차", "김도현", "<a href=\"http://evil\">클릭</a>"), true, AS_APPROVER);
 
         assertFalse(message.content().contains("href=\"http://evil\""),
                 "사용자가 심은 링크가 살아 있다");
@@ -80,34 +84,71 @@ class EmailTemplateFactoryTest {
         EmailTemplateData data = new EmailTemplateData(
                 EmailTemplateKind.LEAVE_APPROVED, 1L, "김도현", "연차",
                 "2026-08-20", "1.0", "휴식", "이서연");
-        assertTrue(factory.create(data, true).content().contains(">처리자<"));
+        assertTrue(factory.create(data, true, AS_APPROVER).content().contains(">처리자<"));
 
         EmailTemplateData applied = new EmailTemplateData(
                 EmailTemplateKind.LEAVE_APPLIED, 1L, "김도현", "연차",
                 "2026-08-20", "1.0", "휴식", "");
-        assertFalse(factory.create(applied, true).content().contains(">처리자<"));
+        assertFalse(factory.create(applied, true, AS_APPROVER).content().contains(">처리자<"));
     }
 
     @Test
     @DisplayName("바로가기 버튼은 frontend-url을 오리진으로 쓴다 — 주소를 코드에 박지 않는다")
     void create_buttonUsesConfiguredOrigin() {
-        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true);
+        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true, AS_APPROVER);
 
         assertTrue(message.content().contains("href=\"" + FRONTEND_URL + "/approvals\""),
                 "설정된 오리진으로 가는 링크가 없다");
         assertTrue(message.content().contains("결재하러 가기"));
     }
 
-    // 한 통이 신청자·승인자·관리자에게 함께 나가므로 역할까지는 못 맞춘다.
-    // 대신 그 메일을 받고 바로 하려는 일이 있는 화면으로 보낸다.
+    // 한 통이 신청자·승인자·관리자에게 함께 나가지만 본문은 수신자별로 만든다.
+    // 그래서 버튼은 그 수신자가 바로 하려는 일이 있는 화면으로 보낸다.
     @Test
-    @DisplayName("접수 알림은 결재 화면으로, 결과 알림은 내역 화면으로 보낸다")
+    @DisplayName("결과 알림은 신청자를 자기 내역 화면으로 보낸다")
     void create_buttonTargetDependsOnKind() {
         EmailTemplateData approved = new EmailTemplateData(
                 EmailTemplateKind.LEAVE_APPROVED, 1L, "김도현", "연차",
                 "2026-08-20", "1.0", "휴식", "이서연");
 
-        assertTrue(factory.create(approved, true).content().contains(FRONTEND_URL + "/history"));
+        assertTrue(factory.create(approved, true, AS_APPLICANT).content()
+                .contains(FRONTEND_URL + "/history"));
+    }
+
+    // 2026-08-17: 종류(kind)만 보고 행선지를 정해 **신청자에게도 "결재하러 가기"가 갔다.**
+    // 자기 신청을 자기가 결재할 수는 없으므로, 눌러도 할 일이 없는 화면으로 데려가는 버튼이었다.
+    @Test
+    @DisplayName("접수 알림에서 신청자는 결재 화면으로 가지 않는다")
+    void create_applicantNeverGetsApprovalButton() {
+        String toApplicant = factory.create(leaveData("연차", "김도현", "휴식"), true, AS_APPLICANT)
+                .content();
+
+        assertFalse(toApplicant.contains("결재하러 가기"), "신청자에게 결재 버튼이 갔다");
+        assertFalse(toApplicant.contains(FRONTEND_URL + "/approvals"), "신청자를 결재 화면으로 보냈다");
+        assertTrue(toApplicant.contains(FRONTEND_URL + "/history"), "신청자를 자기 내역으로 보내지 않았다");
+    }
+
+    @Test
+    @DisplayName("같은 접수 알림이라도 결재자에게는 결재 버튼이 간다")
+    void create_approverStillGetsApprovalButton() {
+        String toApprover = factory.create(leaveData("연차", "김도현", "휴식"), true, AS_APPROVER)
+                .content();
+
+        assertTrue(toApprover.contains("결재하러 가기"));
+        assertTrue(toApprover.contains(FRONTEND_URL + "/approvals"));
+    }
+
+    // 복리후생 신청자를 연차 내역으로 보내면 자기 신청이 없는 화면이 열린다
+    @Test
+    @DisplayName("복리후생 신청자는 복리후생 화면으로 간다")
+    void create_welfareApplicantGoesToWelfare() {
+        EmailTemplateData welfareApplied = new EmailTemplateData(
+                EmailTemplateKind.WELFARE_APPLIED, 1L, "김도현", "결혼",
+                "", "5.0", "결혼", "");
+        String content = factory.create(welfareApplied, true, AS_APPLICANT).content();
+
+        assertTrue(content.contains(FRONTEND_URL + "/welfare"));
+        assertFalse(content.contains(FRONTEND_URL + "/history"), "복리후생인데 연차 내역으로 보냈다");
     }
 
     // 라벨과 목적지를 따로 두면 "복리후생 내역"을 눌렀는데 연차 화면이 열린다
@@ -117,7 +158,7 @@ class EmailTemplateFactoryTest {
         EmailTemplateData welfareApproved = new EmailTemplateData(
                 EmailTemplateKind.WELFARE_APPROVED, 1L, "김도현", "결혼",
                 "", "5.0", "결혼", "이서연");
-        String content = factory.create(welfareApproved, true).content();
+        String content = factory.create(welfareApproved, true, AS_APPLICANT).content();
 
         assertTrue(content.contains(FRONTEND_URL + "/welfare"));
         assertTrue(content.contains("복리후생 내역 확인하기"));
@@ -127,7 +168,8 @@ class EmailTemplateFactoryTest {
     @Test
     @DisplayName("frontend-url이 비면 버튼을 그리지 않는다")
     void create_omitsButtonWithoutOrigin() {
-        EmailMessage message = factoryWith("").create(leaveData("연차", "김도현", "휴식"), true);
+        EmailMessage message = factoryWith("")
+                .create(leaveData("연차", "김도현", "휴식"), true, AS_APPROVER);
 
         assertFalse(message.content().contains("결재하러 가기"));
         assertTrue(message.content().contains("<table"), "버튼이 없어도 본문 표는 남아야 한다");
@@ -141,7 +183,7 @@ class EmailTemplateFactoryTest {
         EmailTemplateData welfare = new EmailTemplateData(
                 EmailTemplateKind.WELFARE_APPLIED, 1L, "김도현", "결혼",
                 "", "5.0", "결혼", "");
-        EmailMessage message = factory.create(welfare, true);
+        EmailMessage message = factory.create(welfare, true, AS_APPROVER);
 
         assertTrue(message.title().startsWith("[복리후생 신청]"), "제목이 복리후생이 아니다");
         assertTrue(message.content().contains(">복리후생 신청<"), "헤더 띠가 복리후생이 아니다");
@@ -155,7 +197,7 @@ class EmailTemplateFactoryTest {
     @Test
     @DisplayName("제목의 대괄호와 헤더 띠는 같은 값을 쓴다")
     void create_subjectAndHeadingShareOneSource() {
-        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true);
+        EmailMessage message = factory.create(leaveData("연차", "김도현", "휴식"), true, AS_APPROVER);
 
         assertTrue(message.title().startsWith("[연차 신청] "));
         assertTrue(message.content().contains(">연차 신청<"));

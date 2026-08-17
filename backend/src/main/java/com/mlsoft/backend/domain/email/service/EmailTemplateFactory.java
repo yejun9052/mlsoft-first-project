@@ -77,20 +77,29 @@ public class EmailTemplateFactory {
         };
     }
 
-    public EmailMessage create(EmailTemplateData data, boolean reasonVisible) {
+    /**
+     * @param reasonVisible 이 수신자가 사유를 볼 권한이 있는가 (검증 Y-4)
+     * @param forApplicant  이 수신자가 <b>신청 당사자</b>인가 — 바로가기 버튼의 행선지가 갈린다
+     */
+    public EmailMessage create(EmailTemplateData data, boolean reasonVisible, boolean forApplicant) {
         return switch (data.kind()) {
-            case LEAVE_APPLIED -> requestMessage("연차 신청이 접수되었습니다.", data, reasonVisible);
-            case LEAVE_APPROVED -> resultMessage("연차 신청이 승인되었습니다.", data, reasonVisible);
-            case LEAVE_REJECTED -> resultMessage("연차 신청이 반려되었습니다.", data, reasonVisible);
-            case LEAVE_CANCELLED -> resultMessage("연차 신청이 취소되었습니다.", data, reasonVisible);
+            case LEAVE_APPLIED -> requestMessage("연차 신청이 접수되었습니다.", data, reasonVisible, forApplicant);
+            case LEAVE_APPROVED -> resultMessage("연차 신청이 승인되었습니다.", data, reasonVisible, forApplicant);
+            case LEAVE_REJECTED -> resultMessage("연차 신청이 반려되었습니다.", data, reasonVisible, forApplicant);
+            case LEAVE_CANCELLED -> resultMessage("연차 신청이 취소되었습니다.", data, reasonVisible, forApplicant);
             case LEAVE_CANCEL_PENDING -> resultMessage(
-                    "연차 소급취소가 승인 대기 상태로 접수되었습니다.", data, reasonVisible);
-            case LEAVE_CANCEL_APPROVED -> resultMessage("연차 소급취소가 승인되었습니다.", data, reasonVisible);
-            case LEAVE_CANCEL_REJECTED -> resultMessage("연차 소급취소가 반려되었습니다.", data, reasonVisible);
-            case WELFARE_APPLIED -> requestMessage("복리후생 신청이 접수되었습니다.", data, reasonVisible);
-            case WELFARE_APPROVED -> resultMessage("복리후생 신청이 승인되었습니다.", data, reasonVisible);
-            case WELFARE_REJECTED -> resultMessage("복리후생 신청이 반려되었습니다.", data, reasonVisible);
-            case BIRTHDAY_LEAVE_GRANTED -> birthdayMessage(data);
+                    "연차 소급취소가 승인 대기 상태로 접수되었습니다.", data, reasonVisible, forApplicant);
+            case LEAVE_CANCEL_APPROVED -> resultMessage(
+                    "연차 소급취소가 승인되었습니다.", data, reasonVisible, forApplicant);
+            case LEAVE_CANCEL_REJECTED -> resultMessage(
+                    "연차 소급취소가 반려되었습니다.", data, reasonVisible, forApplicant);
+            case WELFARE_APPLIED -> requestMessage(
+                    "복리후생 신청이 접수되었습니다.", data, reasonVisible, forApplicant);
+            case WELFARE_APPROVED -> resultMessage(
+                    "복리후생 신청이 승인되었습니다.", data, reasonVisible, forApplicant);
+            case WELFARE_REJECTED -> resultMessage(
+                    "복리후생 신청이 반려되었습니다.", data, reasonVisible, forApplicant);
+            case BIRTHDAY_LEAVE_GRANTED -> birthdayMessage(data, forApplicant);
         };
     }
 
@@ -99,48 +108,68 @@ public class EmailTemplateFactory {
         return "[" + heading(data.kind()) + "] " + data.applicantName();
     }
 
-    private EmailMessage requestMessage(String summary, EmailTemplateData data, boolean reasonVisible) {
-        return new EmailMessage(subject(data), document(summary, rows(data, reasonVisible), data.kind()));
+    private EmailMessage requestMessage(
+            String summary, EmailTemplateData data, boolean reasonVisible, boolean forApplicant) {
+        return new EmailMessage(
+                subject(data), document(summary, rows(data, reasonVisible), data.kind(), forApplicant));
     }
 
-    private EmailMessage resultMessage(String summary, EmailTemplateData data, boolean reasonVisible) {
+    private EmailMessage resultMessage(
+            String summary, EmailTemplateData data, boolean reasonVisible, boolean forApplicant) {
         List<Row> rows = rows(data, reasonVisible);
         // 처리자는 결과 메일에만 붙는다 — 신청 접수 시점에는 처리한 사람이 없다
         if (!data.actorName().isBlank()) {
             rows.add(new Row("처리자", data.actorName()));
         }
-        return new EmailMessage(subject(data), document(summary, rows, data.kind()));
+        return new EmailMessage(subject(data), document(summary, rows, data.kind(), forApplicant));
     }
 
-    private EmailMessage birthdayMessage(EmailTemplateData data) {
+    private EmailMessage birthdayMessage(EmailTemplateData data, boolean forApplicant) {
         List<Row> rows = new ArrayList<>();
         rows.add(new Row("지급일", data.dates()));
         rows.add(new Row("지급 일수", data.days() + "일"));
         return new EmailMessage(
                 subject(data),
-                document(data.applicantName() + " 님에게 생일 반차가 지급되었습니다.", rows, data.kind()));
+                document(
+                        data.applicantName() + " 님에게 생일 반차가 지급되었습니다.",
+                        rows,
+                        data.kind(),
+                        forApplicant));
     }
 
     /**
      * 바로가기 버튼이 열 화면 — 그 메일을 받고 <b>바로 하려는 일</b>이 있는 곳으로 보낸다.
      *
-     * <p>수신자의 역할까지 알지는 못한다(한 건이 신청자·승인자·관리자에게 함께 나간다).
-     * 그래서 권한이 없는 화면으로 보내질 수 있는데, 그때는 {@code RequireAuth}가 대시보드로
-     * 되돌리므로 오류가 아니라 한 번 더 클릭하는 정도의 비용이다. 반대로 전부 대시보드로 보내면
-     * 누구에게도 도움이 안 된다.
+     * <p><b>같은 메일도 신청자와 결재자가 할 일이 다르다.</b> 한 건이 신청자·승인자·관리자에게
+     * 함께 나가는데, 2026-08-16에는 종류(kind)만 보고 행선지를 정해서 <b>신청자에게도
+     * "결재하러 가기"가 갔다</b>(2026-08-17 지적). 자기 신청을 자기가 결재할 수는 없으므로
+     * 그 버튼은 눌러도 할 일이 없는 화면으로 데려간다.
+     *
+     * <p>본문은 이미 수신자별로 만들고 있었다(사유 마스킹). 버튼만 그 갈래를 안 타고 있었다.
+     *
+     * <p>신청자가 아닌 수신자는 결재선에 있는 사람이거나 관리자다. 혹시 권한이 없는 화면으로
+     * 보내지더라도 {@code RequireAuth}가 대시보드로 되돌리므로 오류가 아니라 한 번 더 클릭하는
+     * 정도의 비용이다. 반대로 전부 대시보드로 보내면 누구에게도 도움이 안 된다.
      */
-    private Destination destination(EmailTemplateKind kind) {
+    private Destination destination(EmailTemplateKind kind, boolean forApplicant) {
         return switch (kind) {
-            // 접수 알림의 주 수신자는 결재해야 할 사람이다
-            case LEAVE_APPLIED, WELFARE_APPLIED, LEAVE_CANCEL_PENDING ->
-                    new Destination("/approvals", "결재하러 가기");
-            // 결과 알림의 주 수신자는 신청자다
+            // 접수 알림 — 결재자는 결재하러, 신청자는 자기 신청이 어떻게 됐는지 보러 간다
+            case LEAVE_APPLIED, LEAVE_CANCEL_PENDING -> forApplicant
+                    ? new Destination("/history", "내 신청 확인하기")
+                    : new Destination("/approvals", "결재하러 가기");
+            case WELFARE_APPLIED -> forApplicant
+                    ? new Destination("/welfare", "내 신청 확인하기")
+                    : new Destination("/approvals", "결재하러 가기");
+            // 결과 알림 — 신청자는 자기 내역으로, 결재자·관리자는 처리한 건이 모인 곳으로
             case LEAVE_APPROVED, LEAVE_REJECTED, LEAVE_CANCELLED,
-                 LEAVE_CANCEL_APPROVED, LEAVE_CANCEL_REJECTED ->
-                    new Destination("/history", "연차 내역 확인하기");
-            case WELFARE_APPROVED, WELFARE_REJECTED ->
-                    new Destination("/welfare", "복리후생 내역 확인하기");
-            case BIRTHDAY_LEAVE_GRANTED -> new Destination("/dashboard", "내 연차 현황 보기");
+                 LEAVE_CANCEL_APPROVED, LEAVE_CANCEL_REJECTED -> forApplicant
+                    ? new Destination("/history", "연차 내역 확인하기")
+                    : new Destination("/approvals", "결재 내역 보기");
+            case WELFARE_APPROVED, WELFARE_REJECTED -> forApplicant
+                    ? new Destination("/welfare", "복리후생 내역 확인하기")
+                    : new Destination("/approvals", "결재 내역 보기");
+            // 생일 반차는 지급받은 본인과 관리자가 함께 받는다. 둘 다 볼 곳은 현황 화면 하나뿐이다
+            case BIRTHDAY_LEAVE_GRANTED -> new Destination("/dashboard", "연차 현황 보기");
         };
     }
 
@@ -157,12 +186,12 @@ public class EmailTemplateFactory {
      *
      * <p>{@code frontend-url}이 비어 있으면 버튼 자체를 그리지 않는다 — 깨진 링크를 보내느니 없는 편이 낫다.
      */
-    private String button(EmailTemplateKind kind) {
+    private String button(EmailTemplateKind kind, boolean forApplicant) {
         String origin = appProperties.frontendUrl();
         if (origin == null || origin.isBlank()) {
             return "";
         }
-        Destination destination = destination(kind);
+        Destination destination = destination(kind, forApplicant);
         String url = origin.replaceAll("/+$", "") + destination.path();
         return "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin:22px 0 0\">"
                 + "<tr><td align=\"center\" bgcolor=\"" + COLOR_BUTTON_BG + "\" style=\"border-radius:8px\">"
@@ -196,7 +225,8 @@ public class EmailTemplateFactory {
     }
 
     /** 카드 한 장 — 헤더 띠 / 요약 문장 / 항목 표 / 바로가기 버튼 / 푸터 */
-    private String document(String summary, List<Row> rows, EmailTemplateKind kind) {
+    private String document(
+            String summary, List<Row> rows, EmailTemplateKind kind, boolean forApplicant) {
         StringBuilder html = new StringBuilder(1024);
         html.append("<div style=\"margin:0;padding:24px 12px;background:").append(COLOR_PAGE_BG)
                 .append(";font-family:").append(FONT_STACK).append("\">")
@@ -216,7 +246,7 @@ public class EmailTemplateFactory {
                 .append("<p style=\"margin:0 0 18px;font-size:15px;font-weight:700;color:").append(COLOR_TEXT)
                 .append("\">").append(escape(summary)).append("</p>")
                 .append(table(rows))
-                .append(button(kind))
+                .append(button(kind, forApplicant))
                 .append("</td></tr>");
 
         // 푸터
