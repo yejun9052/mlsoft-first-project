@@ -113,6 +113,41 @@ class UserServiceTest {
         assertEquals(fallback, leave.getPrimaryApprover());
     }
 
+    // S-7 — 마지막 관리자 검사만으로는 부족하다. 관리자가 2명 이상이면 통과해 버리는데,
+    // 퇴직은 그 즉시 로그인까지 막혀 스스로 되돌릴 수 없다(복구는 SYSTEM_ADMIN 전용).
+    @Test
+    @DisplayName("퇴직 — 본인 계정은 퇴직 처리할 수 없다 (관리자가 여럿이어도)")
+    void retire_본인은거부() {
+        User me = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.retire(1L, 1L));
+
+        assertEquals(ErrorCode.CANNOT_RETIRE_SELF, ex.getErrorCode());
+        assertTrue(me.isActive(), "거부됐는데 재직 상태가 바뀌었다");
+    }
+
+    @Test
+    @DisplayName("퇴직 — 남의 계정은 그대로 처리된다")
+    void retire_타인은정상() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+        given(leaveRequestRepository.findByPrimaryApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
+                .willReturn(List.of());
+        given(leaveRequestRepository.findBySubApproverAndStatusIn(target, LEAVE_REASSIGN_STATUSES))
+                .willReturn(List.of());
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(target, RequestStatus.PENDING))
+                .willReturn(List.of());
+        given(welfareRequestRepository.findBySubApproverAndStatus(target, RequestStatus.PENDING))
+                .willReturn(List.of());
+
+        userService.retire(1L, ACTOR_ID);
+
+        assertFalse(target.isActive());
+    }
+
     // 2026-08-17 감사 — 부서 관리에서 팀장을 공석으로 바꾸는 경로가 department.clearLeader()만
     // 불러서, 화면에는 공석인데 그 사람이 역할과 기존 결재선을 그대로 들고 있었다.
     @Test

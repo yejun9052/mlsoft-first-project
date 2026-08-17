@@ -31,6 +31,8 @@ public enum ErrorCode {
     NOT_RETIRED(400, "퇴직 처리된 계정이 아닙니다."),
     DEPARTMENT_REQUIRED_FOR_LEADER(400, "팀장으로 지정하려면 소속 부서를 먼저 배정해야 합니다."),
     LAST_SYSTEM_ADMIN(400, "마지막 시스템 관리자입니다. 다른 관리자를 먼저 지정해주세요."),
+    // 퇴직은 그 즉시 로그인까지 막혀 스스로 되돌릴 수 없다 — 역할 자가 강등보다 나쁘다 (S-7)
+    CANNOT_RETIRE_SELF(400, "본인 계정은 퇴직 처리할 수 없습니다. 다른 관리자에게 요청해주세요."),
     ADVANCE_LIMIT_EXCEEDED(400, "당겨쓸 수 있는 연차 상한을 초과했습니다. 관리자에게 문의해주세요."),
     TOO_MANY_LEAVE_DATES(400, "한 번에 신청할 수 있는 날짜 수를 초과했습니다."),
     INVALID_CONFIG_VALUE(400, "설정 값 형식이 올바르지 않습니다."),
@@ -44,6 +46,8 @@ public enum ErrorCode {
 
     // 403 Forbidden
     ACCESS_DENIED(403, "접근 권한이 없습니다."),
+    // 총관리자라도 예외가 아니다 — 스스로 승인하면 결재라는 절차가 없는 것과 같다
+    CANNOT_APPROVE_OWN_REQUEST(403, "본인이 신청한 건은 본인이 결재할 수 없습니다."),
     ONBOARDING_NOT_COMPLETED(403, "온보딩(생일·입사일 입력)을 먼저 완료해야 합니다."),
     // 승인 대기와 미시작을 구분한다 — 같은 메시지를 주면 사원이 온보딩을 다시 내려다 ALREADY_ONBOARDED를 맞는다 (S-1)
     ONBOARDING_PENDING_APPROVAL(403, "입력하신 입사일은 관리자 확인이 필요합니다. 승인 후 이용할 수 있습니다."),

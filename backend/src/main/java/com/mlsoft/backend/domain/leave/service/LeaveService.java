@@ -465,6 +465,12 @@ public class LeaveService {
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (검증 R-5, docs/03 approval 권한) */
     private void validateApprover(LeaveRequest leave, User actor) {
         Long actorId = actor.getId();
+        // 자기 신청은 자기가 결재할 수 없다 (2026-08-17). 승인자 후보 목록은 본인을 빼지만
+        // 그건 목록일 뿐이라, 저장된 값이 어떤 경로로 본인이 됐든 여기서 막아야 실제 방어선이 된다.
+        // 총관리자도 예외가 아니다 — 스스로 승인하면 결재라는 절차 자체가 없는 것과 같다.
+        if (leave.getUser().getId().equals(actorId)) {
+            throw new BusinessException(ErrorCode.CANNOT_APPROVE_OWN_REQUEST);
+        }
         boolean isPrimary = leave.getPrimaryApprover() != null && leave.getPrimaryApprover().getId().equals(actorId);
         boolean isSub = leave.getSubApprover() != null && leave.getSubApprover().getId().equals(actorId);
         if (!isPrimary && !isSub) {

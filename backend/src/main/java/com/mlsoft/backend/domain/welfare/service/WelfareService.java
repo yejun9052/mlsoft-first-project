@@ -165,6 +165,11 @@ public class WelfareService {
 
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (docs/03 approval 권한) */
     private void validateApprover(WelfareRequest welfare, User actor) {
+        // 자기 신청은 자기가 결재할 수 없다 (2026-08-17) — 연차와 같은 규칙이다.
+        // 총관리자도 예외가 아니다. LeaveService.validateApprover의 주석 참고.
+        if (welfare.getUser().getId().equals(actor.getId())) {
+            throw new BusinessException(ErrorCode.CANNOT_APPROVE_OWN_REQUEST);
+        }
         // 판별은 도메인 메서드에 있다 (리뷰 D-5) — 프록시에서 id를 꺼내는 코드가 흩어지지 않게
         if (!welfare.isApprover(actor.getId())) {
             throw new BusinessException(ErrorCode.ACCESS_DENIED);

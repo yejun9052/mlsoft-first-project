@@ -512,10 +512,18 @@ export default function AdminMembersPage() {
                     <div className="flex items-center justify-end gap-1">
                       {/* 역할·부서 아이콘 버튼은 없앴다 — 같은 일을 하는 길이 둘이면 어느 쪽이
                           최신인지 헷갈리고, 표의 셀렉트가 이미 더 빠르다 */}
+                      {/* 본인 행은 비활성 (S-7). 퇴직은 그 즉시 로그인까지 막혀 스스로 되돌릴 수
+                          없다 — 서버도 CANNOT_RETIRE_SELF로 막지만, 막기만 하고 이유를 안 쓰면
+                          관리자는 버튼이 고장 난 줄 안다. label이 title/aria-label로 나간다 */}
                       <IconButton
                         Icon={UserMinus}
-                        label="퇴직 처리"
+                        label={
+                          m.id === currentUser?.id
+                            ? '본인 계정은 퇴직 처리할 수 없습니다 (다른 관리자에게 요청)'
+                            : '퇴직 처리'
+                        }
                         tone="danger"
+                        disabled={m.id === currentUser?.id}
                         onClick={() => setRetireTarget(m)}
                       />
                     </div>

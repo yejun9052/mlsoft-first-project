@@ -433,6 +433,25 @@ class LeaveServiceTest {
         verify(leaveActionHistoryRepository, never()).save(any());
     }
 
+    // 2026-08-17 — 승인자 후보 목록은 본인을 빼지만 그건 목록일 뿐이다. 저장된 승인자가
+    // 어떤 경로로 본인이 됐든 결재 시점에 막아야 실제 방어선이 된다. 총관리자도 예외가 아니다.
+    @Test
+    @DisplayName("승인 — 본인이 신청한 건은 본인이 결재할 수 없다 (총관리자여도)")
+    void approve_자기신청은거부() {
+        User admin = userWithBalance(9L, "15.0", "2.0", "0.0");
+        // 신청자이면서 승인자로도 저장된 상태를 만든다
+        LeaveRequest leave = pendingLeave(admin, admin, futureWeekdays(2));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(admin));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.processApproval(100L, 9L, new ApprovalRequest(true, "확인")));
+
+        assertEquals(ErrorCode.CANNOT_APPROVE_OWN_REQUEST, ex.getErrorCode());
+        assertEquals(RequestStatus.PENDING, leave.getStatus(), "거부됐는데 상태가 바뀌었다");
+        verify(leaveActionHistoryRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("승인 — 승인자가 아닌 사용자: ACCESS_DENIED")
     void approve_notApprover_accessDenied() {

@@ -307,6 +307,12 @@ public class UserService {
         if (!target.isActive()) {
             throw new BusinessException(ErrorCode.ALREADY_RETIRED);
         }
+        // 본인 퇴직 금지 (S-7, 2026-08-17). 마지막 관리자 검사만으로는 부족하다 —
+        // 관리자가 2명 이상이면 통과해 버리는데, 퇴직은 그 즉시 로그인까지 막혀
+        // **스스로 되돌릴 수 없다**(복구는 SYSTEM_ADMIN 전용). 역할 자가 강등보다 나쁘다.
+        if (targetId.equals(actorId)) {
+            throw new BusinessException(ErrorCode.CANNOT_RETIRE_SELF);
+        }
         validateNotLastSystemAdmin(target);
         target.retire(LocalDate.now(KST));
 
