@@ -12,6 +12,7 @@ import Toggle from '../components/ui/Toggle.jsx';
 import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
 import {
   useLeavePolicies,
   useLeavePolicyConfigs,
@@ -44,17 +45,23 @@ function validateConfigValue(config, value) {
   return null;
 }
 
+// 한 화면에 표가 셋이라 이력 표가 길면 아래 것이 통째로 화면 밖으로 밀린다. 다른 목록 화면보다 짧게 끊는다.
+const HISTORY_PAGE_SIZE = 10;
+
 // 연차 정책 — 근속년수별 정책(인라인 수정) / 시스템 설정(일괄 저장) / 리셋·소멸 이력 (docs/03, SYSTEM_ADMIN 전용)
 export default function AdminPolicyPage() {
   const policiesQuery = useLeavePolicies();
   const configsQuery = useLeavePolicyConfigs();
-  const historiesQuery = useResetHistories({ size: 50 });
+  // 리셋 이력은 해마다 사원 수만큼 쌓인다 — 한 화면에 다 깔면 위 두 표를 보려고 스크롤을 되감게 된다
+  const [historyPage, setHistoryPage] = useState(0);
+  const historiesQuery = useResetHistories({ page: historyPage, size: HISTORY_PAGE_SIZE });
 
   const updatePolicyMutation = useUpdateLeavePolicy();
   const updateConfigMutation = useUpdateLeavePolicyConfig();
 
   const policies = policiesQuery.data ?? [];
   const histories = historiesQuery.data?.content ?? [];
+  const historyPageInfo = historiesQuery.data?.page;
 
   // ① 근속년수별 정책 — 행별 인라인 수정(한 번에 한 행만)
   const [editingId, setEditingId] = useState(null);
@@ -327,6 +334,12 @@ export default function AdminPolicyPage() {
             ))}
           </tbody>
         </Table>
+        <Pagination
+          page={historyPage}
+          totalPages={historyPageInfo?.totalPages}
+          totalElements={historyPageInfo?.totalElements}
+          onChange={setHistoryPage}
+        />
       </TableCard>
     </div>
   );

@@ -14,6 +14,7 @@ import StatusBadge from '../components/ui/StatusBadge.jsx';
 import InlineSelect from '../components/ui/InlineSelect.jsx';
 import IconButton from '../components/ui/IconButton.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
 import {
   useRestoreUser,
   useRetiredUsers,
@@ -35,6 +36,9 @@ import {
 const TAB_ACTIVE = 'active';
 const TAB_RETIRED = 'retired';
 const TAB_ONBOARDING = 'onboarding';
+
+// 세 탭이 같은 값을 쓴다 — 탭을 옮길 때 한 화면에 들어오는 행 수가 달라지면 목록이 튄다
+const PAGE_SIZE = 10;
 
 // 역할 필터 칩 (전체 + 3개 역할)
 const ROLE_FILTERS = [
@@ -118,13 +122,30 @@ export default function AdminMembersPage() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  // 페이지 위치는 탭마다 따로 둔다 — 하나로 합치면 퇴직 3페이지를 보다 재직으로 돌아왔을 때
+  // 있지도 않은 3페이지를 요청해 빈 표가 뜬다
+  const [activePage, setActivePage] = useState(0);
+  const [retiredPage, setRetiredPage] = useState(0);
+  const [onboardingPage, setOnboardingPage] = useState(0);
+
+  // 검색어·역할 필터가 바뀌면 결과 집합 자체가 달라진다. 페이지를 그대로 두면
+  // 조건에 맞는 사람이 5명인데 3페이지를 보고 있어 "검색 결과 없음"이 뜬다.
+  useEffect(() => {
+    setActivePage(0);
+  }, [keyword, roleFilter]);
+
   // 탭 배지가 필터와 무관하게 항상 정확한 건수를 보여줄 수 있도록 재직·퇴직 둘 다 항상 조회한다
   // (ApprovalsPage가 탭과 무관하게 대기 목록을 항상 조회하는 것과 동일한 전략).
-  const activeQuery = useUsers({ keyword, role: roleFilter === 'ALL' ? undefined : roleFilter });
-  const retiredQuery = useRetiredUsers();
+  const activeQuery = useUsers({
+    keyword,
+    role: roleFilter === 'ALL' ? undefined : roleFilter,
+    page: activePage,
+    size: PAGE_SIZE,
+  });
+  const retiredQuery = useRetiredUsers({ page: retiredPage, size: PAGE_SIZE });
   const departmentsQuery = useDepartments();
   // 온보딩 승인 대기 — 배지에 항상 건수를 띄워야 관리자가 잠긴 계정을 놓치지 않는다 (리뷰 S-1)
-  const onboardingQuery = usePendingOnboardings();
+  const onboardingQuery = usePendingOnboardings({ page: onboardingPage, size: PAGE_SIZE });
   const approveOnboardingMutation = useApproveOnboarding();
   const rejectOnboardingMutation = useRejectOnboarding();
 
@@ -147,6 +168,9 @@ export default function AdminMembersPage() {
   const { data: currentUser } = useCurrentUser();
 
   const rows = tab === TAB_ACTIVE ? (activeQuery.data?.content ?? []) : (retiredQuery.data?.content ?? []);
+  const listPage = tab === TAB_ACTIVE ? activePage : retiredPage;
+  const setListPage = tab === TAB_ACTIVE ? setActivePage : setRetiredPage;
+  const listPageInfo = tab === TAB_ACTIVE ? activeQuery.data?.page : retiredQuery.data?.page;
   const loading = tab === TAB_ACTIVE ? activeQuery.isLoading : retiredQuery.isLoading;
   // 조회 실패를 "조회된 구성원이 없습니다"로 보여주면 관리자가 계정이 사라졌다고 오해한다 (리뷰 F-6)
   const listError = tab === TAB_ACTIVE ? activeQuery.isError : retiredQuery.isError;
@@ -352,6 +376,12 @@ export default function AdminMembersPage() {
                 ))}
               </tbody>
             </Table>
+            <Pagination
+              page={onboardingPage}
+              totalPages={onboardingQuery.data?.page?.totalPages}
+              totalElements={onboardingQuery.data?.page?.totalElements}
+              onChange={setOnboardingPage}
+            />
           </TableCard>
         </>
       )}
@@ -503,6 +533,12 @@ export default function AdminMembersPage() {
             ))}
           </tbody>
         </Table>
+        <Pagination
+          page={listPage}
+          totalPages={listPageInfo?.totalPages}
+          totalElements={listPageInfo?.totalElements}
+          onChange={setListPage}
+        />
       </TableCard>
       )}
 

@@ -6,8 +6,11 @@ import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import WelfareApplyModal from '../components/welfare/WelfareApplyModal.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
 import { getWelfareCategoryMeta, getWelfareTargetLabel } from '../constants/welfare.js';
 import { useMyWelfareRequests, useWelfarePoliciesAll } from '../hooks/useWelfare.js';
+
+const PAGE_SIZE = 10;
 
 // 정책 목록(플랫, 백엔드 seed 순서 그대로) → 같은 구분이 연달아 나오면 구분 셀을 첫 행에만 표시하고
 // 그룹 경계에 굵은 상단 보더를 준다 — 카테고리 카드 그리드 대신 정보 밀도 높은 단일 테이블로 통일.
@@ -57,13 +60,16 @@ function PolicyRow({ policy, showCategory, groupBoundary, onApply }) {
 // 복리후생 — 정책 안내 테이블(구분·대상·지급일수·증빙서류, 행 클릭으로 신청) + 내 신청 내역 (docs/05 §⑤)
 export default function WelfarePage() {
   const policiesQuery = useWelfarePoliciesAll();
-  const myRequestsQuery = useMyWelfareRequests();
+  // 신청 내역은 화면에서 거르지 않으므로 서버가 페이지 단위로 끊어 준다
+  const [requestPage, setRequestPage] = useState(0);
+  const myRequestsQuery = useMyWelfareRequests({ page: requestPage, size: PAGE_SIZE });
 
   const [applyPolicy, setApplyPolicy] = useState(null); // null=닫힘, 정책 객체=해당 구분+대상으로 모달 오픈
 
   const policies = policiesQuery.data ?? [];
   const rows = useMemo(() => withGroupInfo(policiesQuery.data ?? []), [policiesQuery.data]);
   const myRequests = myRequestsQuery.data?.content ?? [];
+  const requestPageInfo = myRequestsQuery.data?.page;
 
   return (
     <div>
@@ -140,6 +146,12 @@ export default function WelfarePage() {
               ))}
             </tbody>
           </Table>
+          <Pagination
+            page={requestPage}
+            totalPages={requestPageInfo?.totalPages}
+            totalElements={requestPageInfo?.totalElements}
+            onChange={setRequestPage}
+          />
         </TableCard>
       </div>
 

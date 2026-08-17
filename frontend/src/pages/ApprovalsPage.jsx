@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Check, X } from 'lucide-react';
@@ -25,6 +25,10 @@ import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import Field from '../components/ui/Field.jsx';
 import Textarea from '../components/ui/Textarea.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
+import { paginate } from '../utils/paginate.js';
+
+const PAGE_SIZE = 10;
 
 // 탭 정의 (대기 / 승인 / 반려)
 const TABS = [
@@ -291,6 +295,17 @@ export default function ApprovalsPage() {
   const mode = isProcessedTab ? 'processed' : 'pending';
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? '';
 
+  // 연차·복리후생 두 목록을 합쳐 정렬한 뒤라 서버 페이지로는 끊을 수 없다 — 각각 페이지로 받으면
+  // 경계가 서로 어긋나 정렬이 깨진다 (paginate 주석). 화면에 그리는 양만 줄인다.
+  const [page, setPage] = useState(0);
+  const paged = paginate(list, page, PAGE_SIZE);
+
+  // 탭을 옮기면 목록 자체가 바뀐다. 페이지를 그대로 두면 3페이지짜리 탭에서 1페이지짜리 탭으로
+  // 갔을 때 빈 표가 보인다 (paginate가 클램프하지만 상태도 함께 맞춰 둔다)
+  useEffect(() => {
+    setPage(0);
+  }, [activeTab]);
+
   // 로딩·실패는 탭에 따라 보는 쿼리가 다르다. 실패를 빈 상태로 보여주면 "결재할 게 없다"고
   // 오해해 대기 건을 놓친다 (리뷰 F-6) — TableCard가 error를 empty보다 먼저 처리한다.
   const listLoading = isProcessedTab
@@ -347,7 +362,7 @@ export default function ApprovalsPage() {
             <Th right>상태</Th>
           </THead>
           <tbody>
-            {list.map((item) => (
+            {paged.rows.map((item) => (
               <ApprovalRow
                 key={`${item.kind}-${item.id}`}
                 item={item}
@@ -358,6 +373,12 @@ export default function ApprovalsPage() {
             ))}
           </tbody>
         </Table>
+        <Pagination
+          page={paged.page}
+          totalPages={paged.totalPages}
+          totalElements={paged.totalElements}
+          onChange={setPage}
+        />
       </TableCard>
 
       {/* 승인/반려 확인 다이얼로그 — 카드마다 상시 노출되던 결재의견 인풋 + 인라인 2단계 확인을 대체.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Loader2, X } from 'lucide-react';
@@ -17,6 +17,8 @@ import Field from '../components/ui/Field.jsx';
 import Textarea from '../components/ui/Textarea.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
 import MySchedulesTable from '../components/schedule/MySchedulesTable.jsx';
+import Pagination from '../components/ui/Pagination.jsx';
+import { paginate } from '../utils/paginate.js';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCancelLeave, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
 
@@ -67,6 +69,8 @@ function ReasonCell({ reason }) {
     </span>
   );
 }
+
+const PAGE_SIZE = 10;
 
 // 사용 내역 — 내 연차·복리후생 신청 이력 필터·조회 (docs/05 §④)
 // WELFARE 항목은 복리후생 API가 아직 없어 이 목록엔 나타나지 않는다 (종류 필터의 '경조/복리'는 항상 빈 결과).
@@ -137,6 +141,16 @@ export default function HistoryPage() {
       return true;
     });
   }, [myLeaveRequests, activeYear, typeFilter, statusFilter]);
+
+  // 화면에서 거른 뒤에 끊는다 — 서버가 먼저 끊으면 필터가 그 페이지 안에서만 걸린다 (paginate 주석).
+  // 이름이 tablePage인 것은 위에서 `page`가 이미 서버 응답(Page)을 가리키고 있어서다.
+  const [tablePage, setTablePage] = useState(0);
+  const paged = paginate(filtered, tablePage, PAGE_SIZE);
+
+  // 필터를 바꾸면 첫 페이지로 — 3페이지를 보다 조건을 좁히면 남은 건이 1페이지뿐이라 빈 표가 된다
+  useEffect(() => {
+    setTablePage(0);
+  }, [activeYear, typeFilter, statusFilter]);
 
   // 연차 탭의 조회 상태 — 실패를 로딩과 구분한다.
   // !summary만 보면 조회 실패 시 스피너가 영원히 돈다 (리뷰 F-6).
@@ -240,7 +254,7 @@ export default function HistoryPage() {
             <Th right>취소</Th>
           </THead>
           <tbody>
-            {filtered.map((req) => (
+            {paged.rows.map((req) => (
               <TR key={req.id}>
                 <Td>{dayjs(req.createdAt).format('YYYY.MM.DD')}</Td>
                 <Td className="font-medium text-ink-hi">{LEAVE_TYPE_LABEL[req.leaveType]}</Td>
@@ -271,6 +285,12 @@ export default function HistoryPage() {
             ))}
           </tbody>
         </Table>
+        <Pagination
+          page={paged.page}
+          totalPages={paged.totalPages}
+          totalElements={paged.totalElements}
+          onChange={setTablePage}
+        />
       </TableCard>
         </>
       )}

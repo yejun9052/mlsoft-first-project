@@ -51,7 +51,7 @@ describe('AdminHistoryPage 권한 및 조회 스코프', () => {
       expect.objectContaining({
         scope: 'all',
         page: 0,
-        size: 20,
+        size: 10,
         enabled: true,
       }),
     );
@@ -88,7 +88,7 @@ describe('AdminHistoryPage 권한 및 조회 스코프', () => {
     expect(useAuditLogs).toHaveBeenLastCalledWith({
       action: undefined,
       page: 0,
-      size: 20,
+      size: 10,
       enabled: true,
     });
     expect(useAuditActions).toHaveBeenLastCalledWith({ enabled: true });
@@ -117,7 +117,7 @@ describe('AdminHistoryPage 권한 및 조회 스코프', () => {
     expect(useAuditLogs).toHaveBeenLastCalledWith({
       action: 'ROLE_CHANGED',
       page: 0,
-      size: 20,
+      size: 10,
       enabled: true,
     });
   });
