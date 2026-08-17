@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import IconButton from './IconButton.jsx';
 
@@ -16,17 +16,45 @@ export default function Modal({ title, onClose, children, footer, maxWidth = 440
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // 눌림이 backdrop에서 시작했는지 — 아래 onClick 주석 참고
+  const pressedOnBackdrop = useRef(false);
+
+  /**
+   * backdrop 클릭으로 닫기.
+   *
+   * <p><b>누른 곳과 뗀 곳이 모두 backdrop일 때만</b> 닫는다. `click`은 mousedown과 mouseup의
+   * <b>공통 조상</b>에서 발생하므로, 모달 안에서 누르고 밖에서 떼면 그 공통 조상이 backdrop이 되어
+   * "backdrop을 클릭했다"로 잡힌다. 안쪽 요소의 `stopPropagation`은 이때 아예 실행되지 않는다 —
+   * 이벤트가 안쪽에서 시작한 게 아니기 때문이다.
+   *
+   * <p>입력창의 글자를 드래그로 선택하다 손이 모달 밖으로 나가면 그대로 창이 닫히면서
+   * <b>입력하던 내용이 사라졌다</b> (2026-08-17 지적). 신청 사유·결재 의견처럼 길게 쓰는 칸이 많다.
+   *
+   * <p>`pointerdown`을 쓰는 이유는 마우스·터치·펜을 함께 덮기 위해서다.
+   */
+  function handleBackdropPointerDown(e) {
+    pressedOnBackdrop.current = e.target === e.currentTarget;
+  }
+
+  function handleBackdropClick(e) {
+    // 안쪽에서 올라온 클릭은 여기서 끊는다 (안쪽 stopPropagation을 대신한다 — 장치를 둘로 두지 않는다)
+    if (e.target !== e.currentTarget) return;
+    if (!pressedOnBackdrop.current) return;
+    pressedOnBackdrop.current = false;
+    onClose();
+  }
+
   return (
     <div
       role="dialog"
       aria-label={title}
       className="fixed inset-0 z-50 flex items-center justify-center bg-navy-app/75 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onPointerDown={handleBackdropPointerDown}
+      onClick={handleBackdropClick}
     >
       <div
         className={`glass-strong glass-edge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-card border border-white/[0.15] shadow-card ${className}`}
         style={{ maxWidth }}
-        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="flex items-center justify-between border-b border-white/[0.12] px-5 py-4">
