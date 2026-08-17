@@ -23,6 +23,7 @@ import {
   useUsers,
 } from '../hooks/useUsers.js';
 import { useDepartments } from '../hooks/useDepartments.js';
+import { departmentOptionLabel, orderByHierarchy } from '../utils/departmentTree.js';
 import {
   useApproveOnboarding,
   useCurrentUser,
@@ -215,8 +216,11 @@ export default function AdminMembersPage() {
   // 배정된 부서가 비활성으로 바뀐 사원도 있다. 활성 목록만 내려주면 그 값이 선택지에 없어
   // 브라우저가 첫 항목을 대신 보여주고, 관리자는 부서가 조용히 바뀐 것으로 오해한다.
   // 그래서 현재 배정된 부서는 비활성이라도 선택지에 남긴다.
+  //
+  // 순서는 계층순이다 — 상위 부서 바로 아래에 그 하위 부서가 온다. 비활성 부서는 계층에
+  // 끼우지 않고 맨 뒤에 붙인다. 예외 항목이 목록 중간에 섞이면 왜 거기 있는지 알 수 없다.
   function departmentOptions(user) {
-    const options = activeDepartments;
+    const options = orderByHierarchy(activeDepartments);
     const assigned = user.departmentId;
     if (!assigned || options.some((d) => d.id === assigned)) return options;
     return [...options, { id: assigned, name: `${user.departmentName ?? '알 수 없음'} (비활성)` }];
@@ -432,7 +436,7 @@ export default function AdminMembersPage() {
                       </option>
                       {departmentOptions(m).map((d) => (
                         <option key={d.id} value={d.id}>
-                          {d.name}
+                          {departmentOptionLabel(d)}
                         </option>
                       ))}
                     </InlineSelect>

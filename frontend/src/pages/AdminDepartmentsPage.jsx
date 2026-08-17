@@ -25,6 +25,7 @@ import {
   canDropDepartment,
   resolveDropParentId,
 } from '../utils/departmentDrop.js';
+import { orderByHierarchy } from '../utils/departmentTree.js';
 
 const EMPTY_FORM = { name: '', description: '', leaderId: '', parentId: '' };
 
@@ -56,15 +57,8 @@ export default function AdminDepartmentsPage() {
   const [deactivateTarget, setDeactivateTarget] = useState(null);
 
   // 상위 부서 → 하위 부서 순으로 재배열 (API는 id 순 플랫 목록만 준다).
-  // 2단계 계층이라 루트 아래 자식을 붙이는 것으로 충분하다.
-  const orderedRows = useMemo(() => {
-    const roots = departments.filter((d) => d.parentId == null);
-    const childrenOf = (parentId) => departments.filter((d) => d.parentId === parentId);
-    return roots.flatMap((root) => [
-      { ...root, depth: 0 },
-      ...childrenOf(root.id).map((child) => ({ ...child, depth: 1 })),
-    ]);
-  }, [departments]);
+  // 구성원 관리의 부서 선택도 같은 순서를 써야 해서 utils/departmentTree.js 한 곳에 뒀다.
+  const orderedRows = useMemo(() => orderByHierarchy(departments), [departments]);
 
   const rootDepartments = departments.filter((d) => d.parentId == null);
   // 자식이 있는 부서는 스스로 하위 부서가 될 수 없다 — 내 자식이 손자가 돼 3단계가 되기 때문.
