@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.web.config.EnableSpringDataWebSupport;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -12,13 +13,33 @@ import org.springframework.web.servlet.resource.PathResourceResolver;
 
 import java.io.IOException;
 
+import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
+
 /**
  * MVC 설정 — 유저 상태 검증 인터셉터 등록 (검증 Y-2) + 홈서버 데모 배포용 SPA 폴백.
  * /api/** 전체에 적용한다: 퇴직자 차단·권한 갱신은 /api/auth/* 포함 전 경로,
  * 온보딩 미완료 차단만 인터셉터 내부에서 /api/auth/* 경로를 제외한다.
+ *
+ * <h3>페이지 응답을 {@code PagedModel}로 직렬화한다 (2026-08-17)</h3>
+ * 기본값({@code DIRECT})은 {@code PageImpl}을 그대로 내보내 페이지 메타가
+ * {@code totalPages}·{@code totalElements}처럼 <b>최상위</b>에 흩어진다. Spring도 그 형태는
+ * 안정성을 보장하지 않는다고 기동 때마다 WARN을 남긴다.
+ *
+ * <p>프론트는 처음부터 {@code data.page.totalPages} 형태({@code PagedModel})로 짜여 있었는데
+ * 이 모드를 켜지 않아 <b>그 값이 전부 {@code undefined}였다.</b> 예외가 나지 않고 조용히 사라져서
+ * 화면에는 이렇게 나타났다:
+ * <ul>
+ *   <li>페이지 넘김 바가 아예 안 그려짐 — {@code totalPages}가 없으면 1페이지로 판단한다</li>
+ *   <li>사이드바 결재 대기 배지가 항상 0</li>
+ *   <li>구성원 관리 탭 배지(재직·퇴직·온보딩)에 건수가 안 뜸</li>
+ *   <li>결재 관리 상단 전사 현황 숫자가 항상 0</li>
+ * </ul>
+ * 프론트 테스트는 응답을 목으로 만들어 이 형태를 가정하고 있었으므로 전부 통과했다 —
+ * 실제 응답 모양을 검사하는 테스트가 없던 것이 원인이다. 그래서 {@code WebConfigPageSerializationTest}를 함께 둔다.
  */
 @Configuration
 @RequiredArgsConstructor
+@EnableSpringDataWebSupport(pageSerializationMode = VIA_DTO)
 public class WebConfig implements WebMvcConfigurer {
 
     private final OnboardingCheckInterceptor onboardingCheckInterceptor;
