@@ -73,9 +73,13 @@ public class DepartmentService {
      * 부서 수정 (PUT /api/departments/{id}, SA) — 전체 갱신.
      * leaderId 미포함(null) 시 팀장 공석으로 처리한다 — PUT은 전체 갱신 의미론을 따른다.
      *
-     * <p>팀장 지정은 {@code UserService.assignDepartmentLeader}에 맡긴다 — 여기서 직접
-     * {@code assignLeader}만 부르면 <b>이전 팀장이 역할만 팀장인 채 그 부서에 남는다</b>.
+     * <p>팀장 지정은 {@code UserService.assignDepartmentLeader}에, <b>해제는
+     * {@code releaseDepartmentLeader}에</b> 맡긴다 — 여기서 직접 {@code assignLeader}·
+     * {@code clearLeader}만 부르면 <b>이전 팀장이 역할과 기존 결재선을 그대로 든 채 남는다</b>.
      * 부서당 팀장 1명 불변식이 한쪽 경로에서만 지켜지면 지켜지지 않는 것과 같다 (2026-08-16).
+     *
+     * <p>08-16에는 지정 경로만 합치고 <b>해제 경로를 놓쳐</b> 공석 처리 후에도 이전 팀장이
+     * 기존 신청을 결재할 수 있었다 (2026-08-17 감사).
      */
     @Transactional
     public DepartmentResponse update(Long id, DepartmentUpdateRequest request, Long actorId) {
@@ -85,7 +89,7 @@ public class DepartmentService {
         if (request.leaderId() != null) {
             userService.assignDepartmentLeader(department, findEligibleLeaderOrThrow(request.leaderId()), actorId);
         } else {
-            department.clearLeader();
+            userService.releaseDepartmentLeader(department, actorId);
         }
         return DepartmentResponse.of(department);
     }

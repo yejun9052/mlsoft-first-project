@@ -2,10 +2,13 @@ package com.mlsoft.backend.config;
 
 import com.mlsoft.backend.security.OnboardingCheckInterceptor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
+import org.springframework.data.web.config.SortHandlerMethodArgumentResolverCustomizer;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -44,6 +47,25 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final OnboardingCheckInterceptor onboardingCheckInterceptor;
     private final PageSizeLimitInterceptor pageSizeLimitInterceptor;
+
+    /**
+     * 정렬을 지정하지 않은 페이지 조회의 기본 정렬 — {@code id} 오름차순.
+     *
+     * <p><b>정렬 없는 페이징은 페이지 사이에서 행이 중복되거나 빠질 수 있다.</b> 순서를 정하지
+     * 않으면 DB가 매 쿼리마다 편한 순서로 돌려주므로, 1페이지에서 본 사람이 2페이지에 또 나오거나
+     * 아무 페이지에도 안 나올 수 있다. 그사이 다른 관리자가 행을 추가·삭제하면 확률이 올라간다.
+     * 목록 대부분이 정렬 없이 페이징되고 있었다 (2026-08-17 감사).
+     *
+     * <p>내림차순이 아니라 <b>오름차순</b>인 것은 지금 보이는 순서를 바꾸지 않기 위해서다 —
+     * MySQL이 단순 조회에서 대체로 PK 순으로 돌려주고 있었다. 결정성만 보장하고 화면은 그대로 둔다.
+     *
+     * <p>메서드 이름에 {@code OrderBy}가 있는 조회(온보딩 대기의 {@code updateAt} 등)는 그 정렬이
+     * 먼저 적용되고 이 값이 <b>동률 보조 키</b>로 뒤에 붙는다. 화면이 정렬을 직접 보내면 그쪽이 이긴다.
+     */
+    @Bean
+    SortHandlerMethodArgumentResolverCustomizer stableSortCustomizer() {
+        return resolver -> resolver.setFallbackSort(Sort.by(Sort.Direction.ASC, "id"));
+    }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {

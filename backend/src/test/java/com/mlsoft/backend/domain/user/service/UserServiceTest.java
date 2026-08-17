@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * 사용자 서비스 단위 테스트 — 조회·프로필/관리자 수정, 특히 퇴직 처리의 결재 이관 로직 (docs/01 2-9).
@@ -110,6 +111,60 @@ class UserServiceTest {
         userService.retire(1L, ACTOR_ID);
 
         assertEquals(fallback, leave.getPrimaryApprover());
+    }
+
+    // 2026-08-17 감사 — 부서 관리에서 팀장을 공석으로 바꾸는 경로가 department.clearLeader()만
+    // 불러서, 화면에는 공석인데 그 사람이 역할과 기존 결재선을 그대로 들고 있었다.
+    @Test
+    @DisplayName("팀장 해제 — 부서 공석 + 역할 강등 + 대기 결재 이관이 함께 일어난다")
+    void releaseDepartmentLeader_강등과이관까지() {
+        User leader = activeUser(1L, Role.TEAM_LEADER);
+        User applicant = activeUser(2L, Role.EMPLOYEE);
+        User fallback = activeUser(9L, Role.SYSTEM_ADMIN);
+        Department department = Department.create("개발팀", "설명", null);
+        department.assignLeader(leader);
+        LeaveRequest leave = pendingLeave(applicant, leader, null);
+        given(leaveRequestRepository.findByPrimaryApproverAndStatusIn(leader, LEAVE_REASSIGN_STATUSES))
+                .willReturn(List.of(leave));
+        given(leaveRequestRepository.findBySubApproverAndStatusIn(leader, LEAVE_REASSIGN_STATUSES))
+                .willReturn(List.of());
+        given(welfareRequestRepository.findByPrimaryApproverAndStatus(leader, RequestStatus.PENDING))
+                .willReturn(List.of());
+        given(welfareRequestRepository.findBySubApproverAndStatus(leader, RequestStatus.PENDING))
+                .willReturn(List.of());
+        given(userRepository.findFirstByRoleAndIsActiveTrueOrderByIdAsc(Role.SYSTEM_ADMIN))
+                .willReturn(Optional.of(fallback));
+
+        userService.releaseDepartmentLeader(department, ACTOR_ID);
+
+        assertNull(department.getLeader(), "부서가 공석이 되지 않았다");
+        assertEquals(Role.EMPLOYEE, leader.getRole(), "역할이 팀장으로 남아 있다");
+        assertEquals(fallback, leave.getPrimaryApprover(), "대기 결재가 이관되지 않아 영구 PENDING이 된다");
+    }
+
+    // SYSTEM_ADMIN은 팀장 자리에서만 빠진다 — 관리자 권한은 부서와 무관하다 (지정 경로와 같은 규칙)
+    @Test
+    @DisplayName("팀장 해제 — SYSTEM_ADMIN이 팀장이었으면 역할을 내리지 않는다")
+    void releaseDepartmentLeader_관리자는강등하지않는다() {
+        User admin = activeUser(1L, Role.SYSTEM_ADMIN);
+        Department department = Department.create("개발팀", "설명", null);
+        department.assignLeader(admin);
+
+        userService.releaseDepartmentLeader(department, ACTOR_ID);
+
+        assertNull(department.getLeader());
+        assertEquals(Role.SYSTEM_ADMIN, admin.getRole());
+    }
+
+    @Test
+    @DisplayName("팀장 해제 — 이미 공석이면 아무것도 하지 않는다")
+    void releaseDepartmentLeader_이미공석() {
+        Department department = Department.create("개발팀", "설명", null);
+
+        userService.releaseDepartmentLeader(department, ACTOR_ID);
+
+        assertNull(department.getLeader());
+        verifyNoInteractions(adminAuditService);
     }
 
     @Test

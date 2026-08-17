@@ -117,19 +117,23 @@ class DepartmentServiceTest {
         assertEquals(ErrorCode.DEPARTMENT_NOT_FOUND, ex.getErrorCode());
     }
 
+    // 공석 처리는 부서 필드만 비우는 일이 아니다. 예전에는 department.clearLeader()만 불러
+    // 화면에는 공석으로 보이는데 그 사람이 역할과 기존 결재선을 그대로 들고 있었다 (2026-08-17 감사).
+    // 그래서 "leader == null"만 단정하면 안 되고, 해제 경로를 실제로 탔는지를 본다.
     @Test
-    @DisplayName("수정 — leaderId 미포함(null): 팀장 공석 처리")
-    void update_withoutLeaderId_clearsLeader() {
+    @DisplayName("수정 — leaderId 미포함(null): 팀장 해제 경로를 탄다 (부서 필드만 비우지 않는다)")
+    void update_withoutLeaderId_releasesLeaderThroughSharedPath() {
         User leader = user(1L, Role.TEAM_LEADER);
         Department department = Department.create("개발팀", "설명", null);
         department.assignLeader(leader);
         given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
         DepartmentUpdateRequest request = new DepartmentUpdateRequest("개발팀(수정)", "설명 수정", null, null);
 
-        DepartmentResponse response = departmentService.update(10L, request, ACTOR_ID);
+        departmentService.update(10L, request, ACTOR_ID);
 
-        assertNull(response.leaderId());
-        assertNull(department.getLeader());
+        // 역할 강등·대기 결재 이관·감사 기록은 UserService가 한 곳에서 한다.
+        // 여기서 직접 clearLeader()를 부르면 그 셋이 통째로 빠진다.
+        verify(userService).releaseDepartmentLeader(department, ACTOR_ID);
     }
 
     @Test

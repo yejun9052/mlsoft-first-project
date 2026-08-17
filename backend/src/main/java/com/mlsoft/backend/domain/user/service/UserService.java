@@ -210,6 +210,40 @@ public class UserService {
                 department.getId(), newLeader.getId(), actorId);
     }
 
+    /**
+     * 부서 팀장 해제 — {@link #assignDepartmentLeader}의 역연산이다 (2026-08-17 감사).
+     *
+     * <p>부서 관리에서 팀장을 <b>공석으로</b> 바꾸는 경로가 예전에는 {@code department.clearLeader()}만
+     * 불렀다. 그러면 화면에는 공석으로 보이는데 <b>그 사람은 팀장 역할과 기존 결재선을 그대로 들고 있어</b>
+     * 이미 접수된 신청을 계속 승인·반려할 수 있었다. 새 신청만 상위 부서·총관리자로 가서, 같은 부서의
+     * 결재선이 신청 시점에 따라 갈라졌다.
+     *
+     * <p>지정 경로만 공용 메서드를 타고 해제 경로가 빠져 있으면 <b>불변식이 한쪽에서만 지켜진다</b> —
+     * 그건 지켜지지 않는 것과 같다. 08-16에 지정 경로를 합치면서 이쪽을 놓쳤다.
+     */
+    @Transactional
+    public void releaseDepartmentLeader(Department department, Long actorId) {
+        User previousLeader = department.getLeader();
+        if (previousLeader == null) {
+            return; // 이미 공석
+        }
+
+        department.clearLeader();
+
+        // SYSTEM_ADMIN은 내리지 않는다 — 팀장 자리에서 빠질 뿐 관리자 권한은 부서와 무관하다
+        // (assignDepartmentLeader의 교체 규칙과 같다)
+        if (previousLeader.getRole() == Role.TEAM_LEADER) {
+            previousLeader.changeRole(Role.EMPLOYEE);
+            adminAuditService.recordUserChange(actorId, AdminAction.ROLE_CHANGED, previousLeader,
+                    Role.TEAM_LEADER.getLabel(), Role.EMPLOYEE.getLabel());
+            // 결재할 수 없게 된 사람에게 대기 건이 남으면 그 신청은 선차감이 걸린 채 영구 PENDING이다 (리뷰 I-5a)
+            reassignPendingApprovals(previousLeader);
+        }
+
+        log.info("[팀장 해제] departmentId={}, previousLeaderId={}, actorId={}",
+                department.getId(), previousLeader.getId(), actorId);
+    }
+
     /** 강등·퇴직 시 맡고 있던 부서의 팀장직 해제 — 공석이면 SYSTEM_ADMIN fallback이 받는다 (검증 Y-3) */
     private void releaseLeadership(User user) {
         departmentRepository.findByLeader(user).forEach(department -> {
