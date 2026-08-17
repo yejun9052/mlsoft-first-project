@@ -7,6 +7,7 @@ import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import WelfareApplyModal from '../components/welfare/WelfareApplyModal.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
+import { usePageClamp } from '../hooks/usePageClamp.js';
 import { getWelfareCategoryMeta, getWelfareTargetLabel } from '../constants/welfare.js';
 import { useMyWelfareRequests, useWelfarePoliciesAll } from '../hooks/useWelfare.js';
 
@@ -70,6 +71,7 @@ export default function WelfarePage() {
   const rows = useMemo(() => withGroupInfo(policiesQuery.data ?? []), [policiesQuery.data]);
   const myRequests = myRequestsQuery.data?.content ?? [];
   const requestPageInfo = myRequestsQuery.data?.page;
+  usePageClamp(requestPage, setRequestPage, requestPageInfo?.totalPages);
 
   return (
     <div>

@@ -13,6 +13,7 @@ import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
+import { usePageClamp } from '../hooks/usePageClamp.js';
 import {
   useLeavePolicies,
   useLeavePolicyConfigs,
@@ -62,6 +63,7 @@ export default function AdminPolicyPage() {
   const policies = policiesQuery.data ?? [];
   const histories = historiesQuery.data?.content ?? [];
   const historyPageInfo = historiesQuery.data?.page;
+  usePageClamp(historyPage, setHistoryPage, historyPageInfo?.totalPages);
 
   // ① 근속년수별 정책 — 행별 인라인 수정(한 번에 한 행만)
   const [editingId, setEditingId] = useState(null);

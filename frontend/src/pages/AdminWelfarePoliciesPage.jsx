@@ -13,6 +13,7 @@ import Select from '../components/ui/Select.jsx';
 import Button from '../components/ui/Button.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
+import { usePageClamp } from '../hooks/usePageClamp.js';
 import { WELFARE_TARGET_LABEL } from '../constants/welfare.js';
 import {
   useCreateWelfarePolicy,
@@ -52,6 +53,9 @@ export default function AdminWelfarePoliciesPage() {
 
   const rows = policiesQuery.data?.content ?? [];
   const pageInfo = policiesQuery.data?.page;
+
+  // 정책을 비활성화하면 목록에서 빠진다 — 마지막 페이지가 통째로 사라질 수 있다
+  usePageClamp(page, setPage, pageInfo?.totalPages);
 
   // 모달 — 생성/수정 폼 하나를 공유한다. editing이 null이면 생성 모드 (부서 관리와 같은 구조).
   const [formOpen, setFormOpen] = useState(false);

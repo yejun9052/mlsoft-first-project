@@ -7,6 +7,7 @@ import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
+import { usePageClamp } from '../hooks/usePageClamp.js';
 import { ACTION_LABEL, ACTION_TONE, ADMIN_ACTION_TONE, LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { ROLE } from '../constants/roles.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
@@ -87,6 +88,8 @@ export default function AdminHistoryPage() {
   const query = isAuditTab ? auditQuery : tab === TAB_LEAVE ? leaveQuery : welfareQuery;
   const rows = query.data?.content ?? [];
   const pageInfo = query.data?.page;
+  // 로그는 줄어들지 않지만, 탭·필터를 바꾸면 총 페이지가 달라진다 (그때 setPage(0)도 함께 돈다)
+  usePageClamp(page, setPage, pageInfo?.totalPages);
 
   const tabItems = [
     { value: TAB_LEAVE, label: '연차' },

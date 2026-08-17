@@ -25,6 +25,7 @@ import {
 } from '../hooks/useUsers.js';
 import { useDepartments } from '../hooks/useDepartments.js';
 import { departmentOptionLabel, orderByHierarchy } from '../utils/departmentTree.js';
+import { usePageClamp } from '../hooks/usePageClamp.js';
 import {
   useApproveOnboarding,
   useCurrentUser,
@@ -146,6 +147,13 @@ export default function AdminMembersPage() {
   const departmentsQuery = useDepartments();
   // 온보딩 승인 대기 — 배지에 항상 건수를 띄워야 관리자가 잠긴 계정을 놓치지 않는다 (리뷰 S-1)
   const onboardingQuery = usePendingOnboardings({ page: onboardingPage, size: PAGE_SIZE });
+
+  // 이 화면의 동작은 대부분 목록에서 사람을 덜어낸다 — 퇴직·복구·온보딩 승인·반려.
+  // 마지막 페이지의 마지막 한 명을 처리하면 그 페이지가 사라지는데, 보정하지 않으면
+  // 서버가 빈 목록을 정상 응답으로 주고 화면은 "조회된 구성원이 없습니다"를 띄운다.
+  usePageClamp(activePage, setActivePage, activeQuery.data?.page?.totalPages);
+  usePageClamp(retiredPage, setRetiredPage, retiredQuery.data?.page?.totalPages);
+  usePageClamp(onboardingPage, setOnboardingPage, onboardingQuery.data?.page?.totalPages);
   const approveOnboardingMutation = useApproveOnboarding();
   const rejectOnboardingMutation = useRejectOnboarding();
 

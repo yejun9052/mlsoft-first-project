@@ -9,6 +9,7 @@ import ConfirmDialog from '../ui/ConfirmDialog.jsx';
 import Pagination from '../ui/Pagination.jsx';
 import { SCHEDULE_TYPE_LABEL } from '../../constants/status.js';
 import { useDeleteSchedule, useMySchedules } from '../../hooks/useSchedules.js';
+import { usePageClamp } from '../../hooks/usePageClamp.js';
 
 const PAGE_SIZE = 20;
 
@@ -36,13 +37,18 @@ export default function MySchedulesTable() {
   const totalPages = query.data?.page?.totalPages ?? 0;
   const totalElements = query.data?.page?.totalElements;
 
+  // 어느 경로로 목록이 줄어들든 걸리는 그물. 아래 onSuccess의 선반영은 깜박임을 없애는
+  // 빠른 길이고, 이건 그게 못 잡는 경우(다른 탭에서 지워 캐시가 갱신되는 등)를 받는다.
+  usePageClamp(page, setPage, query.data?.page?.totalPages);
+
   function handleDelete() {
     if (!deleteTarget) return;
     deleteMutation.mutate(deleteTarget.id, {
       onSuccess: () => {
         toast.success('일정을 삭제했습니다.');
         setDeleteTarget(null);
-        // 마지막 페이지의 마지막 건을 지우면 빈 페이지가 남는다 — 한 페이지 앞으로
+        // 마지막 페이지의 마지막 건을 지우면 빈 페이지가 남는다 — 한 페이지 앞으로.
+        // 재조회 응답을 기다리지 않고 먼저 옮겨 빈 표가 잠깐 보이는 것을 막는다
         if (schedules.length === 1 && page > 0) setPage((p) => p - 1);
       },
     });
