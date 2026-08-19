@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Mail, Building2, CalendarDays, Cake } from 'lucide-react';
@@ -11,6 +11,8 @@ import TextInput from '../components/ui/TextInput.jsx';
 import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import { useUnsavedGuard } from '../hooks/useUnsavedGuard.js';
 import { ROLE_LABEL } from '../constants/roles.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useLeaveSummary } from '../hooks/useLeaves.js';
@@ -61,6 +63,25 @@ export default function MyInfoPage() {
   // 수정 폼 — useCurrentUser는 localStorage initialData 덕에 첫 렌더부터 값이 채워져 있다.
   const [name, setName] = useState(me?.name ?? '');
   const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
+
+  // 서버가 준 현재 값. 폼의 기준선이자 "바뀌었는가"의 비교 대상이다
+  const savedName = me?.name ?? '';
+  const savedBirthDay = me?.birthDay ?? '';
+
+  // 서버 값이 바뀌면 폼을 다시 맞춘다. useState 초기값은 **첫 렌더에 한 번**만 쓰이는데,
+  // 위 initialData는 localStorage라 낡아 있을 수 있고(initialDataUpdatedAt: 0이라 매번 재검증한다)
+  // 아예 없으면 undefined다. 그때 폼은 빈 칸이나 옛 이름을 그대로 들고 있게 되고,
+  // 저장하려 하면 "이름과 생년월일을 모두 입력해 주세요"가 뜬다. 저장 성공 뒤 재조회에서도
+  // 이 효과가 기준선을 새 값으로 옮겨 아래 dirty가 풀린다.
+  useEffect(() => {
+    setName(savedName);
+    setBirthDay(savedBirthDay);
+  }, [savedName, savedBirthDay]);
+
+  // 저장하지 않고 나가려 할 때 붙잡는다 (연차 정책 화면과 같은 장치).
+  // 저장 버튼이 입력칸 바로 아래라 그쪽 같은 "미저장 배지"는 두지 않았다 —
+  // 배지는 멀리 있는 버튼을 찾게 하려는 것이고, 여기서는 눈에 이미 들어와 있다.
+  const unsavedGuard = useUnsavedGuard(name !== savedName || birthDay !== savedBirthDay);
 
   // 실패를 로딩과 구분한다 — !summary 가드만 있으면 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
   if (meQuery.isError || summaryQuery.isError) {
@@ -162,6 +183,17 @@ export default function MyInfoPage() {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={unsavedGuard.blocked}
+        title="저장하지 않고 나가시겠습니까?"
+        message="이름·생년월일을 바꿨지만 아직 저장하지 않았습니다. '정보 수정' 카드의 '저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다."
+        tone="danger"
+        confirmLabel="그냥 나가기"
+        cancelLabel="취소"
+        onConfirm={unsavedGuard.leave}
+        onCancel={unsavedGuard.stay}
+      />
     </div>
   );
 }
