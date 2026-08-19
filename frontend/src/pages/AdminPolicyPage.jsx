@@ -13,7 +13,9 @@ import Button from '../components/ui/Button.jsx';
 import LoadingState from '../components/ui/LoadingState.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
+import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { usePageClamp } from '../hooks/usePageClamp.js';
+import { useUnsavedGuard } from '../hooks/useUnsavedGuard.js';
 import {
   useLeavePolicies,
   useLeavePolicyConfigs,
@@ -121,18 +123,26 @@ export default function AdminPolicyPage() {
     return configValues?.[config.name] ?? config.value;
   }
 
+  // 아직 저장하지 않은 설정. 저장 대상·화면 배지·이탈 경고가 **같은 목록 하나**를 본다 —
+  // 각자 세면 "변경 없음"이라며 저장을 건너뛰는데 이탈 경고는 뜨는 식으로 어긋난다.
+  // 설정은 열 개 안팎이라 매 렌더 훑어도 된다(memo를 걸면 currentValue를 또 복제해야 한다).
+  const changedConfigs = (configsQuery.data ?? []).filter((c) => currentValue(c) !== c.value);
+
+  // 이탈 경고는 **시스템 설정에만** 건다. 위 근속년수별 정책은 편집 중인 행 안에 저장(✓)·취소(✕)가
+  // 붙어 있어 놓칠 수가 없다 — 여기 저장 버튼만 카드 맨 아래 오른쪽으로 멀리 떨어져 있다.
+  const unsavedGuard = useUnsavedGuard(changedConfigs.length > 0);
+
   // 저장 — PUT이 name 단건 갱신뿐이라 항목마다 호출한다. 단 서버 값과 다른 항목만 보낸다
   // (설정이 늘어날수록 전체 재전송은 낭비이고, 로그에도 바꾸지 않은 설정 변경이 남는다).
   async function handleSaveConfigs() {
     if (!configValues) return;
 
-    const changed = (configsQuery.data ?? []).filter((c) => currentValue(c) !== c.value);
-    if (changed.length === 0) {
+    if (changedConfigs.length === 0) {
       toast.success('변경된 설정이 없습니다.');
       return;
     }
 
-    const firstError = changed
+    const firstError = changedConfigs
       .map((c) => validateConfigValue(c, currentValue(c)))
       .find((message) => message !== null);
     if (firstError) {
@@ -143,9 +153,9 @@ export default function AdminPolicyPage() {
     setSavingConfigs(true);
     try {
       await Promise.all(
-        changed.map((c) => updateConfigMutation.mutateAsync({ name: c.name, value: currentValue(c) })),
+        changedConfigs.map((c) => updateConfigMutation.mutateAsync({ name: c.name, value: currentValue(c) })),
       );
-      toast.success(`설정 ${changed.length}건을 저장했습니다.`);
+      toast.success(`설정 ${changedConfigs.length}건을 저장했습니다.`);
     } catch {
       // 실패는 api 인터셉터가 토스트로 일괄 처리
     } finally {
@@ -287,7 +297,15 @@ export default function AdminPolicyPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-5 flex justify-end">
+              {/* 저장 버튼 옆 미저장 배지 — 떠날 때 붙잡는 것만으로는 부족하다.
+                  토글은 눌리는 순간 켜진 것처럼 보여서, 애초에 "아직 저장 안 됨"이 화면에
+                  보여야 저장 버튼을 찾게 된다. 이탈 경고는 그걸 놓쳤을 때의 그물이다 */}
+              <div className="mt-5 flex items-center justify-end gap-3">
+                {changedConfigs.length > 0 && (
+                  <span className="text-[12px] font-medium text-warn">
+                    저장하지 않은 변경 {changedConfigs.length}건
+                  </span>
+                )}
                 <Button Icon={Save} onClick={handleSaveConfigs} loading={savingConfigs}>
                   설정 저장
                 </Button>
@@ -343,6 +361,19 @@ export default function AdminPolicyPage() {
           onChange={setHistoryPage}
         />
       </TableCard>
+
+      {/* 저장하지 않고 나가려 할 때 — 저장 버튼이 **어디에 있는지**까지 말해준다.
+          "저장되지 않았습니다"만 띄우면 이 창을 처음 본 사람은 어디를 눌러야 할지 모른다 */}
+      <ConfirmDialog
+        open={unsavedGuard.blocked}
+        title="저장하지 않고 나가시겠습니까?"
+        message={`시스템 설정 ${changedConfigs.length}건을 바꿨지만 아직 저장하지 않았습니다. '연차 시스템 설정' 카드 오른쪽 아래의 '설정 저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다.`}
+        tone="danger"
+        confirmLabel="그냥 나가기"
+        cancelLabel="취소"
+        onConfirm={unsavedGuard.leave}
+        onCancel={unsavedGuard.stay}
+      />
     </div>
   );
 }
