@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Navigate, Route, createRoutesFromElements } from 'react-router-dom';
 import RequireAuth from './components/RequireAuth.jsx';
 import Layout from './components/layout/Layout.jsx';
 import { ROLE } from './constants/roles.js';
@@ -23,69 +23,69 @@ const APPROVER_ROLES = [ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN];
 // 관리자 전용 역할
 const ADMIN_ROLES = [ROLE.SYSTEM_ADMIN];
 
-export default function App() {
-  return (
-    <Routes>
-      {/* 인증 불필요 */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
+const routes = createRoutesFromElements(
+  <>
+    {/* 인증 불필요 */}
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/oauth-callback" element={<OAuthCallbackPage />} />
 
-      {/* 인증 필요 — 레이아웃 없는 단독 페이지 */}
-      <Route
-        path="/onboarding"
-        element={
-          <RequireAuth>
-            <OnboardingPage />
-          </RequireAuth>
-        }
-      />
+    {/* 인증 필요 — 레이아웃 없는 단독 페이지 */}
+    <Route
+      path="/onboarding"
+      element={
+        <RequireAuth>
+          <OnboardingPage />
+        </RequireAuth>
+      }
+    />
 
-      {/* 인증 필요 — 사이드바 레이아웃 */}
-      <Route
-        element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/calendar" element={<CalendarPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/welfare" element={<WelfarePage />} />
-        <Route path="/team" element={<TeamPage />} />
-        <Route path="/myinfo" element={<MyInfoPage />} />
-      </Route>
+    {/* 인증 필요 — 사이드바 레이아웃 */}
+    <Route
+      element={
+        <RequireAuth>
+          <Layout />
+        </RequireAuth>
+      }
+    >
+      <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/calendar" element={<CalendarPage />} />
+      <Route path="/history" element={<HistoryPage />} />
+      <Route path="/welfare" element={<WelfarePage />} />
+      <Route path="/team" element={<TeamPage />} />
+      <Route path="/myinfo" element={<MyInfoPage />} />
+    </Route>
 
-      {/* 결재 관리 — 팀장·총관리자만 */}
-      <Route
-        element={
-          <RequireAuth roles={APPROVER_ROLES}>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route path="/approvals" element={<ApprovalsPage />} />
-        {/* 처리 이력 — 관리자는 전사, 팀장은 내 부서 (스코프는 서버가 결정) */}
-        <Route path="/admin/history" element={<AdminHistoryPage />} />
-      </Route>
+    {/* 결재 관리 — 팀장·총관리자만 */}
+    <Route
+      element={
+        <RequireAuth roles={APPROVER_ROLES}>
+          <Layout />
+        </RequireAuth>
+      }
+    >
+      <Route path="/approvals" element={<ApprovalsPage />} />
+      {/* 처리 이력 — 관리자는 전사, 팀장은 내 부서 (스코프는 서버가 결정) */}
+      <Route path="/admin/history" element={<AdminHistoryPage />} />
+    </Route>
 
-      {/* 관리자 — 총관리자만 */}
-      <Route
-        element={
-          <RequireAuth roles={ADMIN_ROLES}>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route path="/admin" element={<AdminMembersPage />} />
-        <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
-        <Route path="/admin/policy" element={<AdminPolicyPage />} />
-        <Route path="/admin/welfare-policies" element={<AdminWelfarePoliciesPage />} />
-      </Route>
+    {/* 관리자 — 총관리자만 */}
+    <Route
+      element={
+        <RequireAuth roles={ADMIN_ROLES}>
+          <Layout />
+        </RequireAuth>
+      }
+    >
+      <Route path="/admin" element={<AdminMembersPage />} />
+      <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
+      <Route path="/admin/policy" element={<AdminPolicyPage />} />
+      <Route path="/admin/welfare-policies" element={<AdminWelfarePoliciesPage />} />
+    </Route>
 
-      {/* 기본 진입·미정의 경로는 대시보드로 */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
-  );
-}
+    {/* 기본 진입·미정의 경로는 대시보드로 */}
+    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+  </>,
+);
+
+export default routes;
