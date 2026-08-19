@@ -434,15 +434,16 @@ class LeaveServiceTest {
     }
 
     // 2026-08-17 — 승인자 후보 목록은 본인을 빼지만 그건 목록일 뿐이다. 저장된 승인자가
-    // 어떤 경로로 본인이 됐든 결재 시점에 막아야 실제 방어선이 된다. 총관리자도 예외가 아니다.
+    // 어떤 경로로 본인이 됐든 결재 시점에 막아야 실제 방어선이 된다.
     @Test
-    @DisplayName("승인 — 본인이 신청한 건은 본인이 결재할 수 없다 (총관리자여도)")
+    @DisplayName("승인 — 본인이 신청한 건은 본인이 결재할 수 없다 (사원·팀장)")
     void approve_자기신청은거부() {
-        User admin = userWithBalance(9L, "15.0", "2.0", "0.0");
+        // 사원. 총관리자는 2026-08-19부터 예외이므로 아래 별도 검증이 그쪽을 본다
+        User applicant = userWithBalance(9L, "15.0", "2.0", "0.0");
         // 신청자이면서 승인자로도 저장된 상태를 만든다
-        LeaveRequest leave = pendingLeave(admin, admin, futureWeekdays(2));
+        LeaveRequest leave = pendingLeave(applicant, applicant, futureWeekdays(2));
         given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
-        given(userRepository.findById(9L)).willReturn(Optional.of(admin));
+        given(userRepository.findById(9L)).willReturn(Optional.of(applicant));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> leaveService.processApproval(100L, 9L, new ApprovalRequest(true, "확인")));
@@ -450,6 +451,54 @@ class LeaveServiceTest {
         assertEquals(ErrorCode.CANNOT_APPROVE_OWN_REQUEST, ex.getErrorCode());
         assertEquals(RequestStatus.PENDING, leave.getStatus(), "거부됐는데 상태가 바뀌었다");
         verify(leaveActionHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("승인 — 팀장도 본인 신청은 결재할 수 없다")
+    void approve_팀장_자기신청은거부() {
+        User leader = user(9L, Role.TEAM_LEADER, "15.0");
+        LeaveRequest leave = pendingLeave(leader, leader, futureWeekdays(2));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(leader));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.processApproval(100L, 9L, new ApprovalRequest(true, "확인")));
+
+        assertEquals(ErrorCode.CANNOT_APPROVE_OWN_REQUEST, ex.getErrorCode());
+    }
+
+    // 2026-08-19 — 총관리자만 예외다. 위에 결재선이 없어 막으면 자기 연차를 처리할 사람이 없다.
+    // ApproverResolver가 총관리자를 본인의 승인자로 배정하므로 이 경로가 실제로 쓰인다.
+    @Test
+    @DisplayName("승인 — 총관리자는 본인이 신청한 건을 본인이 결재할 수 있다")
+    void approve_총관리자는_자기신청을_결재한다() {
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = pendingLeave(admin, admin, futureWeekdays(2));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(admin));
+        given(leaveRequestRepository.updateStatusIfCurrent(100L, RequestStatus.PENDING, RequestStatus.APPROVED))
+                .willReturn(1);
+
+        leaveService.processApproval(100L, 9L, new ApprovalRequest(true, "확인"));
+
+        verify(leaveActionHistoryRepository).save(historyWith(RequestAction.APPROVED));
+    }
+
+    @Test
+    @DisplayName("승인 — 총관리자라도 자기가 승인자로 배정되지 않은 남의 건은 결재할 수 없다")
+    void approve_총관리자_미배정건은_거부() {
+        // 푼 것은 "자기 것"뿐이다. 총관리자라는 이유로 결재선을 건너뛰지는 않는다 (docs/01 §2-3(a))
+        User applicant = userWithBalance(1L, "15.0", "2.0", "0.0");
+        User assignedApprover = user(5L, Role.TEAM_LEADER, "15.0");
+        User outsideAdmin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        LeaveRequest leave = pendingLeave(applicant, assignedApprover, futureWeekdays(2));
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(userRepository.findById(9L)).willReturn(Optional.of(outsideAdmin));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.processApproval(100L, 9L, new ApprovalRequest(true, "확인")));
+
+        assertEquals(ErrorCode.ACCESS_DENIED, ex.getErrorCode());
     }
 
     @Test

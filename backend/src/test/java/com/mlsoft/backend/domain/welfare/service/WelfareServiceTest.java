@@ -196,6 +196,42 @@ class WelfareServiceTest {
         verify(welfareActionHistoryRepository, never()).save(any());
     }
 
+    // 자기 결재 규칙은 연차와 같아야 한다 — 승인자 배정이 ApproverResolver 하나뿐이라
+    // 한쪽만 다르면 배정된 채 아무도 결재하지 못하는 신청이 생긴다.
+    @Test
+    @DisplayName("승인 — 본인이 신청한 건은 본인이 결재할 수 없다 (사원)")
+    void approve_자기신청은거부() {
+        User applicant = user(9L, Role.EMPLOYEE);
+        WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
+        WelfareRequest welfare = pendingWelfare(policy, applicant, 9L, null);
+        given(welfareRequestRepository.findById(200L)).willReturn(Optional.of(welfare));
+        given(userRepository.findById(9L)).willReturn(Optional.of(applicant));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> welfareService.processApproval(200L, 9L, new WelfareApprovalRequest(true, "확인")));
+
+        assertEquals(ErrorCode.CANNOT_APPROVE_OWN_REQUEST, ex.getErrorCode());
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getBonusDays()), "거부됐는데 가산됐다");
+        verify(welfareActionHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("승인 — 총관리자는 본인이 신청한 건을 본인이 결재할 수 있다 (2026-08-19, 연차와 동일)")
+    void approve_총관리자는_자기신청을_결재한다() {
+        User admin = user(9L, Role.SYSTEM_ADMIN);
+        WelfarePolicy policy = policy(100L, "결혼", WelfareTarget.SELF, "7.0");
+        WelfareRequest welfare = pendingWelfare(policy, admin, 9L, null);
+        given(welfareRequestRepository.findById(200L)).willReturn(Optional.of(welfare));
+        given(userRepository.findById(9L)).willReturn(Optional.of(admin));
+        given(welfareRequestRepository.updateStatusIfCurrent(200L, RequestStatus.PENDING, RequestStatus.APPROVED))
+                .willReturn(1);
+
+        welfareService.processApproval(200L, 9L, new WelfareApprovalRequest(true, "확인"));
+
+        assertEquals(0, new BigDecimal("7.0").compareTo(admin.getBonusDays()));
+        verify(welfareActionHistoryRepository).save(historyWith(RequestAction.APPROVED));
+    }
+
     @Test
     @DisplayName("승인 — 승인자가 아닌 사용자: ACCESS_DENIED")
     void approve_notApprover_accessDenied() {

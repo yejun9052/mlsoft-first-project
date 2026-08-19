@@ -166,8 +166,10 @@ public class WelfareService {
     /** 처리자가 이 건의 primary·sub 승인자인지 검증 (docs/03 approval 권한) */
     private void validateApprover(WelfareRequest welfare, User actor) {
         // 자기 신청은 자기가 결재할 수 없다 (2026-08-17) — 연차와 같은 규칙이다.
-        // 총관리자도 예외가 아니다. LeaveService.validateApprover의 주석 참고.
-        if (welfare.getUser().getId().equals(actor.getId())) {
+        // **총관리자만 예외**인 것도 같다 (2026-08-19). LeaveService.validateApprover의 주석 참고.
+        // 승인자 배정이 ApproverResolver 하나뿐이라 여기만 다르게 두면 총관리자의 복리후생
+        // 신청이 본인에게 배정된 채 아무도 결재하지 못하는 상태로 남는다.
+        if (welfare.getUser().getId().equals(actor.getId()) && actor.getRole() != Role.SYSTEM_ADMIN) {
             throw new BusinessException(ErrorCode.CANNOT_APPROVE_OWN_REQUEST);
         }
         // 판별은 도메인 메서드에 있다 (리뷰 D-5) — 프록시에서 id를 꺼내는 코드가 흩어지지 않게

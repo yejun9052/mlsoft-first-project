@@ -467,8 +467,13 @@ public class LeaveService {
         Long actorId = actor.getId();
         // 자기 신청은 자기가 결재할 수 없다 (2026-08-17). 승인자 후보 목록은 본인을 빼지만
         // 그건 목록일 뿐이라, 저장된 값이 어떤 경로로 본인이 됐든 여기서 막아야 실제 방어선이 된다.
-        // 총관리자도 예외가 아니다 — 스스로 승인하면 결재라는 절차 자체가 없는 것과 같다.
-        if (leave.getUser().getId().equals(actorId)) {
+        //
+        // **총관리자만 예외다** (2026-08-19). 위에 결재선이 없어서 막으면 자기 연차를 처리할
+        // 사람이 아예 없어진다 — 총관리자가 한 명뿐이면 신청조차 INVALID_APPROVER로 막혔다.
+        // 그래서 ApproverResolver가 총관리자를 본인의 승인자로 배정하고, 여기서 통과시킨다.
+        // 아래 primary/sub 검사는 그대로 살아 있으므로 **배정되지 않은 남의 건**은 총관리자라도
+        // 결재하지 못한다 — 푸는 것은 "자기 것"뿐이다.
+        if (leave.getUser().getId().equals(actorId) && actor.getRole() != Role.SYSTEM_ADMIN) {
             throw new BusinessException(ErrorCode.CANNOT_APPROVE_OWN_REQUEST);
         }
         boolean isPrimary = leave.getPrimaryApprover() != null && leave.getPrimaryApprover().getId().equals(actorId);

@@ -191,14 +191,44 @@ class ApproverResolverTest {
         assertEquals(admin, approverResolver.resolvePrimary(applicant));
     }
 
+    // 2026-08-19 — I-5c(SA 셀프 결재 방지)를 **의도적으로 뒤집었다**. 총관리자 위에는 결재선이
+    // 없어서, 막으면 총관리자가 한 명일 때 fallback 조회가 비고 신청 자체가 INVALID_APPROVER로
+    // 막힌다. 아래 두 검증이 새 규칙의 명세다.
     @Test
-    @DisplayName("기본 승인자 — fallback 조회는 신청자 본인을 제외한다 (I-5c: SA 셀프 결재 방지)")
-    void resolvePrimary_fallbackExcludesApplicant() {
-        User applicant = user(9L, Role.SYSTEM_ADMIN, true, true); // 본인이 첫 SA
-        User otherAdmin = user(10L, Role.SYSTEM_ADMIN, true, true);
-        givenFallback(9L, otherAdmin);
+    @DisplayName("기본 승인자 — 신청자가 총관리자면 본인이 승인자다 (위에 결재선이 없다)")
+    void resolvePrimary_applicantIsSystemAdmin_returnsSelf() {
+        User applicant = user(9L, Role.SYSTEM_ADMIN, true, true);
 
-        assertEquals(otherAdmin, approverResolver.resolvePrimary(applicant));
+        assertEquals(applicant, approverResolver.resolvePrimary(applicant));
+        // 다른 총관리자를 찾으러 가지 않는다 — 있든 없든 결과가 같아야 규칙이 하나다
+        verify(userRepository, never()).findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("기본 승인자 — 총관리자는 다른 총관리자가 있어도 본인이 승인자다")
+    void resolvePrimary_systemAdminWithOtherAdmin_stillSelf() {
+        User applicant = user(9L, Role.SYSTEM_ADMIN, true, true);
+        // 스텁을 세워 두고 쓰이지 않는 것을 확인한다 — "마지막 수단"으로 처리되면 여기서 갈린다
+        lenient().when(userRepository.findFirstByRoleAndIsActiveTrueAndOnboardingStatusAndIdNotOrderByIdAsc(
+                eq(Role.SYSTEM_ADMIN), eq(OnboardingStatus.COMPLETED), any()))
+                .thenReturn(Optional.of(user(10L, Role.SYSTEM_ADMIN, true, true)));
+
+        assertEquals(applicant, approverResolver.resolvePrimary(applicant));
+    }
+
+    @Test
+    @DisplayName("기본 승인자 — 총관리자는 부서 팀장이 있어도 본인이 승인자다 (부하가 상급자를 심사하지 않는다)")
+    void resolvePrimary_systemAdminWithDepartmentLeader_stillSelf() {
+        User leader = user(1L, Role.TEAM_LEADER, true, true);
+        Department department = Department.builder()
+                .id(10L).name("개발팀").description("설명").active(true).build();
+        department.assignLeader(leader);
+        User applicant = user(9L, Role.SYSTEM_ADMIN, true, true);
+        applicant.assignDepartment(department);
+
+        // 팀장이 있느냐에 따라 총관리자의 결재선이 달라지면 "왜 이 사람이 승인자인지"를 설명할 수 없다
+        assertEquals(applicant, approverResolver.resolvePrimary(applicant));
     }
 
     @Test

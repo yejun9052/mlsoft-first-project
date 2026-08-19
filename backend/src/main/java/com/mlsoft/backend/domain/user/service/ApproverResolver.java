@@ -31,7 +31,9 @@ import java.util.Set;
  *   <li><b>온보딩을 마쳤어야</b> 한다 — {@code OnboardingCheckInterceptor}가 {@code hire_date}가 없는
  *       계정의 {@code /api/**} 접근을 막으므로, 지정돼도 결재를 못 한다 (I-5b, 검증 Y-2)</li>
  *   <li><b>신청자 본인이 아니어야</b> 한다 — 셀프 결재 방지. leader 분기에만 있고 fallback에는 없어서
- *       첫 SYSTEM_ADMIN이 본인이면 자기 신청을 자기가 승인할 수 있었다 (I-5c)</li>
+ *       첫 SYSTEM_ADMIN이 본인이면 자기 신청을 자기가 승인할 수 있었다 (I-5c).
+ *       <b>단 신청자가 SYSTEM_ADMIN이면 이 탐색에 들어오지 않는다</b> — 본인이 승인자다
+ *       ({@link #resolvePrimary} 첫 줄, 2026-08-19)</li>
  * </ol>
  */
 @Slf4j
@@ -50,6 +52,7 @@ public class ApproverResolver {
      * 기본 승인자 결정 — <b>가까운 곳부터 위로 올라가며</b> 결재할 수 있는 팀장을 찾는다.
      *
      * <pre>
+     * ⓪ 신청자가 SYSTEM_ADMIN  → 본인 (2026-08-19 추가. 위에 결재선이 없다)
      * ① 소속 부서 팀장          자격 있으면 → 확정
      * ② 상위 부서 팀장 (2026-08-16 추가)  자격 있으면 → 확정
      *    └ 그 위에 또 부모가 있으면 계속 (현재 계층은 2단계라 실제로는 한 번만 올라간다)
@@ -69,6 +72,20 @@ public class ApproverResolver {
      * 관리자는 그 부서 결재선이 비어 있다는 것을 영원히 모른다.
      */
     public User resolvePrimary(User applicant) {
+        // 총관리자 위에는 결재선이 없다 — 본인이 자기 결재자다 (2026-08-19).
+        //
+        // 2026-08-17에 "본인 신청은 본인이 결재할 수 없다"를 넣으면서 총관리자도 예외로 두지
+        // 않았는데, 그러면 총관리자의 연차가 갈 곳이 없다. 아래 ③이 **본인을 제외한** 다른
+        // 총관리자를 찾으므로 총관리자가 한 명뿐이면 INVALID_APPROVER로 **신청 자체가 막힌다.**
+        // 부서 팀장이 있으면 올라가지도 않고 ①에서 잡히는데, 그건 부하가 상급자의 연차를
+        // 심사하는 모양이 된다.
+        //
+        // 그래서 "마지막 수단"이 아니라 **맨 앞**에 둔다. 부서 팀장이 있느냐 없느냐에 따라
+        // 총관리자의 결재선이 달라지면 "왜 이 사람이 승인자인지" 설명할 수 없다.
+        if (applicant.getRole() == Role.SYSTEM_ADMIN) {
+            return applicant;
+        }
+
         User leader = findLeaderUpwards(applicant);
         if (leader != null) {
             return leader;
