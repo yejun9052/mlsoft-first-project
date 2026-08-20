@@ -1,31 +1,73 @@
 import dayjs from 'dayjs';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CalendarPlus, Gift, ChevronRight, Loader2 } from 'lucide-react';
+import { CalendarClock, CalendarPlus, ChevronRight, Gift, Loader2 } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
 import Button from '../components/ui/Button.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import Stat from '../components/ui/Stat.jsx';
 import StatStrip from '../components/ui/StatStrip.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
-import { useLeaveCalendar, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import { useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import { useMySchedules } from '../hooks/useSchedules.js';
 import { useMyWelfareRequests } from '../hooks/useWelfare.js';
 import { useHolidays } from '../hooks/useHolidays.js';
-import { LEAVE_TYPE_LABEL } from '../constants/status.js';
+import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../constants/status.js';
 
 const TODAY_D = dayjs();
 const TODAY = TODAY_D.format('YYYY-MM-DD');
+// 공휴일이 연속된 주에도 개인 일정이 함께 보일 여지를 두되 우측 카드를 길게 만들지 않는 상한이다.
+const UPCOMING_EVENT_LIMIT = 5;
 
-// 남은 일수가 이 값 이하면 "다가오는 일정"에 다음 달 캘린더도 함께 조회한다
-const UPCOMING_LOOKAHEAD_DAYS = 7;
-
-// 날짜 목록 요약 — "7/20 (월)" 또는 "7/20 외 2일"
 function formatDates(dates) {
   const first = dayjs(dates[0]);
   const head = `${first.format('M/D')} (${'일월화수목금토'[first.day()]})`;
   return dates.length > 1 ? `${head} 외 ${dates.length - 1}일` : head;
+}
+
+function UpcomingEventItem({ event }) {
+  const [showDetail, setShowDetail] = useState(false);
+  const dday = dayjs(event.date).diff(dayjs(TODAY), 'day');
+
+  return (
+    <li
+      className="relative flex items-center justify-between gap-3 py-3"
+      tabIndex={event.detail ? 0 : undefined}
+      onMouseEnter={() => setShowDetail(true)}
+      onMouseLeave={() => setShowDetail(false)}
+      onFocus={() => setShowDetail(true)}
+      onBlur={() => setShowDetail(false)}
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+            event.kind === 'holiday' ? 'bg-danger/70' : 'bg-violet-400/80'
+          }`}
+        />
+        <span className="truncate text-[14px] text-ink-body">{event.label}</span>
+        <span className="shrink-0 text-[12px] text-ink-faint">{event.sub}</span>
+      </div>
+
+      <span className="shrink-0 text-[13px] text-ink-mute tabular-nums">
+        {dayjs(event.date).format('M/D')}
+        <span className="ml-1.5 text-[12px] text-ink-faint">
+          {dday === 0 ? '오늘' : `D-${dday}`}
+        </span>
+      </span>
+
+      {showDetail && event.detail && (
+        <div
+          role="tooltip"
+          className="absolute bottom-full left-5 z-20 mb-1 max-w-[280px] rounded-btn border border-white/[0.15] bg-navy-card px-3 py-2 text-[12px] leading-5 text-ink-body shadow-card"
+        >
+          {event.detail}
+        </div>
+      )}
+    </li>
+  );
 }
 
 export default function DashboardPage() {
@@ -34,64 +76,80 @@ export default function DashboardPage() {
   const { data: me } = meQuery;
   const summaryQuery = useLeaveSummary();
   const myLeavesQuery = useMyLeaves();
-  // size는 연차(useMyLeaves 기본 100)와 맞춘다 — 상태 필터가 없는 API라 클라이언트에서 세므로,
-  // 한 페이지에 안 들어오면 대기 건이 누락된다
+  // 상태 필터가 없는 목록은 한 페이지 안에서 세므로 기존 연차 조회 상한과 맞춘다.
   const myWelfareQuery = useMyWelfareRequests({ size: 100 });
-
-  // 캘린더는 이번 달을 조회하되, **월말에는 다음 달도 덧붙인다**. 이번 달만 보면 말일에 가까울수록
-  // "다가오는 일정"에 남는 항목이 줄어 마지막 날에는 사실상 비어 버린다 — 다음 달 일정이 없어서가
-  // 아니라 조회 범위 밖이라서다. 평소에는 두 번째 요청이 나가지 않는다(enabled=false).
-  const calendarQuery = useLeaveCalendar(TODAY_D.year(), TODAY_D.month() + 1);
-  const nextMonth = TODAY_D.add(1, 'month');
-  const nearMonthEnd = TODAY_D.daysInMonth() - TODAY_D.date() <= UPCOMING_LOOKAHEAD_DAYS;
-  const nextCalendarQuery = useLeaveCalendar(nextMonth.year(), nextMonth.month() + 1, {
-    enabled: nearMonthEnd,
-  });
+  // 현재 API에는 날짜 범위 필터가 없다. 넉넉한 한 페이지를 받고 날짜별로 펼친 뒤 정렬한다.
+  const mySchedulesQuery = useMySchedules({ size: 100 });
 
   const summary = summaryQuery.data;
   const myLeaves = myLeavesQuery.data?.content ?? [];
   const myWelfareRequests = myWelfareQuery.data?.content ?? [];
-  const calendarLeaves = useMemo(
-    () => [...(calendarQuery.data ?? []), ...(nextCalendarQuery.data ?? [])],
-    [calendarQuery.data, nextCalendarQuery.data],
+  // `?? []`는 매 렌더 새 배열을 만든다. 그대로 아래 useMemo의 의존성에 넣으면
+  // 참조가 항상 달라 메모가 매번 무효가 된다 — 이 화면은 카드가 많아 그 비용이 그냥 쌓인다.
+  const mySchedules = useMemo(
+    () => mySchedulesQuery.data?.content ?? [],
+    [mySchedulesQuery.data],
   );
-  // 공휴일 조회 실패는 화면을 막지 않는다 — 다가오는 일정에서 공휴일만 빠진다
-  const holidaysQuery = useHolidays(dayjs().year());
-  const holidays = useMemo(() => holidaysQuery.data ?? [], [holidaysQuery.data]);
 
-  // 다가오는 부재 일정 — 오늘 이후의 승인 연차(캘린더 API) + 공휴일(공휴일 API)을 날짜순으로 병합.
-  // 캘린더 API는 신청 건 단위(dates 배열 포함)라 날짜별 항목으로 펼쳐서(flatMap) 다룬다.
+  // 연말에 다음 해 첫 일정을 놓치지 않도록 올해와 다음 해 공휴일을 함께 받는다.
+  // 실패해도 개인 일정은 계속 표시돼야 하므로 data가 없으면 해당 연도만 빈 배열로 취급한다.
+  const holidayYear = TODAY_D.year();
+  const holidaysQuery = useHolidays(holidayYear);
+  const nextYearHolidaysQuery = useHolidays(holidayYear + 1);
+  const holidays = useMemo(
+    () => [...(holidaysQuery.data ?? []), ...(nextYearHolidaysQuery.data ?? [])],
+    [holidaysQuery.data, nextYearHolidaysQuery.data],
+  );
+
+  // 본인 개인 일정과 공휴일만 날짜별로 펼친다. 연차는 휴무 신청 내역과 성격이 달라 섞지 않는다.
   const upcomingEvents = useMemo(() => {
-    const leaveEvents = calendarLeaves.flatMap((leave) =>
-      leave.dates
+    const scheduleEvents = mySchedules.flatMap((schedule) =>
+      schedule.dates
         .filter((date) => date >= TODAY)
         .map((date) => ({
           date,
-          kind: 'leave',
-          label: leave.userName,
-          sub: LEAVE_TYPE_LABEL[leave.leaveType],
-          mine: leave.userId === me?.id,
+          kind: 'schedule',
+          label:
+            schedule.typeLabel ??
+            SCHEDULE_TYPE_LABEL[schedule.scheduleType] ??
+            schedule.scheduleType,
+          sub: '내 일정',
+          detail: schedule.memo,
+          id: schedule.id,
         })),
     );
-    const holidayEvents = holidays
-      .filter((h) => h.date >= TODAY)
-      .map((h) => ({ date: h.date, kind: 'holiday', label: h.name, sub: '공휴일', mine: false }));
-    return [...leaveEvents, ...holidayEvents].sort((a, b) => a.date.localeCompare(b.date));
-  }, [calendarLeaves, holidays, me?.id]);
 
-  // 내 신청 중 결재 대기 건수 — 관리자 결재함이 아니라 '내' 대기 건 (검증 F2)
-  // 신규 신청(PENDING)과 소급 취소 신청(CANCEL_PENDING) 모두 결재자 처리를 기다리는 건이라 합산.
-  //
-  // **연차와 복리후생을 함께 센다** — 사이드바 배지를 목록과 같은 기준으로 통일할 때(리뷰 F-8)
-  // 여기는 같이 고치지 못했다. 복리후생 API가 없던 시절의 주석이 남아 연차만 세고 있었고,
-  // 그래서 복리후생만 대기 중인 사람에게는 "내 결재 대기 0건"으로 보였다.
-  const isAwaitingApproval = (r) => r.status === 'PENDING' || r.status === 'CANCEL_PENDING';
+    const holidayEvents = holidays
+      .filter((holiday) => holiday.date >= TODAY)
+      .map((holiday) => ({
+        date: holiday.date,
+        kind: 'holiday',
+        label: holiday.name,
+        sub: '공휴일',
+        detail: null,
+        id: holiday.date,
+      }));
+
+    return [...scheduleEvents, ...holidayEvents]
+      .sort((left, right) => {
+        const dateOrder = left.date.localeCompare(right.date);
+        if (dateOrder !== 0) return dateOrder;
+        return left.kind.localeCompare(right.kind);
+      })
+      .slice(0, UPCOMING_EVENT_LIMIT);
+  }, [mySchedules, holidays]);
+
+  // 내 신청 중 결재 대기 건수 — 신규 신청과 소급 취소 신청을 모두 센다.
+  // 연차와 복리후생을 함께 세어 사이드바 및 실제 신청 목록과 기준을 맞춘다.
+  function isAwaitingApproval(request) {
+    return request.status === 'PENDING' || request.status === 'CANCEL_PENDING';
+  }
+
   const myPendingCount =
     myLeaves.filter(isAwaitingApproval).length +
     myWelfareRequests.filter(isAwaitingApproval).length;
 
-  // 실패를 로딩과 구분한다 — 아래 !summary 가드만 있으면 조회가 실패해도 계속 "불러오는 중"이
-  // 표시돼 스피너가 영원히 돈다 (리뷰 F-6).
+  // 실패를 로딩과 구분한다. 부가 카드 쿼리 실패는 인터셉터가 알리고 핵심 현황은 계속 보여준다.
   if (summaryQuery.isError || meQuery.isError) {
     return (
       <ErrorState
@@ -104,7 +162,6 @@ export default function DashboardPage() {
     );
   }
 
-  // 로딩 — 통계 계산에 필요한 요약·현재유저 데이터가 없으면 진행 중 표시
   if (!summary || !me) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-ink-mute">
@@ -114,20 +171,17 @@ export default function DashboardPage() {
     );
   }
 
-  // 소진 현황 게이지 — 총 부여(base+bonus) 대비 확정 사용 / 대기 선차감 비율
   const totalDays = Number(summary.baseDays) + Number(summary.bonusDays);
   const confirmedUsed = Number(summary.useDays) - Number(summary.pendingDays);
-  const usedPct = (confirmedUsed / totalDays) * 100;
-  const pendingPct = (Number(summary.pendingDays) / totalDays) * 100;
-  // 미사용 이월 없이 소멸되는 정책이라 "소멸 예정" = 잔여와 동일 (백엔드에 별도 필드 없음)
+  const usedPct = totalDays > 0 ? (confirmedUsed / totalDays) * 100 : 0;
+  const pendingPct = totalDays > 0 ? (Number(summary.pendingDays) / totalDays) * 100 : 0;
   const expiringDays = summary.remainingDays;
-
-  // 다음 기산일까지 남은 일수
-  const resetDday = summary.nextResetDate ? dayjs(summary.nextResetDate).diff(dayjs(TODAY), 'day') : null;
+  const resetDday = summary.nextResetDate
+    ? dayjs(summary.nextResetDate).diff(dayjs(TODAY), 'day')
+    : null;
 
   return (
     <div className="flex h-full flex-col">
-      {/* 헤더 — 공용 PageHeader 사용 (페이지 간 일관성) */}
       <PageHeader
         title="내 연차 현황"
         subtitle={`${dayjs(TODAY).format('YYYY년 M월 D일')} · ${me.departmentName ?? '미배정'} ${me.name}님`}
@@ -137,8 +191,6 @@ export default function DashboardPage() {
         </span>
       </PageHeader>
 
-      {/* 통계 스트립 + 빠른 신청 — 퀵액션은 실제 신청 플로우가 있는 페이지로 이동
-          (연차·반차는 캘린더의 신청 패널, 경조사는 복리후생 페이지) */}
       <div className="mb-5 flex items-end justify-between gap-6 border-b border-white/[0.12] pb-6">
         <StatStrip>
           <Stat label="잔여 연차" value={summary.remainingDays} unit="일" size="hero" />
@@ -148,9 +200,14 @@ export default function DashboardPage() {
             label="다음 기산일"
             value={resetDday !== null ? `D-${resetDday}` : '-'}
             tone={resetDday !== null ? 'text-warn' : undefined}
-            caption={summary.nextResetDate ? dayjs(summary.nextResetDate).format('M월 D일') : undefined}
+            caption={
+              summary.nextResetDate
+                ? dayjs(summary.nextResetDate).format('M월 D일')
+                : undefined
+            }
           />
         </StatStrip>
+
         <div className="flex items-center gap-2">
           <Button variant="primary" Icon={CalendarPlus} onClick={() => navigate('/calendar')}>
             연차·반차 신청
@@ -161,9 +218,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 본문 2단 — 좌: 최근 신청 내역 / 우: 소진 현황 + 다가오는 부재 (캘린더는 팀 캘린더 페이지 전담) */}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
-        {/* 최근 신청 내역 */}
         <Card
           title="최근 신청 내역"
           fill
@@ -181,24 +236,25 @@ export default function DashboardPage() {
             <p className="py-4 text-[12px] text-ink-faint">신청 내역이 없습니다.</p>
           ) : (
             <ul className="divide-y divide-white/[0.10]">
-              {myLeaves.map((r) => (
-                <li key={r.id} className="flex items-center justify-between gap-3 py-4">
+              {myLeaves.map((request) => (
+                <li key={request.id} className="flex items-center justify-between gap-3 py-4">
                   <div className="min-w-0">
                     <p className="truncate text-[15px] font-semibold text-ink-hi">
-                      {formatDates(r.dates)}
+                      {formatDates(request.dates)}
                       <span className="ml-2 text-[14px] font-medium text-ink-mute">
-                        {LEAVE_TYPE_LABEL[r.leaveType]}
+                        {LEAVE_TYPE_LABEL[request.leaveType]}
                       </span>
                     </p>
                     <p className="mt-1 truncate text-[13px] text-ink-mute">
-                      <span className="tabular-nums">{r.days}일</span> · {r.requestReason}
+                      <span className="tabular-nums">{request.days}일</span> ·{' '}
+                      {request.requestReason}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-[12px] text-ink-faint tabular-nums">
-                      신청 {dayjs(r.createdAt).format('M/D')}
+                      신청 {dayjs(request.createdAt).format('M/D')}
                     </span>
-                    <StatusBadge status={r.status} />
+                    <StatusBadge status={request.status} />
                   </div>
                 </li>
               ))}
@@ -206,56 +262,47 @@ export default function DashboardPage() {
           )}
         </Card>
 
-        {/* 우측 스택 */}
         <div className="flex min-h-0 flex-col gap-5">
-          {/* 연차 소진 현황 */}
           <Card title="연차 소진 현황">
-            {/* 게이지 — 사용(코발트 그라데이션) / 대기 선차감(주황) / 잔여(빈 트랙) */}
             <div className="flex h-3.5 overflow-hidden rounded-full border border-white/[0.10] bg-navy-app/60">
               <div className="bg-accent" style={{ width: `${usedPct}%` }} />
               <div className="bg-warn/80" style={{ width: `${pendingPct}%` }} />
             </div>
             <div className="mt-4 grid grid-cols-3 gap-2">
               <Stat swatch="bg-accent" label="사용" value={confirmedUsed} unit="일" />
-              <Stat swatch="bg-warn/80" label="대기 차감" value={summary.pendingDays} unit="일" />
-              <Stat swatch="bg-white/20" label="잔여" value={summary.remainingDays} unit="일" />
+              <Stat
+                swatch="bg-warn/80"
+                label="대기 차감"
+                value={summary.pendingDays}
+                unit="일"
+              />
+              <Stat
+                swatch="bg-white/20"
+                label="잔여"
+                value={summary.remainingDays}
+                unit="일"
+              />
             </div>
             <p className="mt-4 border-t border-white/[0.12] pt-3.5 text-center text-[12px] text-ink-mute">
               미사용분은 이월 없이 소멸됩니다.
             </p>
           </Card>
 
-          {/* 다가오는 부재 일정 */}
-          <Card title="다가오는 부재 일정" fill scroll>
+          <Card title="다가오는 내 일정" fill scroll>
             {upcomingEvents.length === 0 ? (
-              <p className="py-4 text-[12px] text-ink-faint">예정된 일정이 없습니다.</p>
+              <EmptyState
+                Icon={CalendarClock}
+                label="다가오는 개인 일정이나 공휴일이 없습니다."
+                className="py-8"
+              />
             ) : (
               <ul className="divide-y divide-white/[0.10]">
-                {upcomingEvents.map((ev) => {
-                  const dday = dayjs(ev.date).diff(dayjs(TODAY), 'day');
-                  return (
-                    <li key={`${ev.date}-${ev.kind}-${ev.label}`} className="flex items-center justify-between gap-3 py-3">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                            ev.kind === 'holiday' ? 'bg-danger/70' : ev.mine ? 'bg-accent' : 'bg-ok/80'
-                          }`}
-                        />
-                        <span className="truncate text-[14px] text-ink-body">
-                          {ev.label}
-                          {ev.mine && <span className="ml-1 text-[12px] text-accent-light">(나)</span>}
-                        </span>
-                        <span className="shrink-0 text-[12px] text-ink-faint">{ev.sub}</span>
-                      </div>
-                      <span className="shrink-0 text-[13px] text-ink-mute tabular-nums">
-                        {dayjs(ev.date).format('M/D')}
-                        <span className="ml-1.5 text-[12px] text-ink-faint">
-                          {dday === 0 ? '오늘' : `D-${dday}`}
-                        </span>
-                      </span>
-                    </li>
-                  );
-                })}
+                {upcomingEvents.map((event) => (
+                  <UpcomingEventItem
+                    key={`${event.date}-${event.kind}-${event.id}`}
+                    event={event}
+                  />
+                ))}
               </ul>
             )}
           </Card>
