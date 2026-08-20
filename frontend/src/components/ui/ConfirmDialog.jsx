@@ -14,6 +14,7 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
   loading = false,
+  confirmDisabled = false,
   children,
 }) {
   if (!open) return null;
@@ -31,6 +32,7 @@ export default function ConfirmDialog({
             variant={tone === 'danger' ? 'danger' : 'primary'}
             onClick={onConfirm}
             loading={loading}
+            disabled={loading || confirmDisabled}
             lift={false}
           >
             {confirmLabel}

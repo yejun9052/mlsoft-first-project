@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.user.controller;
 
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.DepartmentAssignRequest;
+import com.mlsoft.backend.domain.user.dto.RoleDepartmentUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.RoleUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserResponse;
@@ -120,6 +121,22 @@ public class UserController {
     ) {
         UserResponse response = userService.changeDepartment(id, request.departmentId(), authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_DEPARTMENT_UPDATED, response));
+    }
+
+    /**
+     * 역할·부서 동시 변경 — 미배정 사원의 팀장 승격에서 부분 성공을 막는다.
+     * 기존 역할·부서 개별 엔드포인트는 독립 변경 화면이 계속 사용하므로 유지한다.
+     */
+    @PatchMapping("/{id}/role-and-department")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<UserResponse>> changeRoleAndDepartment(
+            @PathVariable Long id,
+            @Valid @RequestBody RoleDepartmentUpdateRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        UserResponse response = userService.changeRoleAndDepartment(
+                id, request.role(), request.departmentId(), authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_ROLE_UPDATED, response));
     }
 
     /** 연차 직접 설정 */

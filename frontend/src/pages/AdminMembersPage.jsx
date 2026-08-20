@@ -14,6 +14,8 @@ import StatusBadge from '../components/ui/StatusBadge.jsx';
 import InlineSelect from '../components/ui/InlineSelect.jsx';
 import IconButton from '../components/ui/IconButton.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import Field from '../components/ui/Field.jsx';
+import Select from '../components/ui/Select.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
 import {
   useRestoreUser,
@@ -21,6 +23,7 @@ import {
   useRetireUser,
   useUpdateUserDepartment,
   useUpdateUserRole,
+  useUpdateUserRoleAndDepartment,
   useUsers,
 } from '../hooks/useUsers.js';
 import { useDepartments } from '../hooks/useDepartments.js';
@@ -159,6 +162,7 @@ export default function AdminMembersPage() {
 
   const updateRoleMutation = useUpdateUserRole();
   const updateDepartmentMutation = useUpdateUserDepartment();
+  const updateRoleAndDepartmentMutation = useUpdateUserRoleAndDepartment();
   const retireMutation = useRetireUser();
   const restoreMutation = useRestoreUser();
 
@@ -197,17 +201,13 @@ export default function AdminMembersPage() {
   function handleRoleChange(user, nextRole) {
     if (nextRole === user.role) return;
 
-    // 팀장은 "어느 부서의" 팀장이므로 부서가 없으면 앉힐 자리가 없다. 서버도 같은 이유로 거부하지만
-    // (DEPARTMENT_REQUIRED_FOR_LEADER) 확인 창까지 띄웠다가 오류를 보여 주는 것은 헛걸음이다
-    if (nextRole === ROLE.TEAM_LEADER && !user.departmentId) {
-      toast.error(`${user.name}님은 부서가 없습니다. 부서를 먼저 배정한 뒤 팀장으로 지정해 주세요.`);
-      return;
-    }
-
     const department = activeDepartments.find((d) => d.id === user.departmentId);
     setRoleTarget({
       user,
       nextRole,
+      // 미배정 팀장 승격만 확인 창에서 부서를 함께 받는다. 이미 부서가 있으면 기존 경로를 그대로 쓴다.
+      needsDepartment: nextRole === ROLE.TEAM_LEADER && !user.departmentId,
+      departmentId: user.departmentId ? String(user.departmentId) : '',
       // 본인 강등만 특별하다. 총관리자를 유지하는 변경은 잠기지 않으므로 자기 자신이어도 일반 문구다
       isSelf: currentUser?.id === user.id && nextRole !== ROLE.SYSTEM_ADMIN,
       departmentName: department?.name ?? user.departmentName,
@@ -217,20 +217,47 @@ export default function AdminMembersPage() {
     });
   }
 
+  function handleRoleDepartmentChange(departmentId) {
+    const department = activeDepartments.find((d) => d.id === Number(departmentId));
+    setRoleTarget((target) => ({
+      ...target,
+      departmentId,
+      departmentName: department?.name,
+      currentLeaderName:
+        department?.leaderId && department.leaderId !== target.user.id
+          ? department.leaderName
+          : null,
+    }));
+  }
+
   function handleRoleConfirm() {
     if (!roleTarget) return;
-    const { user, nextRole } = roleTarget;
+    const { user, nextRole, needsDepartment, departmentId } = roleTarget;
+    if (needsDepartment && !departmentId) return;
+
     setRoleTarget(null);
     setPendingEdit({ id: user.id, field: 'role', value: nextRole });
-    updateRoleMutation.mutate(
-      { id: user.id, role: nextRole },
-      {
-        onSuccess: () =>
-          toast.success(`${user.name}님의 역할을 ${ROLE_LABEL[nextRole]}(으)로 변경했습니다.`),
-        // 성공이든 실패든 표시를 거둔다 — 실패하면 서버 값이 그대로라 옛 역할로 되돌아간다
-        onSettled: () => setPendingEdit(null),
-      },
-    );
+
+    const options = {
+      onSuccess: () =>
+        toast.success(`${user.name}님의 역할을 ${ROLE_LABEL[nextRole]}(으)로 변경했습니다.`),
+      // 성공이든 실패든 표시를 거둔다 — 실패하면 서버 값이 그대로라 옛 역할로 되돌아간다
+      onSettled: () => setPendingEdit(null),
+    };
+
+    if (needsDepartment) {
+      updateRoleAndDepartmentMutation.mutate(
+        {
+          id: user.id,
+          role: nextRole,
+          departmentId: Number(departmentId),
+        },
+        options,
+      );
+      return;
+    }
+
+    updateRoleMutation.mutate({ id: user.id, role: nextRole }, options);
   }
 
   function handleDeptChange(user, nextDepartmentId) {
@@ -574,17 +601,46 @@ export default function AdminMembersPage() {
         onCancel={() => setOnboardingTarget(null)}
       />
 
-      {/* 역할 변경 확인 — 세 방향 모두 조용히 넘어가면 안 되는 결과가 딸려 온다 (roleChangeNotice) */}
+      {/* 역할 변경 확인 — 미배정 팀장 승격은 부분 성공을 막기 위해 부서까지 한 번에 받는다 */}
       <ConfirmDialog
         open={Boolean(roleTarget)}
         title={roleTarget ? roleChangeNotice(roleTarget).title : ''}
-        message={roleTarget ? roleChangeNotice(roleTarget).body : ''}
+        message={
+          roleTarget?.needsDepartment && !roleTarget.departmentId
+            ? `${roleTarget.user.name}님을 팀장으로 지정할 부서를 먼저 선택해 주세요.`
+            : roleTarget
+              ? roleChangeNotice(roleTarget).body
+              : ''
+        }
         tone={roleTarget ? roleChangeNotice(roleTarget).tone : 'default'}
         confirmLabel={`${roleTarget ? ROLE_LABEL[roleTarget.nextRole] : ''}(으)로 변경`}
-        loading={updateRoleMutation.isPending}
+        loading={updateRoleMutation.isPending || updateRoleAndDepartmentMutation.isPending}
+        confirmDisabled={Boolean(roleTarget?.needsDepartment && !roleTarget.departmentId)}
         onConfirm={handleRoleConfirm}
         onCancel={() => setRoleTarget(null)}
-      />
+      >
+        {roleTarget?.needsDepartment && (
+          <Field
+            className="mt-4"
+            label="팀장으로 지정할 부서"
+            required
+            hint="부서 배정과 팀장 승격이 서버에서 한 번에 처리됩니다."
+          >
+            <Select
+              aria-label={`${roleTarget.user.name}님의 팀장 부서`}
+              value={roleTarget.departmentId}
+              onChange={(event) => handleRoleDepartmentChange(event.target.value)}
+            >
+              <option value="">부서를 선택해 주세요</option>
+              {orderByHierarchy(activeDepartments).map((department) => (
+                <option key={department.id} value={department.id}>
+                  {departmentOptionLabel(department)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+      </ConfirmDialog>
 
       {/* 퇴직 복구 확인 — 되살아나지 않는 것을 반드시 적는다.
           "퇴직을 취소한다"고만 쓰면 관리자는 팀장직과 결재까지 되돌아온다고 읽는다 */}

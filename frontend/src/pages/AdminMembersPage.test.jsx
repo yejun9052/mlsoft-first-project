@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import toast from 'react-hot-toast';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import AdminMembersPage from './AdminMembersPage.jsx';
 import {
   useRestoreUser,
@@ -8,6 +8,7 @@ import {
   useRetireUser,
   useUpdateUserDepartment,
   useUpdateUserRole,
+  useUpdateUserRoleAndDepartment,
   useUsers,
 } from '../hooks/useUsers.js';
 import { useDepartments } from '../hooks/useDepartments.js';
@@ -28,6 +29,7 @@ vi.mock('../hooks/useUsers.js', () => ({
   useRetireUser: vi.fn(),
   useUpdateUserDepartment: vi.fn(),
   useUpdateUserRole: vi.fn(),
+  useUpdateUserRoleAndDepartment: vi.fn(),
   useUsers: vi.fn(),
 }));
 
@@ -42,11 +44,13 @@ vi.mock('../hooks/useAuth.js', () => ({
 
 const roleMutate = vi.fn();
 const deptMutate = vi.fn();
+const roleAndDepartmentMutate = vi.fn();
 const restoreMutate = vi.fn();
 
-const 개발팀 = { id: 1, name: '개발팀', active: true };
-const 디자인팀 = { id: 2, name: '디자인팀', active: true };
-const 폐지된팀 = { id: 9, name: '폐지된팀', active: false };
+const 개발팀 = { id: 1, name: '개발팀', parentId: null, active: true };
+const 디자인팀 = { id: 2, name: '디자인팀', parentId: null, active: true };
+const 개발1팀 = { id: 3, name: '개발1팀', parentId: 1, active: true };
+const 폐지된팀 = { id: 9, name: '폐지된팀', parentId: null, active: false };
 
 const 나 = {
   id: 100,
@@ -72,9 +76,19 @@ function renderPage(rows = [나, 남], departments = [개발팀, 디자인팀], 
   useRejectOnboarding.mockReturnValue({ mutate: vi.fn(), isPending: false });
   useUpdateUserRole.mockReturnValue({ mutate: roleMutate, isPending: false });
   useUpdateUserDepartment.mockReturnValue({ mutate: deptMutate, isPending: false });
+  useUpdateUserRoleAndDepartment.mockReturnValue({
+    mutate: roleAndDepartmentMutate,
+    isPending: false,
+  });
   useRetireUser.mockReturnValue({ mutate: vi.fn(), isPending: false });
   useCurrentUser.mockReturnValue({ data: { id: 나.id } });
-  return render(<AdminMembersPage />);
+
+  // 앱이 데이터 라우터를 사용하므로 실제 라우팅 컨텍스트와 같은 방식으로 렌더한다.
+  const router = createMemoryRouter(
+    [{ path: '/', element: <AdminMembersPage /> }],
+    { initialEntries: ['/'] },
+  );
+  return render(<RouterProvider router={router} />);
 }
 
 /** 라벨은 InlineSelect가 aria-label로 내려 준다 — 행마다 이름이 붙어 유일하다 */
@@ -105,18 +119,67 @@ describe('AdminMembersPage 표에서 바로 고치기', () => {
     expect(screen.getByText(/개발팀의 연차·복리후생 신청이 기본으로 박준호님에게 갑니다/)).toBeInTheDocument();
   });
 
-  // 팀장 지정은 그 부서 결재선을 바꾸는 조작이다. 앉힐 자리(부서)가 없으면 서버도 거부하므로
-  // 확인 창까지 띄웠다가 오류를 보여 주는 것은 헛걸음이다
-  it('부서가 없는 사원은 팀장으로 올릴 수 없다 — 확인 창도 뜨지 않는다', () => {
+  it('부서가 있는 사원을 팀장으로 올리면 부서 선택이 나타나지 않는다', () => {
+    renderPage();
+
+    fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
+
+    expect(screen.queryByLabelText('박준호님의 팀장 부서')).not.toBeInTheDocument();
+    expect(screen.getByText(/박준호님을 개발팀 팀장으로 정말 지정하시겠습니까/)).toBeInTheDocument();
+  });
+
+  it('부서가 없는 사원은 확인 창에서 부서를 고르기 전 진행할 수 없다', () => {
     const 미배정 = { ...남, departmentId: null, departmentName: null };
     renderPage([나, 미배정]);
 
     fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
 
+    expect(screen.getByLabelText('박준호님의 팀장 부서')).toHaveValue('');
+    expect(screen.getByRole('button', { name: '팀장(으)로 변경' })).toBeDisabled();
     expect(roleMutate).not.toHaveBeenCalled();
-    expect(screen.queryByText(/정말 지정하시겠습니까/)).not.toBeInTheDocument();
-    // 막기만 하고 아무 말도 안 하면 관리자는 클릭이 먹히지 않는 것으로 본다
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('부서를 먼저 배정'));
+    expect(roleAndDepartmentMutate).not.toHaveBeenCalled();
+  });
+
+  it('미배정 사원의 부서를 골라 확정하면 새 엔드포인트 뮤테이션만 한 번 호출한다', () => {
+    const 미배정 = { ...남, departmentId: null, departmentName: null };
+    renderPage([나, 미배정]);
+
+    fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
+    fireEvent.change(screen.getByLabelText('박준호님의 팀장 부서'), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '팀장(으)로 변경' }));
+
+    expect(roleAndDepartmentMutate).toHaveBeenCalledTimes(1);
+    expect(roleAndDepartmentMutate).toHaveBeenCalledWith(
+      {
+        id: 200,
+        role: 'TEAM_LEADER',
+        departmentId: 2,
+      },
+      expect.anything(),
+    );
+    expect(roleMutate).not.toHaveBeenCalled();
+    expect(deptMutate).not.toHaveBeenCalled();
+  });
+
+  it('미배정 승격의 부서 선택지는 상위 부서 바로 뒤에 하위 부서가 온다', () => {
+    const 미배정 = { ...남, departmentId: null, departmentName: null };
+    // API 원본 순서에서는 개발1팀이 디자인팀 뒤지만 화면은 계층 순서로 재배열해야 한다.
+    renderPage([나, 미배정], [개발팀, 디자인팀, 개발1팀]);
+
+    fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
+
+    const optionLabels = Array.from(
+      screen.getByLabelText('박준호님의 팀장 부서').options,
+      (option) => option.textContent,
+    );
+    expect(optionLabels).toEqual([
+      '부서를 선택해 주세요',
+      '개발팀',
+      '  ↳ 개발1팀',
+      '디자인팀',
+    ]);
   });
 
   // 부서당 팀장은 1명이라 기존 팀장이 내려간다. 그 사실을 안 적으면 관리자는 남을 강등시킨 줄 모른다

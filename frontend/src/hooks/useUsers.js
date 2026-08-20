@@ -11,6 +11,7 @@ import {
   updateUserBaseDays,
   updateUserDepartment,
   updateUserRole,
+  updateUserRoleAndDepartment,
 } from '../api/users.js';
 
 // 쿼리 키 규칙: ['users', 서브리소스, ...파라미터]. 접두사(['users'])로 invalidate하면
@@ -101,6 +102,22 @@ export function useUpdateUserDepartment() {
   return useMutation({
     mutationFn: ({ id, departmentId }) => updateUserDepartment(id, { departmentId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+// 역할·부서 동시 변경 뮤테이션 — 팀장 교체는 사용자와 부서 결재선,
+// 기존 팀장의 대기 결재를 함께 바꿀 수 있어 관련 캐시를 전부 새로 받는다.
+export function useUpdateUserRoleAndDepartment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role, departmentId }) =>
+      updateUserRoleAndDepartment(id, { role, departmentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      queryClient.invalidateQueries({ queryKey: ['leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['welfare'] });
+    },
   });
 }
 

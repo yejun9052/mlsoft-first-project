@@ -266,6 +266,30 @@ public class UserService {
         return UserResponse.of(target);
     }
 
+    /**
+     * 역할·부서 동시 변경
+     * (PATCH /api/users/{id}/role-and-department, SA).
+     *
+     * <p>미배정 사원을 팀장으로 올릴 때 기존 API를 두 번 호출하면 부서만 반영되는
+     * 부분 성공을 막을 수 없다. 이 진입점의 트랜잭션이 두 기존 메서드와 감사 기록을
+     * 함께 감싸므로, 역할 변경이 실패하면 먼저 수행한 부서 변경도 롤백된다.
+     *
+     * <p>순서는 의도적으로 부서 변경이 먼저다. {@link #changeRole}의
+     * {@code DEPARTMENT_REQUIRED_FOR_LEADER} 가드는 마지막 그물로 그대로 두고,
+     * 팀장 교체·기존 팀장 강등·대기 결재 이관은 {@link #assignDepartmentLeader}가
+     * 가진 기존 규칙을 그대로 재사용한다.
+     */
+    @Transactional
+    public UserResponse changeRoleAndDepartment(
+            Long targetId,
+            Role role,
+            Long departmentId,
+            Long actorId
+    ) {
+        changeDepartment(targetId, departmentId, actorId);
+        return changeRole(targetId, role, actorId);
+    }
+
     /** 부서 미배정도 감사 기록에서는 값으로 남아야 한다 — 빈칸이면 무엇에서 바뀌었는지 알 수 없다 */
     private String departmentLabel(Department department) {
         return department == null ? "미배정" : department.getName();

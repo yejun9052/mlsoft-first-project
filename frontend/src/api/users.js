@@ -51,6 +51,13 @@ export async function updateUserDepartment(id, { departmentId }) {
   return res.data.data;
 }
 
+// 역할·부서 동시 변경 — 미배정 사원의 팀장 승격에서 부분 성공을 막는다
+// (PATCH /api/users/{id}/role-and-department, SYSTEM_ADMIN 전용)
+export async function updateUserRoleAndDepartment(id, { role, departmentId }) {
+  const res = await api.patch(`/users/${id}/role-and-department`, { role, departmentId });
+  return res.data.data;
+}
+
 // 연차 기본일수 직접 설정 — SYSTEM_ADMIN 전용, 과거 데이터 정정 목적 (PATCH /api/users/{id}/base-days)
 export async function updateUserBaseDays(id, { baseDays }) {
   const res = await api.patch(`/users/${id}/base-days`, { baseDays });

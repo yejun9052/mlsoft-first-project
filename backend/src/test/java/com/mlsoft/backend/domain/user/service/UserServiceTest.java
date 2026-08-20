@@ -297,6 +297,56 @@ class UserServiceTest {
     // SYSTEM_ADMIN fallback으로 갔다. 같은 단어를 쓰는 두 값이 따로 놀았던 것이 원인이다.
 
     @Test
+    @DisplayName("역할·부서 동시 변경 — 부서 배정과 팀장 승격을 모두 반영한다")
+    void changeRoleAndDepartment_둘다반영() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
+
+        userService.changeRoleAndDepartment(1L, Role.TEAM_LEADER, 10L, ACTOR_ID);
+
+        assertEquals(department, target.getDepartment());
+        assertEquals(target, department.getLeader());
+        assertEquals(Role.TEAM_LEADER, target.getRole());
+    }
+
+    @Test
+    @DisplayName("역할·부서 동시 변경 — 기존 팀장은 사원으로 내려가고 새 팀장이 자리를 받는다")
+    void changeRoleAndDepartment_기존팀장강등() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User previous = activeUser(2L, Role.TEAM_LEADER);
+        previous.assignDepartment(department);
+        department.assignLeader(previous);
+
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
+
+        userService.changeRoleAndDepartment(1L, Role.TEAM_LEADER, 10L, ACTOR_ID);
+
+        assertEquals(target, department.getLeader());
+        assertEquals(Role.EMPLOYEE, previous.getRole());
+        assertEquals(Role.TEAM_LEADER, target.getRole());
+    }
+
+    @Test
+    @DisplayName("역할·부서 동시 변경 — 부서 변경과 역할 변경 감사가 각각 남는다")
+    void changeRoleAndDepartment_감사두건() {
+        Department department = Department.create("개발1팀", "설명", null);
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(department));
+
+        userService.changeRoleAndDepartment(1L, Role.TEAM_LEADER, 10L, ACTOR_ID);
+
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.DEPARTMENT_CHANGED, target, "미배정", "개발1팀");
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.ROLE_CHANGED, target, "사원", "팀장");
+    }
+
+    @Test
     @DisplayName("팀장 승격 — 소속 부서의 팀장 자리까지 함께 채운다")
     void changeRole_팀장승격_부서팀장까지지정() {
         Department department = Department.create("개발1팀", "설명", null);
