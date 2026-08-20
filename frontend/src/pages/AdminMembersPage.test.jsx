@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import AdminMembersPage from './AdminMembersPage.jsx';
 import {
@@ -47,10 +47,11 @@ const deptMutate = vi.fn();
 const roleAndDepartmentMutate = vi.fn();
 const restoreMutate = vi.fn();
 
-const 개발팀 = { id: 1, name: '개발팀', parentId: null, active: true };
-const 디자인팀 = { id: 2, name: '디자인팀', parentId: null, active: true };
-const 개발1팀 = { id: 3, name: '개발1팀', parentId: 1, active: true };
-const 폐지된팀 = { id: 9, name: '폐지된팀', parentId: null, active: false };
+const 개발팀 = { id: 1, name: '개발팀', parentId: null, active: true, unassigned: false };
+const 디자인팀 = { id: 2, name: '디자인팀', parentId: null, active: true, unassigned: false };
+const 개발1팀 = { id: 3, name: '개발1팀', parentId: 1, active: true, unassigned: false };
+const 미배정부서 = { id: 4, name: '표시 이름은 식별자가 아님', parentId: null, active: true, unassigned: true };
+const 폐지된팀 = { id: 9, name: '폐지된팀', parentId: null, active: false, unassigned: false };
 
 const 나 = {
   id: 100,
@@ -182,6 +183,35 @@ describe('AdminMembersPage 표에서 바로 고치기', () => {
     ]);
   });
 
+  it('실제 미배정 부서 소속도 팀장 승격 전에 새 부서를 고르게 한다', () => {
+    const 미배정소속 = {
+      ...남,
+      departmentId: 미배정부서.id,
+      departmentName: 미배정부서.name,
+    };
+    renderPage([나, 미배정소속], [개발팀, 디자인팀, 미배정부서]);
+
+    fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
+
+    expect(screen.getByLabelText('박준호님의 팀장 부서')).toHaveValue('');
+    expect(screen.getByRole('button', { name: '팀장(으)로 변경' })).toBeDisabled();
+  });
+
+  it('팀장 승격 부서 선택지에서는 미배정 플래그가 있는 부서를 제외한다', () => {
+    const 미배정소속 = {
+      ...남,
+      departmentId: 미배정부서.id,
+      departmentName: 미배정부서.name,
+    };
+    renderPage([나, 미배정소속], [개발팀, 디자인팀, 미배정부서]);
+
+    fireEvent.change(역할셀렉트('박준호'), { target: { value: 'TEAM_LEADER' } });
+
+    const select = screen.getByLabelText('박준호님의 팀장 부서');
+    expect(within(select).queryByRole('option', { name: 미배정부서.name })).not.toBeInTheDocument();
+    expect(within(select).getByRole('option', { name: '개발팀' })).toBeInTheDocument();
+  });
+
   // 부서당 팀장은 1명이라 기존 팀장이 내려간다. 그 사실을 안 적으면 관리자는 남을 강등시킨 줄 모른다
   it('이미 팀장이 있는 부서면 누가 내려가는지 이름까지 알린다', () => {
     const 팀장있는개발팀 = { ...개발팀, leaderId: 500, leaderName: '김도현' };
@@ -281,6 +311,12 @@ describe('AdminMembersPage 퇴직 복구', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:00:00+09:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   /**
@@ -297,6 +333,20 @@ describe('AdminMembersPage 퇴직 복구', () => {
     퇴직탭();
 
     expect(screen.getByRole('button', { name: '퇴직 복구' })).toBeInTheDocument();
+  });
+
+  // 경과일수는 "오늘"에 의존한다. 고정하지 않으면 **내일 이 검증이 깨진다** —
+  // Codex 초안이 109일을 그대로 박아 뒀다(2026-08-20 기준).
+  it('퇴직일과 오늘 사이의 경과일수를 함께 보여준다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T09:00:00+09:00'));
+    try {
+      퇴직탭([{ ...퇴직자, retiredAt: '2026-05-03' }]);
+
+      expect(screen.getByText('2026-05-03 (109일 전)')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // 복구는 퇴직의 완전한 역연산이 아니다. "퇴직을 취소한다"고만 읽으면 관리자는 팀장직과

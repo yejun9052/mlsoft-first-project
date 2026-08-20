@@ -59,7 +59,7 @@ export default function MySchedulesTable() {
       <TableCard
         loading={query.isLoading}
         empty={schedules.length === 0}
-        emptyLabel="등록한 개인 일정이 없습니다. 팀 캘린더에서 날짜를 클릭해 등록하세요."
+        emptyLabel="등록한 개인 일정이 없습니다. 캘린더에서 날짜를 클릭해 등록하세요."
         error={query.isError}
         errorLabel="일정을 불러오지 못했습니다."
         onRetry={query.refetch}

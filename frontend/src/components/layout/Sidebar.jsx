@@ -25,7 +25,7 @@ import BrandMark from '../ui/BrandMark.jsx';
 // MENU 섹션 (전 직원 공통 6개)
 const MENU_ITEMS = [
   { to: '/dashboard', label: '대시보드', Icon: LayoutDashboard },
-  { to: '/calendar', label: '팀 캘린더', Icon: CalendarDays },
+  { to: '/calendar', label: '캘린더', Icon: CalendarDays },
   { to: '/history', label: '사용 내역', Icon: History },
   { to: '/welfare', label: '복리후생', Icon: Gift },
   { to: '/team', label: '팀 정보', Icon: Users },

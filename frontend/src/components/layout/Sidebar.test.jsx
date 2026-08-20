@@ -86,6 +86,24 @@ afterEach(() => {
   localStorage.clear();
 });
 
+describe('Sidebar 사용자 표시 라벨', () => {
+  it('캘린더 메뉴를 팀 한정 표현 없이 표시한다', async () => {
+    me.mockResolvedValue({
+      name: '사원',
+      role: 'EMPLOYEE',
+      onboarded: true,
+    });
+
+    renderSidebar();
+
+    expect(await screen.findByRole('link', { name: '캘린더' })).toHaveAttribute(
+      'href',
+      '/calendar',
+    );
+    expect(screen.queryByRole('link', { name: '팀 캘린더' })).not.toBeInTheDocument();
+  });
+});
+
 describe('Sidebar 결재 배지 — 결재 화면 목록과 같은 기준 (리뷰 F-8)', () => {
   it('관리자 배지는 연차와 복리후생 대기 건수의 합계다', async () => {
     me.mockResolvedValue({

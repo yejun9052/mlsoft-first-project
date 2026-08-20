@@ -118,7 +118,7 @@ describe('Layout 모바일 서랍', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
     const drawer = screen.getByRole('dialog', { name: '전체 메뉴' });
-    fireEvent.click(within(drawer).getByRole('link', { name: '팀 캘린더' }));
+    fireEvent.click(within(drawer).getByRole('link', { name: '캘린더' }));
 
     expect(await screen.findByText('캘린더 화면')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '전체 메뉴' })).not.toBeInTheDocument();

@@ -12,6 +12,7 @@ import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import Button from '../components/ui/Button.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import ErrorState from '../components/ui/ErrorState.jsx';
 import Field from '../components/ui/Field.jsx';
 import Textarea from '../components/ui/Textarea.jsx';
@@ -58,15 +59,27 @@ function formatPeriod(dates) {
   return `${start} ~ ${dayjs(dates[dates.length - 1]).format('M.D')}`;
 }
 
-// 사유 셀 — truncate + hover 시 전문을 툴팁으로 노출 (한 줄 요약은 유지하되 전문 확인 수단 제공)
-function ReasonCell({ reason }) {
+// 현재 셀 폭에서 한글 한 줄을 안정적으로 유지하는 상한이다.
+// 이 기준을 넘은 사유만 상세 동작을 제공해 짧은 문장을 가짜 버튼으로 만들지 않는다.
+const REASON_PREVIEW_LENGTH = 20;
+
+function ReasonCell({ reason, onOpen }) {
+  const text = reason ?? '';
+  const truncated = text.length > REASON_PREVIEW_LENGTH;
+
+  if (!truncated) {
+    return <span>{text || '-'}</span>;
+  }
+
   return (
-    <span className="group relative inline-block max-w-[220px] truncate align-bottom">
-      {reason}
-      <span className="glass-strong pointer-events-none absolute left-0 top-full z-10 mt-1.5 hidden w-max max-w-xs rounded-btn border border-white/[0.12] px-3 py-2 text-[12px] leading-relaxed text-ink-body opacity-0 shadow-card transition-opacity group-hover:block group-hover:opacity-100">
-        {reason}
-      </span>
-    </span>
+    <button
+      type="button"
+      aria-label={`사유 상세 보기: ${text}`}
+      onClick={() => onOpen(text)}
+      className="inline-block max-w-[220px] truncate align-bottom text-left text-accent-light underline decoration-accent/40 underline-offset-2 transition-colors hover:text-ink-hi"
+    >
+      {text.slice(0, REASON_PREVIEW_LENGTH)}…
+    </button>
   );
 }
 
@@ -85,6 +98,7 @@ export default function HistoryPage() {
   // 취소 확인 다이얼로그 — 클릭한 건 하나만 담는다
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [reasonDetail, setReasonDetail] = useState(null);
 
   function openCancel(request) {
     setCancelTarget(request);
@@ -263,7 +277,7 @@ export default function HistoryPage() {
                   {req.days}일
                 </Td>
                 <Td className="text-ink-mute">
-                  <ReasonCell reason={req.requestReason} />
+                  <ReasonCell reason={req.requestReason} onOpen={setReasonDetail} />
                 </Td>
                 <Td>
                   <StatusBadge status={req.status} />
@@ -293,6 +307,14 @@ export default function HistoryPage() {
         />
       </TableCard>
         </>
+      )}
+
+      {reasonDetail && (
+        <Modal title="신청 사유" onClose={() => setReasonDetail(null)} maxWidth={520}>
+          <p className="whitespace-pre-wrap break-words text-[14px] leading-6 text-ink-body">
+            {reasonDetail}
+          </p>
+        </Modal>
       )}
 
       {/* 취소 확인 — 사유는 필수다(서버 CancelRequest도 필수). 승인된 건은 지난 날짜가 섞였는지에 따라

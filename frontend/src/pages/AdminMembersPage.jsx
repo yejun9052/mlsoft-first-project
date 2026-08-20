@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import { Search, UserMinus, UserCheck, Check, X } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
@@ -58,6 +59,13 @@ const ROLE_OPTIONS = [ROLE.EMPLOYEE, ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN];
 // 역할 배지·셀렉트의 색 — 사원만 무채색, 권한이 있는 둘은 강조색 (기존 StatusBadge 규칙 유지)
 function roleTone(role) {
   return role === ROLE.EMPLOYEE ? 'muted' : 'accent';
+}
+
+// 퇴직일 원문은 유지하고 경과일만 덧붙인다 — 날짜 자체를 상대 표현으로 바꾸면 감사 시점을 잃는다.
+function formatRetiredAt(retiredAt) {
+  if (!retiredAt) return '-';
+  const elapsedDays = Math.max(0, dayjs().startOf('day').diff(dayjs(retiredAt), 'day'));
+  return `${retiredAt} (${elapsedDays}일 전)`;
 }
 
 /**
@@ -188,6 +196,8 @@ export default function AdminMembersPage() {
   const listError = tab === TAB_ACTIVE ? activeQuery.isError : retiredQuery.isError;
   const retryList = tab === TAB_ACTIVE ? activeQuery.refetch : retiredQuery.refetch;
   const activeDepartments = (departmentsQuery.data ?? []).filter((d) => d.active);
+  // 미배정 부서에는 팀장을 둘 수 없다 — 이 목록이 승격 확인 창의 유일한 후보 출처다.
+  const leaderAssignableDepartments = activeDepartments.filter((d) => !d.unassigned);
 
   // 저장 중인 셀만 그 값을 보여주고, 나머지는 서버 목록 값을 그대로 쓴다
   function cellValue(user, field, serverValue) {
@@ -202,12 +212,14 @@ export default function AdminMembersPage() {
     if (nextRole === user.role) return;
 
     const department = activeDepartments.find((d) => d.id === user.departmentId);
+    const needsDepartment =
+      nextRole === ROLE.TEAM_LEADER && (!user.departmentId || department?.unassigned === true);
     setRoleTarget({
       user,
       nextRole,
-      // 미배정 팀장 승격만 확인 창에서 부서를 함께 받는다. 이미 부서가 있으면 기존 경로를 그대로 쓴다.
-      needsDepartment: nextRole === ROLE.TEAM_LEADER && !user.departmentId,
-      departmentId: user.departmentId ? String(user.departmentId) : '',
+      // 미배정 여부는 서버가 내려준 부서 플래그로 판단한다 — 이름은 관리자가 바꿀 수 있어 식별자가 아니다.
+      needsDepartment,
+      departmentId: needsDepartment ? '' : String(user.departmentId),
       // 본인 강등만 특별하다. 총관리자를 유지하는 변경은 잠기지 않으므로 자기 자신이어도 일반 문구다
       isSelf: currentUser?.id === user.id && nextRole !== ROLE.SYSTEM_ADMIN,
       departmentName: department?.name ?? user.departmentName,
@@ -557,7 +569,7 @@ export default function AdminMembersPage() {
                   </Td>
                 ) : (
                   <>
-                    <Td className="text-ink-mute">{m.retiredAt}</Td>
+                    <Td className="text-ink-mute">{formatRetiredAt(m.retiredAt)}</Td>
                     <Td right>
                       <div className="flex items-center justify-end">
                         {/* 복구는 되살리는 조작이라 accent(시안)다 — 퇴직 처리의 danger와 방향이 반대인 것이
@@ -632,7 +644,7 @@ export default function AdminMembersPage() {
               onChange={(event) => handleRoleDepartmentChange(event.target.value)}
             >
               <option value="">부서를 선택해 주세요</option>
-              {orderByHierarchy(activeDepartments).map((department) => (
+              {orderByHierarchy(leaderAssignableDepartments).map((department) => (
                 <option key={department.id} value={department.id}>
                   {departmentOptionLabel(department)}
                 </option>

@@ -89,6 +89,31 @@ describe('CalendarPage 하루 상세 모달', () => {
     });
   });
 
+  it('페이지 제목은 캘린더로 표시한다', () => {
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: '캘린더' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '팀 캘린더' })).not.toBeInTheDocument();
+  });
+
+  it('강조된 이전·다음 달 버튼으로 연도 경계를 포함해 월을 이동한다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-20T12:00:00+09:00'));
+
+    renderPage();
+
+    expect(screen.getByText('2026년 1월')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '이전 달' }));
+    expect(screen.getByText('2025년 12월')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '다음 달' }));
+    fireEvent.click(screen.getByRole('button', { name: '다음 달' }));
+    expect(screen.getByText('2026년 2월')).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
   it('셀 표시 상한을 넘으면 초과 항목 수 손잡이가 보인다', () => {
     renderPage();
 

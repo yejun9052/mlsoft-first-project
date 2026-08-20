@@ -103,7 +103,7 @@ function CalendarDayDetail({ detail, onClose }) {
   );
 }
 
-// 팀 캘린더 — 회사 전체 연차·개인 일정·공휴일을 큰 월간 그리드로 조회 (docs/05 §②·§2-5b)
+// 캘린더 — 회사 전체 연차·개인 일정·공휴일을 큰 월간 그리드로 조회 (docs/05 §②·§2-5b)
 // 날짜 셀을 클릭하면 드래그 가능한 등록 패널이 떠서, 캘린더를 보면서 날짜를 담아 등록한다.
 export default function CalendarPage() {
   const { data: me } = useCurrentUser();
@@ -261,17 +261,33 @@ export default function CalendarPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="팀 캘린더"
+        title="캘린더"
         subtitle="회사 전체 연차·일정과 공휴일 · 날짜를 클릭하면 바로 등록"
-      >
-        <div className="flex items-center gap-1 rounded-btn bg-navy-card p-1 shadow-card">
-          <IconButton Icon={ChevronLeft} label="이전 달" onClick={() => shiftMonth(-1)} />
-          <span className="min-w-[100px] text-center text-[14px] font-semibold text-ink-hi">
-            {year}년 {month}월
-          </span>
-          <IconButton Icon={ChevronRight} label="다음 달" onClick={() => shiftMonth(1)} />
-        </div>
-      </PageHeader>
+      />
+
+      {/* 월 이동은 캘린더의 주 탐색이다. 헤더 보조 영역에서 분리해 위치·크기·대비를 함께 높인다. */}
+      <div className="mb-4 flex items-center justify-center gap-3 rounded-card border border-white/[0.12] bg-navy-card px-4 py-3 shadow-card">
+        <IconButton
+          Icon={ChevronLeft}
+          label="이전 달"
+          size="lg"
+          tone="accent"
+          onClick={() => shiftMonth(-1)}
+        />
+        <span
+          aria-live="polite"
+          className="min-w-[132px] text-center text-[17px] font-bold text-ink-hi tabular-nums"
+        >
+          {year}년 {month}월
+        </span>
+        <IconButton
+          Icon={ChevronRight}
+          label="다음 달"
+          size="lg"
+          tone="accent"
+          onClick={() => shiftMonth(1)}
+        />
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1 sm:max-w-[300px]">
