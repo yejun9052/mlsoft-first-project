@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import AdminHistoryPage from './AdminHistoryPage.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
@@ -19,6 +19,17 @@ vi.mock('../hooks/useAudit.js', () => ({
   useAuditLogs: vi.fn(),
 }));
 
+function installMatchMedia(matches) {
+  window.matchMedia = vi.fn().mockImplementation((media) => ({
+    matches,
+    media,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
+
 function query(data = { content: [], page: { totalPages: 1, totalElements: 0 } }) {
   return {
     data,
@@ -30,6 +41,7 @@ function query(data = { content: [], page: { totalPages: 1, totalElements: 0 } }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  installMatchMedia(false);
 
   useCurrentUser.mockReturnValue({
     data: { role: 'SYSTEM_ADMIN' },
@@ -38,6 +50,10 @@ beforeEach(() => {
   useWelfareHistories.mockReturnValue(query());
   useAuditLogs.mockReturnValue(query());
   useAuditActions.mockReturnValue(query([]));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('AdminHistoryPage 권한 및 조회 스코프', () => {
@@ -139,6 +155,36 @@ describe('AdminHistoryPage 권한 및 조회 스코프', () => {
         enabled: true,
       }),
     );
+  });
+
+  it('좁은 화면에서는 결재 이력을 표 대신 카드로 표시한다', () => {
+    installMatchMedia(true);
+    useLeaveHistories.mockReturnValue(
+      query({
+        content: [
+          {
+            id: 10,
+            createdAt: '2026-08-20T09:30:00',
+            action: 'APPROVED',
+            userName: '홍길동',
+            departmentName: '개발팀',
+            leaveType: 'ANNUAL',
+            days: '1.0',
+            actorName: '김팀장',
+            comment: '승인합니다',
+          },
+        ],
+        page: { totalPages: 1, totalElements: 1 },
+      }),
+    );
+
+    render(<AdminHistoryPage />);
+
+    expect(screen.getByTestId('responsive-table-cards')).toBeInTheDocument();
+    expect(screen.queryByTestId('responsive-table-table')).not.toBeInTheDocument();
+    expect(screen.getByText('홍길동')).toBeInTheDocument();
+    expect(screen.getByText('개발팀')).toBeInTheDocument();
+    expect(screen.getByText('승인합니다')).toBeInTheDocument();
   });
 
   it('감사 로그의 변경 전과 변경 후 값을 함께 표시한다', () => {

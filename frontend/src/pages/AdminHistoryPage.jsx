@@ -3,8 +3,10 @@ import PageHeader from '../components/ui/PageHeader.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
 import FilterGroup from '../components/ui/FilterGroup.jsx';
 import Chip from '../components/ui/Chip.jsx';
+import Card from '../components/ui/Card.jsx';
 import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
+import ResponsiveTable from '../components/ui/ResponsiveTable.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
 import { usePageClamp } from '../hooks/usePageClamp.js';
@@ -170,7 +172,7 @@ export default function AdminHistoryPage() {
 
 // 연차·복리후생 결재 처리 로그
 function ApprovalTable({ rows, isLeaveTab }) {
-  return (
+  const table = (
     <Table className="min-w-[880px]">
       <THead>
         <Th>처리 일시</Th>
@@ -206,13 +208,49 @@ function ApprovalTable({ rows, isLeaveTab }) {
       </tbody>
     </Table>
   );
+
+  const cards = rows.map((history) => (
+    <Card key={history.id} padding="tight" as="article">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-ink-hi">{history.userName}</p>
+          <p className="mt-1 text-[11px] text-ink-faint tabular-nums">
+            {formatDateTime(history.createdAt)}
+          </p>
+        </div>
+        <StatusBadge
+          label={ACTION_LABEL[history.action] ?? history.action}
+          tone={ACTION_TONE[history.action]}
+        />
+      </div>
+
+      <dl className="mt-4 grid grid-cols-[88px_1fr] gap-x-3 gap-y-2 text-[13px]">
+        <dt className="text-ink-faint">부서</dt>
+        <dd className="min-w-0 text-ink-body">{history.departmentName ?? '미배정'}</dd>
+        <dt className="text-ink-faint">{isLeaveTab ? '연차 종류' : '구분'}</dt>
+        <dd className="min-w-0 text-ink-body">
+          {isLeaveTab ? (LEAVE_TYPE_LABEL[history.leaveType] ?? history.leaveType) : history.category}
+        </dd>
+        <dt className="text-ink-faint">일수</dt>
+        <dd className="text-ink-body tabular-nums">
+          {Number(isLeaveTab ? history.days : history.addDays)}일
+        </dd>
+        <dt className="text-ink-faint">처리자</dt>
+        <dd className="min-w-0 text-ink-body">{history.actorName}</dd>
+        <dt className="text-ink-faint">코멘트</dt>
+        <dd className="min-w-0 break-words text-ink-mute">{history.comment || '—'}</dd>
+      </dl>
+    </Card>
+  ));
+
+  return <ResponsiveTable table={table} cards={cards} />;
 }
 
 // 관리자 조작 감사 로그 (리뷰 S-3).
 // 이 표의 핵심은 "무엇에서 무엇으로" 열이다 — 조작이 있었다는 사실만으로는 대조가 안 된다.
 // 액션 라벨은 서버가 응답에 담아 주므로(actionLabel) 프론트가 매핑하지 않는다.
 function AuditTable({ rows }) {
-  return (
+  const table = (
     <Table className="min-w-[880px]">
       <THead>
         <Th>일시</Th>
@@ -239,6 +277,34 @@ function AuditTable({ rows }) {
       </tbody>
     </Table>
   );
+
+  const cards = rows.map((log) => (
+    <Card key={log.id} padding="tight" as="article">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-ink-hi">{log.targetLabel}</p>
+          <p className="mt-1 text-[11px] text-ink-faint tabular-nums">
+            {formatDateTime(log.createdAt)}
+          </p>
+        </div>
+        <StatusBadge
+          label={log.actionLabel ?? log.action}
+          tone={ADMIN_ACTION_TONE[log.action]}
+        />
+      </div>
+
+      <dl className="mt-4 grid grid-cols-[72px_1fr] gap-x-3 gap-y-2 text-[13px]">
+        <dt className="text-ink-faint">관리자</dt>
+        <dd className="min-w-0 text-ink-body">{log.actorName}</dd>
+        <dt className="text-ink-faint">변경 전</dt>
+        <dd className="min-w-0 break-words text-ink-mute">{log.beforeValue || '—'}</dd>
+        <dt className="text-ink-faint">변경 후</dt>
+        <dd className="min-w-0 break-words font-medium text-ink-body">{log.afterValue || '—'}</dd>
+      </dl>
+    </Card>
+  ));
+
+  return <ResponsiveTable table={table} cards={cards} />;
 }
 
 // 로그 타임스탬프 — 'YYYY-MM-DD HH:mm' (서버는 LocalDateTime을 ISO 문자열로 내려준다).

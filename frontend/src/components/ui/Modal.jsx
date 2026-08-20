@@ -9,11 +9,18 @@ import IconButton from './IconButton.jsx';
 export default function Modal({ title, onClose, children, footer, maxWidth = 440, className = '' }) {
   // Esc로 닫기
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
     function onKeyDown(e) {
       if (e.key === 'Escape') onClose();
     }
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [onClose]);
 
   // 눌림이 backdrop에서 시작했는지 — 아래 onClick 주석 참고
@@ -48,12 +55,12 @@ export default function Modal({ title, onClose, children, footer, maxWidth = 440
     <div
       role="dialog"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-app/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-app/75 p-0 backdrop-blur-sm sm:p-4"
       onPointerDown={handleBackdropPointerDown}
       onClick={handleBackdropClick}
     >
       <div
-        className={`glass-strong glass-edge flex max-h-[90vh] w-full flex-col overflow-hidden rounded-card border border-white/[0.15] shadow-card ${className}`}
+        className={`glass-strong glass-edge flex h-[100dvh] max-h-none w-full flex-col overflow-hidden rounded-none border border-white/[0.15] shadow-card sm:h-auto sm:max-h-[90vh] sm:rounded-card ${className}`}
         style={{ maxWidth }}
       >
         {title && (
@@ -64,7 +71,7 @@ export default function Modal({ title, onClose, children, footer, maxWidth = 440
         )}
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-white/[0.12] px-5 py-4">
+          <div className="safe-area-bottom flex items-center justify-end gap-2 border-t border-white/[0.12] px-5 py-4">
             {footer}
           </div>
         )}

@@ -34,15 +34,17 @@ export default function IconButton({
   tone = 'muted',
   disabled = false,
   className = '',
+  ref,
   ...rest
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       title={label}
       aria-label={label}
       disabled={disabled}
-      className={`rounded-btn border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-btn border transition-colors disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0 lg:min-w-0 ${
         SIZE_PADDING_CLASS[size]
       } ${TONE_CLASS[tone] ?? TONE_CLASS.muted} ${className}`}
       {...rest}

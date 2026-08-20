@@ -58,11 +58,12 @@ const SECTION_LABEL_CLASS =
 
 // 사이드바 메뉴 한 줄
 // 활성: 코발트 틴트 + 시안 텍스트 + 좌측 그라데이션 바(기존 점 대신 — 세로 바가 스캔하기 쉽다)
-function SidebarLink({ to, label, Icon, badge }) {
+function SidebarLink({ to, label, Icon, badge, onNavigate }) {
   return (
     <NavLink
       to={to}
       end={to === '/admin'}
+      onClick={onNavigate}
       className={({ isActive }) =>
         `relative flex items-center gap-2.5 rounded-btn px-3 py-2.5 text-[13px] font-medium transition-all ${
           isActive
@@ -128,8 +129,9 @@ function LeaveSummaryPanel() {
   );
 }
 
-// 사이드바 — 236px 고정, 로고 → MENU → 관리자 → 연차 요약 → 하단 유저 카드 (docs/05 ①)
-export default function Sidebar() {
+// 데스크톱에서는 236px 고정이고, 모바일 서랍은 className으로 같은 정보 구조를 그대로 쓴다.
+// 메뉴와 권한 판정을 복제하지 않아야 역할 변경 때 두 탐색 UI가 서로 어긋나지 않는다.
+export default function Sidebar({ className = '', onNavigate }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -170,7 +172,9 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="glass-strong flex w-[236px] shrink-0 flex-col border-r border-white/[0.12] px-4 py-5">
+    <aside
+      className={`glass-strong flex h-full w-[236px] shrink-0 flex-col border-r border-white/[0.12] px-4 py-5 ${className}`}
+    >
       {/* 로고 — 그라데이션 모노그램 + 그라데이션 워드마크 */}
       <div className="flex items-center gap-2.5 px-2 pb-7">
         <BrandMark size="sm" />
@@ -185,7 +189,7 @@ export default function Sidebar() {
         <p className={SECTION_LABEL_CLASS}>Menu</p>
         <nav className="flex flex-col gap-1">
           {MENU_ITEMS.map((item) => (
-            <SidebarLink key={item.to} {...item} />
+            <SidebarLink key={item.to} {...item} onNavigate={onNavigate} />
           ))}
         </nav>
 
@@ -199,6 +203,7 @@ export default function Sidebar() {
                   key={item.to}
                   {...item}
                   badge={item.to === '/approvals' ? approvalsBadge : undefined}
+                  onNavigate={onNavigate}
                 />
               ))}
             </nav>
@@ -229,7 +234,7 @@ export default function Sidebar() {
           onClick={handleLogout}
           title="로그아웃"
           aria-label="로그아웃"
-          className="shrink-0 rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-danger/10 hover:text-danger"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-btn p-1.5 text-ink-mute transition-colors hover:bg-danger/10 hover:text-danger lg:min-h-0 lg:min-w-0"
         >
           <LogOut size={16} />
         </button>
