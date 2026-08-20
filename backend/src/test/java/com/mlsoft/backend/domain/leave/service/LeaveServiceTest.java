@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.leave.dto.LeaveResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
 import com.mlsoft.backend.domain.leave.entity.LeaveActionHistory;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
+import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
@@ -40,6 +41,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -813,6 +815,86 @@ class LeaveServiceTest {
 
         assertEquals(0, new BigDecimal("2.0").compareTo(response.pendingDays()));
         assertEquals(resetDate.plusYears(1), response.nextResetDate());
+    }
+
+    // ============================ 히트맵 집계 ============================
+
+    // Codex가 fixture 시그니처를 확인하지 못해 이 두 건을 내지 않았다(2026-08-20).
+    // 새로 만든 집계 로직이 검증 없이 들어가는 것이라 여기서 채운다.
+
+    @Test
+    @DisplayName("개인 히트맵 — 같은 날짜의 종일·반차를 단가로 합산한다")
+    void getMyAnnualUsage_종일반차_단가합산() {
+        User me = userWithBalance(1L, "15.0", "0.0", "0.0");
+        LocalDate day = LocalDate.of(2026, 3, 10);
+        // 같은 날 종일 1건 + 반차 1건 — 실제로는 중복 신청이 막히지만, 과거 정정 데이터가
+        // 이 모양이 될 수 있어 합산이 단가 기준인지 못박는다 (1.0 + 0.5 = 1.5)
+        LeaveRequest full = LeaveRequest.create(me, LeaveType.ANNUAL, List.of(day), "종일", me, null);
+        LeaveRequest half = LeaveRequest.create(me, LeaveType.HALF_AM, List.of(day), "반차", me, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(leaveRequestRepository.findByUserAndStatusInDateRange(
+                eq(me), eq(RequestStatus.APPROVED), any(), any()))
+                .willReturn(List.of(full, half));
+
+        var result = leaveService.getMyAnnualUsage(1L, 2026);
+
+        assertEquals(1, result.size(), "같은 날짜가 두 줄로 나왔다");
+        assertEquals(day, result.get(0).date());
+        assertEquals(0, new BigDecimal("1.5").compareTo(result.get(0).days()),
+                "종일 1.0 + 반차 0.5 = 1.5가 아니다");
+    }
+
+    @Test
+    @DisplayName("개인 히트맵 — 조회 연도 밖 날짜는 빼고 센다")
+    void getMyAnnualUsage_연도밖날짜제외() {
+        User me = userWithBalance(1L, "15.0", "0.0", "0.0");
+        // 연말을 걸친 신청 — 쿼리는 날짜 하나만 걸려도 건 전체를 가져오므로
+        // 서비스가 날짜 단위로 다시 거르지 않으면 다음 해 날짜가 이 해에 섞인다
+        LeaveRequest across = LeaveRequest.create(me, LeaveType.ANNUAL,
+                List.of(LocalDate.of(2026, 12, 31), LocalDate.of(2027, 1, 1)), "연말", me, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(leaveRequestRepository.findByUserAndStatusInDateRange(
+                eq(me), eq(RequestStatus.APPROVED), any(), any()))
+                .willReturn(List.of(across));
+
+        var result = leaveService.getMyAnnualUsage(1L, 2026);
+
+        assertEquals(1, result.size());
+        assertEquals(LocalDate.of(2026, 12, 31), result.get(0).date());
+    }
+
+    @Test
+    @DisplayName("팀 히트맵 — 같은 날 같은 사람이 여러 건이어도 1명으로 센다")
+    void getTeamAnnualUsage_사람단위중복제거() {
+        Department dept = Department.builder().id(10L).name("개발팀").active(true).build();
+        User viewer = userWithBalance(1L, "15.0", "0.0", "0.0");
+        viewer.assignDepartment(dept);
+        User mate = userWithBalance(2L, "15.0", "0.0", "0.0");
+        mate.assignDepartment(dept);
+        LocalDate day = LocalDate.of(2026, 5, 4);
+        // viewer가 같은 날 두 건 — 인원 수는 2가 아니라 2명(viewer·mate)이어야 한다
+        LeaveRequest a = LeaveRequest.create(viewer, LeaveType.HALF_AM, List.of(day), "오전", viewer, null);
+        LeaveRequest b = LeaveRequest.create(viewer, LeaveType.HALF_PM, List.of(day), "오후", viewer, null);
+        LeaveRequest c = LeaveRequest.create(mate, LeaveType.ANNUAL, List.of(day), "종일", mate, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(viewer));
+        given(leaveRequestRepository.findByDepartmentInDateRange(
+                eq(10L), any(), any(), any()))
+                .willReturn(List.of(a, b, c));
+
+        var result = leaveService.getTeamAnnualUsage(1L, 2026);
+
+        assertEquals(1, result.size());
+        assertEquals(2, result.get(0).memberCount(), "같은 사람의 두 건이 2명으로 세어졌다");
+    }
+
+    @Test
+    @DisplayName("팀 히트맵 — 부서가 없으면 빈 목록 (미배정도 부서이므로 실제로는 드물다)")
+    void getTeamAnnualUsage_부서없으면_빈목록() {
+        User viewer = userWithBalance(1L, "15.0", "0.0", "0.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(viewer));
+
+        assertTrue(leaveService.getTeamAnnualUsage(1L, 2026).isEmpty());
+        verify(leaveRequestRepository, never()).findByDepartmentInDateRange(any(), any(), any(), any());
     }
 
     // ============================ 헬퍼 ============================

@@ -35,6 +35,18 @@ export async function getTeamLeaves({ from, to } = {}) {
   return res.data.data;
 }
 
+// 개인 히트맵 — 승인 완료된 날짜별 사용 일수만 받는다
+export async function getMyAnnualUsage({ year }) {
+  const res = await api.get('/leaves/me/annual-usage', { params: { year } });
+  return res.data.data;
+}
+
+// 팀 히트맵 — 이름·사유 없이 날짜별 인원 수만 받는다
+export async function getTeamAnnualUsage({ year }) {
+  const res = await api.get('/leaves/team/annual-usage', { params: { year } });
+  return res.data.data;
+}
+
 // 내가 승인자인 대기 목록 — 취소 대기(CANCEL_PENDING) 포함 (GET /api/leaves/pending, TL·SA)
 export async function getPendingApprovals({ page = 0, size = 20, sort = 'createdAt,asc' } = {}) {
   const res = await api.get('/leaves/pending', { params: { page, size, sort } });

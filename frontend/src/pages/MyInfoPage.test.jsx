@@ -8,12 +8,17 @@ import {
 } from 'react-router-dom';
 import MyInfoPage from './MyInfoPage.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
-import { useLeaveSummary } from '../hooks/useLeaves.js';
+import { useHolidays } from '../hooks/useHolidays.js';
+import { useLeaveSummary, useMyAnnualUsage } from '../hooks/useLeaves.js';
 import { useUpdateMyProfile } from '../hooks/useUsers.js';
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../hooks/useAuth.js', () => ({ useCurrentUser: vi.fn() }));
-vi.mock('../hooks/useLeaves.js', () => ({ useLeaveSummary: vi.fn() }));
+vi.mock('../hooks/useHolidays.js', () => ({ useHolidays: vi.fn() }));
+vi.mock('../hooks/useLeaves.js', () => ({
+  useLeaveSummary: vi.fn(),
+  useMyAnnualUsage: vi.fn(),
+}));
 vi.mock('../hooks/useUsers.js', () => ({ useUpdateMyProfile: vi.fn() }));
 
 const ME = {
@@ -21,6 +26,7 @@ const ME = {
   birthDay: '1995-03-14',
   email: 'hong@mlsoft.example',
   role: 'EMPLOYEE',
+  position: '선임',
   departmentName: '개발팀',
   hireDate: '2020-01-02',
 };
@@ -123,6 +129,13 @@ describe('MyInfoPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useLeaveSummary.mockReturnValue({ data: SUMMARY, isError: false, refetch: vi.fn() });
+    useMyAnnualUsage.mockReturnValue({
+      data: [{ date: '2026-01-05', days: '0.5' }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useHolidays.mockReturnValue({ data: [], isError: false });
     useUpdateMyProfile.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
@@ -173,6 +186,43 @@ describe('MyInfoPage', () => {
 
     expect(dialogTitle()).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/myinfo');
+  });
+
+  it('직책만 바꾸고 나가려 해도 붙잡는다', () => {
+    const { router } = renderPage();
+
+    fireEvent.change(screen.getByDisplayValue('선임'), { target: { value: '책임' } });
+    goToDashboard();
+
+    expect(dialogTitle()).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/myinfo');
+  });
+
+  it('직책을 이름·생년월일과 함께 저장한다', () => {
+    const mutate = vi.fn();
+    useUpdateMyProfile.mockReturnValue({ mutate, isPending: false });
+    renderPage();
+
+    fireEvent.change(screen.getByDisplayValue('선임'), { target: { value: ' 책임 연구원 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        name: '홍길동',
+        birthDay: '1995-03-14',
+        position: '책임 연구원',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('연도 선택을 바꾸면 개인 기록과 공휴일을 같은 연도로 조회한다', () => {
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('히트맵 연도'), { target: { value: '2025' } });
+
+    expect(useMyAnnualUsage).toHaveBeenLastCalledWith(2025);
+    expect(useHolidays).toHaveBeenLastCalledWith(2025);
   });
 
   it('취소하면 화면에 남고 고치던 값도 그대로다', () => {

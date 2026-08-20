@@ -8,6 +8,8 @@ import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveHistoryResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
+import com.mlsoft.backend.domain.leave.dto.MyLeaveHeatmapResponse;
+import com.mlsoft.backend.domain.leave.dto.TeamLeaveHeatmapResponse;
 import com.mlsoft.backend.domain.leave.service.LeaveService;
 import com.mlsoft.backend.global.response.CommonResponse;
 import com.mlsoft.backend.global.response.ResponseMessage;
@@ -76,6 +78,16 @@ public class LeaveController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
     }
 
+    /** 개인 연차 사용 히트맵 — 승인 완료 날짜별 사용 일수 */
+    @GetMapping("/me/annual-usage")
+    public ResponseEntity<CommonResponse<List<MyLeaveHeatmapResponse>>> getMyAnnualUsage(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam int year
+    ) {
+        List<MyLeaveHeatmapResponse> response = leaveService.getMyAnnualUsage(authUser.id(), year);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
+    }
+
     /** 캘린더용 승인 연차 (타인 사유 마스킹) — keyword(신청자명)·departmentId로 좁힐 수 있다 */
     @GetMapping("/calendar")
     public ResponseEntity<CommonResponse<List<LeaveCalendarResponse>>> getCalendar(
@@ -109,6 +121,16 @@ public class LeaveController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
     ) {
         List<LeaveCalendarResponse> response = leaveService.getTeam(authUser.id(), from, to);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
+    }
+
+    /** 팀 연차 사용 히트맵 — 현재 부서의 승인 완료 날짜별 인원 수 */
+    @GetMapping("/team/annual-usage")
+    public ResponseEntity<CommonResponse<List<TeamLeaveHeatmapResponse>>> getTeamAnnualUsage(
+            @AuthenticationPrincipal AuthUser authUser,
+            @RequestParam int year
+    ) {
+        List<TeamLeaveHeatmapResponse> response = leaveService.getTeamAnnualUsage(authUser.id(), year);
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
     }
 

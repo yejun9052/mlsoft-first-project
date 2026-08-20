@@ -10,6 +10,7 @@ import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
+import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -71,6 +72,52 @@ class UserServiceTest {
     private UserService userService;
 
     // ============================ 퇴직 처리 — 결재 이관 ============================
+
+    // ============================ 내 정보 수정 ============================
+
+    // 이 경로에는 테스트가 하나도 없었다. 2026-08-20에 직책이 얹히면서 처음 만든다
+    // (Codex가 있지도 않은 기존 테스트를 고치려 해서 드러났다).
+
+    @Test
+    @DisplayName("내 정보 수정 — 이름·생일·직책이 함께 반영된다")
+    void updateMyProfile_직책까지반영() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("새 이름", LocalDate.of(1995, 3, 14), "선임연구원"));
+
+        assertEquals("새 이름", target.getName());
+        assertEquals(LocalDate.of(1995, 3, 14), target.getBirthDay());
+        assertEquals("선임연구원", target.getPosition());
+    }
+
+    // 직책은 선택 항목이다. 빈 문자열을 그대로 넣으면 "값이 있는데 비어 있는" 상태가 되어
+    // 화면에서 미입력과 구분되지 않는다 — 없는 것은 null 하나로만 표현한다
+    @Test
+    @DisplayName("내 정보 수정 — 공백뿐인 직책은 null로 정규화된다")
+    void updateMyProfile_공백직책은null() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("새 이름", LocalDate.of(1995, 3, 14), "   "));
+
+        assertNull(target.getPosition());
+    }
+
+    @Test
+    @DisplayName("내 정보 수정 — 이름과 직책의 앞뒤 공백은 잘라 낸다")
+    void updateMyProfile_공백제거() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("  새 이름  ", LocalDate.of(1995, 3, 14), "  책임  "));
+
+        assertEquals("새 이름", target.getName());
+        assertEquals("책임", target.getPosition());
+    }
 
     @Test
     @DisplayName("퇴직 — 대상이 부서 팀장: 해당 부서 leader 해제")

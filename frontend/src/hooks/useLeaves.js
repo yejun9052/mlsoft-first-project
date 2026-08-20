@@ -4,9 +4,11 @@ import {
   cancelLeave,
   getAllLeaves,
   getCalendar,
+  getMyAnnualUsage,
   getMyLeaves,
   getMySummary,
   getPendingApprovals,
+  getTeamAnnualUsage,
   getTeamLeaves,
   processApproval,
   processCancelApproval,
@@ -25,6 +27,8 @@ const leaveKeys = {
   calendar: (year, month, keyword, departmentId) =>
     ['leaves', 'calendar', year, month, keyword || 'ALL', departmentId || 'ALL'],
   team: (from, to) => ['leaves', 'team', from ?? 'default', to ?? 'default'],
+  myAnnualUsage: (year) => ['leaves', 'me', 'annual-usage', year],
+  teamAnnualUsage: (year) => ['leaves', 'team', 'annual-usage', year],
   pending: (page, size) => ['leaves', 'pending', page, size],
   allCount: (status) => ['leaves', 'all-count', status],
 };
@@ -66,6 +70,24 @@ export function useTeamLeaves({ from, to } = {}) {
   return useQuery({
     queryKey: leaveKeys.team(from, to),
     queryFn: () => getTeamLeaves({ from, to }),
+  });
+}
+
+// 개인 히트맵 — 승인 완료 날짜별 사용량
+export function useMyAnnualUsage(year) {
+  return useQuery({
+    queryKey: leaveKeys.myAnnualUsage(year),
+    queryFn: () => getMyAnnualUsage({ year }),
+    enabled: Boolean(year),
+  });
+}
+
+// 팀 히트맵 — 현재 부서의 승인 완료 날짜별 인원 수
+export function useTeamAnnualUsage(year) {
+  return useQuery({
+    queryKey: leaveKeys.teamAnnualUsage(year),
+    queryFn: () => getTeamAnnualUsage({ year }),
+    enabled: Boolean(year),
   });
 }
 

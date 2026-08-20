@@ -11,6 +11,8 @@ import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveHistoryResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
+import com.mlsoft.backend.domain.leave.dto.MyLeaveHeatmapResponse;
+import com.mlsoft.backend.domain.leave.dto.TeamLeaveHeatmapResponse;
 import com.mlsoft.backend.domain.leave.entity.LeaveActionHistory;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
@@ -38,6 +40,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -172,6 +175,72 @@ public class LeaveService {
         return leaves.stream()
                 .map(leave -> LeaveCalendarResponse.of(leave, canViewReason(viewer, leave)))
                 .toList();
+    }
+
+    /** 개인 연차 사용 히트맵 — 승인 완료된 날짜별 사용 일수만 반환 */
+    @Transactional(readOnly = true)
+    public List<MyLeaveHeatmapResponse> getMyAnnualUsage(Long userId, int year) {
+        validateHeatmapYear(year);
+        User user = findUserOrThrow(userId);
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+        List<LeaveRequest> leaves = leaveRequestRepository.findByUserAndStatusInDateRange(
+                user, RequestStatus.APPROVED, start, end);
+
+        Map<LocalDate, BigDecimal> daysByDate = new HashMap<>();
+        for (LeaveRequest leave : leaves) {
+            BigDecimal daysPerDate = leave.getLeaveType().getDaysPerDate();
+            for (LocalDate date : leave.getDates()) {
+                if (!date.isBefore(start) && !date.isAfter(end)) {
+                    daysByDate.merge(date, daysPerDate, BigDecimal::add);
+                }
+            }
+        }
+
+        return daysByDate.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new MyLeaveHeatmapResponse(entry.getKey(), entry.getValue()))
+                .toList();
+    }
+
+    /**
+     * 팀 연차 사용 히트맵 — 현재 소속 부서의 승인 완료 인원 수만 반환.
+     * 같은 사용자가 같은 날짜에 복수 신청으로 남은 과거 데이터가 있어도 한 명으로 센다.
+     */
+    @Transactional(readOnly = true)
+    public List<TeamLeaveHeatmapResponse> getTeamAnnualUsage(Long viewerId, int year) {
+        validateHeatmapYear(year);
+        User viewer = findUserOrThrow(viewerId);
+        Department department = viewer.getDepartment();
+        if (department == null) {
+            return List.of();
+        }
+
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+        List<LeaveRequest> leaves = leaveRequestRepository.findByDepartmentInDateRange(
+                department.getId(), List.of(RequestStatus.APPROVED), start, end);
+
+        Map<LocalDate, Set<Long>> userIdsByDate = new HashMap<>();
+        for (LeaveRequest leave : leaves) {
+            for (LocalDate date : leave.getDates()) {
+                if (!date.isBefore(start) && !date.isAfter(end)) {
+                    userIdsByDate.computeIfAbsent(date, ignored -> new HashSet<>())
+                            .add(leave.getUser().getId());
+                }
+            }
+        }
+
+        return userIdsByDate.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new TeamLeaveHeatmapResponse(entry.getKey(), entry.getValue().size()))
+                .toList();
+    }
+
+    private void validateHeatmapYear(int year) {
+        if (year < 1900 || year > 2100) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
     }
 
     /** 내 팀 연차 현황 (GET /api/leaves/team) — 기간 미지정 시 이번 달, 타인 사유 마스킹 */

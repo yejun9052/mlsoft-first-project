@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.user.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
@@ -14,6 +15,9 @@ public record UserProfileUpdateRequest(
         String name,
 
         @NotNull(message = "생일을 입력해주세요.")
-        LocalDate birthDay
+        LocalDate birthDay,
+
+        @Size(max = 50, message = "직책은 50자 이내로 입력해주세요.")
+        String position
 ) {
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Building2, Users, Crown, CalendarDays, Clock3 } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
@@ -9,9 +9,11 @@ import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
+import LeaveHeatmap from '../components/LeaveHeatmap.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
+import { useHolidays } from '../hooks/useHolidays.js';
 import { useTeamMembers } from '../hooks/useUsers.js';
-import { useTeamLeaves } from '../hooks/useLeaves.js';
+import { useTeamAnnualUsage, useTeamLeaves } from '../hooks/useLeaves.js';
 import { useDepartments } from '../hooks/useDepartments.js';
 
 // 역할별 배지 톤 (총관리자·팀장은 강조 accent, 사원은 muted)
@@ -26,8 +28,11 @@ const ROLE_TONE = {
 // 백엔드 설계라 다른 API로 우회 보강하지 않고, 명단은 이름·직책·역할 중심으로 구성한다.
 export default function TeamPage() {
   const { data: me } = useCurrentUser();
+  const [heatmapYear, setHeatmapYear] = useState(new Date().getFullYear());
   const teamMembersQuery = useTeamMembers();
   const teamLeavesQuery = useTeamLeaves();
+  const teamAnnualUsageQuery = useTeamAnnualUsage(heatmapYear);
+  const holidaysQuery = useHolidays(heatmapYear);
   const departmentsQuery = useDepartments();
 
   const teamMembers = teamMembersQuery.data ?? [];
@@ -90,6 +95,33 @@ export default function TeamPage() {
             <Stat Icon={Clock3} label="이번 달 대기 중" value={`${pendingDays}일`} />
           </div>
         </div>
+      </Card>
+
+      <Card
+        className="mb-5"
+        title="팀 연차 사용 기록"
+        right={
+          <select
+            aria-label="히트맵 연도"
+            value={heatmapYear}
+            onChange={(event) => setHeatmapYear(Number(event.target.value))}
+            className="rounded-btn border border-white/[0.14] bg-navy-btn2 px-3 py-2 text-[12px] text-ink-body outline-none focus:border-accent"
+          >
+            {Array.from({ length: 6 }, (_, index) => new Date().getFullYear() - index).map((year) => (
+              <option key={year} value={year}>{year}년</option>
+            ))}
+          </select>
+        }
+      >
+        <LeaveHeatmap
+          year={heatmapYear}
+          mode="team"
+          entries={teamAnnualUsageQuery.data ?? []}
+          holidays={holidaysQuery.data ?? []}
+          loading={teamAnnualUsageQuery.isLoading}
+          error={teamAnnualUsageQuery.isError}
+          onRetry={teamAnnualUsageQuery.refetch}
+        />
       </Card>
 
       {/* 팀원 목록 */}

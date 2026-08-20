@@ -33,9 +33,9 @@ export async function getRetiredUsers({ page = 0, size = 20 } = {}) {
   return res.data.data; // Page<UserResponse>
 }
 
-// 내 정보 수정 — 이름·생일만 가능(연차·부서·권한은 관리자 전용 API로 분리) (PATCH /api/users/me)
-export async function updateMyProfile({ name, birthDay }) {
-  const res = await api.patch('/users/me', { name, birthDay });
+// 내 정보 수정 — 이름·생일·직책만 가능(연차·부서·권한은 관리자 전용 API로 분리)
+export async function updateMyProfile({ name, birthDay, position }) {
+  const res = await api.patch('/users/me', { name, birthDay, position });
   return res.data.data;
 }
 

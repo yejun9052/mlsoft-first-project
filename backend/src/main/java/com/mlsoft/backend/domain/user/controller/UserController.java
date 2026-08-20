@@ -89,7 +89,7 @@ public class UserController {
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_INFO_FETCHED, response));
     }
 
-    /** 내 정보 수정 (이름·생일) */
+    /** 내 정보 수정 (이름·생일·직책) */
     @PatchMapping("/me")
     public ResponseEntity<CommonResponse<UserResponse>> updateMyProfile(
             @AuthenticationPrincipal AuthUser authUser,

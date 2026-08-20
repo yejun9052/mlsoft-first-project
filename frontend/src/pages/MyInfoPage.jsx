@@ -15,7 +15,9 @@ import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard.js';
 import { ROLE_LABEL } from '../constants/roles.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
-import { useLeaveSummary } from '../hooks/useLeaves.js';
+import LeaveHeatmap from '../components/LeaveHeatmap.jsx';
+import { useHolidays } from '../hooks/useHolidays.js';
+import { useLeaveSummary, useMyAnnualUsage } from '../hooks/useLeaves.js';
 import { useUpdateMyProfile } from '../hooks/useUsers.js';
 
 // 프로필 정보 행 — 아이콘 + 라벨(ink-mute) + 값(ink-body)
@@ -63,10 +65,15 @@ export default function MyInfoPage() {
   // 수정 폼 — useCurrentUser는 localStorage initialData 덕에 첫 렌더부터 값이 채워져 있다.
   const [name, setName] = useState(me?.name ?? '');
   const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
+  const [position, setPosition] = useState(me?.position ?? '');
+  const [heatmapYear, setHeatmapYear] = useState(dayjs().year());
+  const annualUsageQuery = useMyAnnualUsage(heatmapYear);
+  const holidaysQuery = useHolidays(heatmapYear);
 
   // 서버가 준 현재 값. 폼의 기준선이자 "바뀌었는가"의 비교 대상이다
   const savedName = me?.name ?? '';
   const savedBirthDay = me?.birthDay ?? '';
+  const savedPosition = me?.position ?? '';
 
   // 서버 값이 바뀌면 폼을 다시 맞춘다. useState 초기값은 **첫 렌더에 한 번**만 쓰이는데,
   // 위 initialData는 localStorage라 낡아 있을 수 있고(initialDataUpdatedAt: 0이라 매번 재검증한다)
@@ -76,12 +83,15 @@ export default function MyInfoPage() {
   useEffect(() => {
     setName(savedName);
     setBirthDay(savedBirthDay);
-  }, [savedName, savedBirthDay]);
+    setPosition(savedPosition);
+  }, [savedName, savedBirthDay, savedPosition]);
 
   // 저장하지 않고 나가려 할 때 붙잡는다 (연차 정책 화면과 같은 장치).
   // 저장 버튼이 입력칸 바로 아래라 그쪽 같은 "미저장 배지"는 두지 않았다 —
   // 배지는 멀리 있는 버튼을 찾게 하려는 것이고, 여기서는 눈에 이미 들어와 있다.
-  const unsavedGuard = useUnsavedGuard(name !== savedName || birthDay !== savedBirthDay);
+  const unsavedGuard = useUnsavedGuard(
+    name !== savedName || birthDay !== savedBirthDay || position !== savedPosition,
+  );
 
   // 실패를 로딩과 구분한다 — !summary 가드만 있으면 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
   if (meQuery.isError || summaryQuery.isError) {
@@ -110,7 +120,7 @@ export default function MyInfoPage() {
       return;
     }
     updateProfileMutation.mutate(
-      { name: name.trim(), birthDay },
+      { name: name.trim(), birthDay, position: position.trim() || null },
       { onSuccess: () => toast.success('저장되었습니다.') },
     );
   }
@@ -134,6 +144,7 @@ export default function MyInfoPage() {
           <div className="mt-2 divide-y divide-white/[0.10]">
             <InfoRow Icon={Mail} label="이메일" value={me.email} />
             <InfoRow Icon={Building2} label="부서" value={me.departmentName ?? '미배정'} />
+            <InfoRow Icon={Building2} label="직책" value={me.position ?? '미설정'} />
             <InfoRow Icon={CalendarDays} label="입사일" value={me.hireDate} />
             <InfoRow Icon={Cake} label="생년월일" value={me.birthDay} />
           </div>
@@ -176,6 +187,15 @@ export default function MyInfoPage() {
                   onChange={(e) => setBirthDay(e.target.value)}
                 />
               </Field>
+              <Field label="직책" hint="50자 이내로 입력할 수 있습니다.">
+                <TextInput
+                  type="text"
+                  value={position}
+                  maxLength={50}
+                  placeholder="예: 선임 연구원"
+                  onChange={(e) => setPosition(e.target.value)}
+                />
+              </Field>
               <Button type="submit" className="mt-1 self-start" loading={updateProfileMutation.isPending}>
                 저장
               </Button>
@@ -184,10 +204,36 @@ export default function MyInfoPage() {
         </div>
       </div>
 
+      <Card
+        className="mt-5"
+        title="연차 사용 기록"
+        right={
+          <select
+            aria-label="히트맵 연도"
+            value={heatmapYear}
+            onChange={(event) => setHeatmapYear(Number(event.target.value))}
+            className="rounded-btn border border-white/[0.14] bg-navy-btn2 px-3 py-2 text-[12px] text-ink-body outline-none focus:border-accent"
+          >
+            {Array.from({ length: 6 }, (_, index) => dayjs().year() - index).map((year) => (
+              <option key={year} value={year}>{year}년</option>
+            ))}
+          </select>
+        }
+      >
+        <LeaveHeatmap
+          year={heatmapYear}
+          entries={annualUsageQuery.data ?? []}
+          holidays={holidaysQuery.data ?? []}
+          loading={annualUsageQuery.isLoading}
+          error={annualUsageQuery.isError}
+          onRetry={annualUsageQuery.refetch}
+        />
+      </Card>
+
       <ConfirmDialog
         open={unsavedGuard.blocked}
         title="저장하지 않고 나가시겠습니까?"
-        message="이름·생년월일을 바꿨지만 아직 저장하지 않았습니다. '정보 수정' 카드의 '저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다."
+        message="이름·생년월일·직책을 바꿨지만 아직 저장하지 않았습니다. '정보 수정' 카드의 '저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다."
         tone="danger"
         confirmLabel="그냥 나가기"
         cancelLabel="취소"

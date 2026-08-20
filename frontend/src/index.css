@@ -45,8 +45,18 @@
   --color-warn: #fbbf24;
   --color-danger: #fb7185;
 
+  /* 연차 히트맵 — 빈 평일·비근무일과 4단계 사용량을 같은 컴포넌트에서 일관되게 쓴다.
+     초록은 상태색 ok와 분리해 승인 배지의 의미색을 데이터 강도 표현에 재사용하지 않는다. */
+  --color-heatmap-empty: #17253a;
+  --color-heatmap-rest: #3b4658;
+  --color-heatmap-1: #164e3d;
+  --color-heatmap-2: #0f7654;
+  --color-heatmap-3: #16a36f;
+  --color-heatmap-4: #2ee6a8;
+
   /* 라디우스 — 글래스 서피스가 부드럽게 읽히도록 한 단계씩 키움 */
   --radius-window: 20px;
+  --radius-heatmap: 2px;
   --radius-card: 18px;
   --radius-btn: 11px;
   --radius-badge: 999px;

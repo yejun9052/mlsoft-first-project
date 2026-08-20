@@ -124,11 +124,14 @@ public class UserService {
     // 수정
     // ---------------------------------------------------------------------
 
-    /** 내 정보 수정 (PATCH /api/users/me) — 이름·생일만 */
+    /** 내 정보 수정 (PATCH /api/users/me) — 이름·생일·직책 */
     @Transactional
     public UserResponse updateMyProfile(Long userId, UserProfileUpdateRequest request) {
         User user = findUserOrThrow(userId);
-        user.updateProfile(request.name(), request.birthDay());
+        String position = request.position() == null || request.position().isBlank()
+                ? null
+                : request.position().trim();
+        user.updateProfile(request.name().trim(), request.birthDay(), position);
         return UserResponse.of(user);
     }
 

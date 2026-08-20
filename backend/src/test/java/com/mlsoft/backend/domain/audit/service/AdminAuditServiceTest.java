@@ -91,7 +91,7 @@ class AdminAuditServiceTest {
         User target = saveUser("개명전", Role.EMPLOYEE);
         adminAuditService.recordUserChange(actor.getId(), AdminAction.ROLE_CHANGED, target, "사원", "팀장");
 
-        target.updateProfile("개명후", LocalDate.of(1990, 1, 1));
+        target.updateProfile("개명후", LocalDate.of(1990, 1, 1), null);
         userRepository.saveAndFlush(target);
 
         assertEquals("개명전", onlyLogOf(target).targetLabel());

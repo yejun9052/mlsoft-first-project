@@ -80,6 +80,18 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                        @Param("keyword") String keyword,
                                        @Param("departmentId") Long departmentId);
 
+    /**
+     * 개인 히트맵 원자료 — 승인 완료 건만 날짜 범위로 가져온다.
+     * 날짜별 단가는 LeaveType이 단일 출처이므로 서비스에서 BigDecimal로 합산한다.
+     */
+    @EntityGraph(attributePaths = {"user"})
+    @Query("select distinct lr from LeaveRequest lr join lr.dates d "
+            + "where lr.user = :user and lr.status = :status and d between :start and :end")
+    List<LeaveRequest> findByUserAndStatusInDateRange(@Param("user") User user,
+                                                      @Param("status") RequestStatus status,
+                                                      @Param("start") LocalDate start,
+                                                      @Param("end") LocalDate end);
+
     /** 팀 현황 — 특정 부서원의 날짜범위와 겹치는 건 (GET /api/leaves/team) */
     @EntityGraph(attributePaths = {"user", "user.department"})
     @Query("select distinct lr from LeaveRequest lr join lr.dates d "

@@ -461,10 +461,11 @@ public class User extends BaseTimeEntity {
         this.department = department;
     }
 
-    /** 내 정보 수정 — 이름·생일만 (PATCH /api/users/me) */
-    public void updateProfile(String name, LocalDate birthDay) {
+    /** 내 정보 수정 — 본인이 관리하도록 허용된 이름·생일·직책만 한 경로에서 바꾼다 */
+    public void updateProfile(String name, LocalDate birthDay, String position) {
         this.name = name;
         this.birthDay = birthDay;
+        this.position = position;
     }
 
     /**
