@@ -30,6 +30,7 @@ public enum ErrorCode {
     ALREADY_RETIRED(400, "이미 퇴직 처리된 사용자입니다."),
     NOT_RETIRED(400, "퇴직 처리된 계정이 아닙니다."),
     DEPARTMENT_REQUIRED_FOR_LEADER(400, "팀장으로 지정하려면 소속 부서를 먼저 배정해야 합니다."),
+    SYSTEM_DEFAULT_DEPARTMENT_LOCKED(400, "기본 미배정 부서는 이름 변경·이동·비활성화할 수 없습니다."),
     LAST_SYSTEM_ADMIN(400, "마지막 시스템 관리자입니다. 다른 관리자를 먼저 지정해주세요."),
     // 퇴직은 그 즉시 로그인까지 막혀 스스로 되돌릴 수 없다 — 역할 자가 강등보다 나쁘다 (S-7)
     CANNOT_RETIRE_SELF(400, "본인 계정은 퇴직 처리할 수 없습니다. 다른 관리자에게 요청해주세요."),

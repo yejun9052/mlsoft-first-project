@@ -84,6 +84,7 @@ public class DepartmentService {
     @Transactional
     public DepartmentResponse update(Long id, DepartmentUpdateRequest request, Long actorId) {
         Department department = findActiveDepartmentOrThrow(id);
+        validateSystemDefaultUnchanged(department, request.name().trim(), request.parentId());
         validateParent(request.parentId(), id);
         department.update(request.name().trim(), request.description(), request.parentId());
         if (request.leaderId() != null) {
@@ -97,7 +98,32 @@ public class DepartmentService {
     /** 부서 비활성화 (DELETE /api/departments/{id}, SA) — 소프트 삭제 */
     @Transactional
     public void deactivate(Long id) {
-        findActiveDepartmentOrThrow(id).deactivate();
+        Department department = findActiveDepartmentOrThrow(id);
+        // 기본 부서를 비활성화하면 신규 가입자를 배속할 곳이 사라진다 — 가입이 통째로 끊긴다
+        if (department.isSystemDefault()) {
+            throw new BusinessException(ErrorCode.SYSTEM_DEFAULT_DEPARTMENT_LOCKED);
+        }
+        department.deactivate();
+    }
+
+    /**
+     * 시스템 기본 부서는 <b>이름과 상위 부서를 바꿀 수 없다</b> (2026-08-20).
+     *
+     * <p>설명은 바꿔도 된다 — 신규 가입 경로가 쓰는 것은 이름이 아니라 시스템 기본 표시이지만,
+     * 이름이 바뀌면 <b>사람이</b> 그 부서가 무엇인지 알 수 없게 된다. 화면 여러 곳이
+     * "미배정"이라는 말로 "아직 안 정해짐"을 설명하고 있어 그 말과 부서 이름이 어긋나면
+     * 관리자가 두 개념을 구분할 방법이 없어진다.
+     *
+     * <p>상위 부서를 막는 이유는 다르다 — 기본 부서가 어느 부서의 하위로 들어가면
+     * 소속이 정해지지 않은 사원이 그 상위 부서의 결재선에 딸려 들어간다.
+     */
+    private void validateSystemDefaultUnchanged(Department department, String name, Long parentId) {
+        if (!department.isSystemDefault()) {
+            return;
+        }
+        if (!department.getName().equals(name) || parentId != null) {
+            throw new BusinessException(ErrorCode.SYSTEM_DEFAULT_DEPARTMENT_LOCKED);
+        }
     }
 
     // ---------------------------------------------------------------------

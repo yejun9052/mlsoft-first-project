@@ -23,6 +23,9 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     /** 부서명으로 조회 (신규 가입 시 미배정 부서 배속) */
     Optional<Department> findByName(String name);
 
+    /** 시스템 기본 부서가 이미 있는가 — 이름이 바뀐 뒤에도 중복 생성을 막는다 (2026-08-20) */
+    boolean existsBySystemDefaultTrue();
+
     /** 활성 부서 전체 — 플랫 목록/트리 조회 기반 (GET /api/departments, /tree) */
     @EntityGraph(attributePaths = {"leader"})
     List<Department> findByActiveTrueOrderByIdAsc();

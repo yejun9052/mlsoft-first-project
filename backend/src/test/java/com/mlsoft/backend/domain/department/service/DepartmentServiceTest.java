@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -147,6 +148,66 @@ class DepartmentServiceTest {
 
         assertEquals(ErrorCode.DEPARTMENT_NOT_FOUND, ex.getErrorCode());
         verify(userRepository, never()).findById(any());
+    }
+
+    // ===== 시스템 기본 "미배정" 부서 잠금 (2026-08-21, docs/12 B-9) =====
+    //
+    // 이 부서는 첫 기동에 만들어지고 신규 자동 가입자가 전부 배속된다.
+    // 이름이 바뀌면 사람이 그 부서가 무엇인지 알 수 없게 되고, 비활성화되면 배속할 곳이
+    // 사라져 **신규 가입이 통째로 끊긴다.** 지금까지 그걸 막는 것이 아무것도 없었다.
+
+    @Test
+    @DisplayName("수정 — 시스템 기본 부서는 이름을 바꿀 수 없다")
+    void update_systemDefaultRename_throws() {
+        Department unassigned = Department.createSystemDefault("미배정", "부서 배정 전 기본 소속");
+        given(departmentRepository.findByIdAndActiveTrue(4L)).willReturn(Optional.of(unassigned));
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest("영업팀", "설명", null, null);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> departmentService.update(4L, request, ACTOR_ID));
+
+        assertEquals(ErrorCode.SYSTEM_DEFAULT_DEPARTMENT_LOCKED, ex.getErrorCode());
+        assertEquals("미배정", unassigned.getName(), "거부됐는데 이름이 바뀌었다");
+    }
+
+    // 기본 부서가 어느 부서의 하위로 들어가면, 소속이 정해지지 않은 사원이
+    // 그 상위 부서의 결재선에 딸려 들어간다
+    @Test
+    @DisplayName("수정 — 시스템 기본 부서는 다른 부서 밑으로 옮길 수 없다")
+    void update_systemDefaultMove_throws() {
+        Department unassigned = Department.createSystemDefault("미배정", "부서 배정 전 기본 소속");
+        given(departmentRepository.findByIdAndActiveTrue(4L)).willReturn(Optional.of(unassigned));
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest("미배정", "설명", null, 1L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> departmentService.update(4L, request, ACTOR_ID));
+
+        assertEquals(ErrorCode.SYSTEM_DEFAULT_DEPARTMENT_LOCKED, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("수정 — 시스템 기본 부서도 설명은 바꿀 수 있다")
+    void update_systemDefaultDescription_allowed() {
+        Department unassigned = Department.createSystemDefault("미배정", "옛 설명");
+        given(departmentRepository.findByIdAndActiveTrue(4L)).willReturn(Optional.of(unassigned));
+        DepartmentUpdateRequest request = new DepartmentUpdateRequest("미배정", "새 설명", null, null);
+
+        departmentService.update(4L, request, ACTOR_ID);
+
+        assertEquals("새 설명", unassigned.getDescription());
+    }
+
+    @Test
+    @DisplayName("비활성화 — 시스템 기본 부서는 끌 수 없다 (끄면 신규 가입이 끊긴다)")
+    void deactivate_systemDefault_throws() {
+        Department unassigned = Department.createSystemDefault("미배정", "부서 배정 전 기본 소속");
+        given(departmentRepository.findByIdAndActiveTrue(4L)).willReturn(Optional.of(unassigned));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> departmentService.deactivate(4L));
+
+        assertEquals(ErrorCode.SYSTEM_DEFAULT_DEPARTMENT_LOCKED, ex.getErrorCode());
+        assertTrue(unassigned.isActive(), "거부됐는데 비활성화됐다");
     }
 
     @Test

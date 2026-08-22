@@ -120,13 +120,27 @@ public class DataInitializer implements ApplicationRunner {
      * 팀장이 없으므로 승인자는 SYSTEM_ADMIN fallback (검증 Y-3).
      */
     private void initDefaultDepartment() {
-        if (departmentRepository.existsByName(UNASSIGNED_DEPARTMENT_NAME)) {
+        // 이 컬럼이 생기기 전(2026-08-20 이전)에 만들어진 DB에는 부서는 있는데 표시가 없다.
+        // 이름으로 한 번만 찾아 표시를 붙인다 — 이후로는 이름을 바꿔도 표시가 남으므로
+        // 이 이름 조회는 "처음 한 번"에만 쓰인다.
+        var existing = departmentRepository.findByName(UNASSIGNED_DEPARTMENT_NAME);
+        if (existing.isPresent()) {
+            Department department = existing.get();
+            if (!department.isSystemDefault()) {
+                department.markAsSystemDefault();
+                departmentRepository.save(department);
+                log.info("[DataInitializer] 기존 미배정 부서에 시스템 기본 표시를 붙였다 — id={}",
+                        department.getId());
+            }
             return;
         }
-        departmentRepository.save(Department.create(
+        if (departmentRepository.existsBySystemDefaultTrue()) {
+            // 이름이 이미 바뀐 기본 부서가 있다 — 새로 만들면 기본 부서가 둘이 된다
+            return;
+        }
+        departmentRepository.save(Department.createSystemDefault(
                 UNASSIGNED_DEPARTMENT_NAME,
-                "부서 배정 전 사원의 기본 소속",
-                null
+                "부서 배정 전 사원의 기본 소속"
         ));
         log.info("[DataInitializer] 미배정 부서 초기화 완료");
     }

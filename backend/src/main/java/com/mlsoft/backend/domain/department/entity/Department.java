@@ -56,6 +56,22 @@ public class Department extends BaseTimeEntity {
     @Builder.Default
     private boolean active = true;
 
+    /**
+     * <b>시스템 기본 부서인가</b> — 첫 기동에 만들어지는 "미배정" 한 행만 참이다 (2026-08-20).
+     *
+     * <p>이 표시가 필요한 이유는 <b>같은 단어가 두 가지를 가리켰기 때문</b>이다.
+     * 화면의 "미배정"은 원래 {@code department == null}용 문구인데,
+     * {@code DataInitializer}가 <b>그 이름의 실제 부서 행</b>을 만들고 신규 가입자를 거기 배속한다.
+     * 그래서 실계정 중 부서가 {@code null}인 사람이 사실상 없고, "부서 없음"을 조건으로 삼은
+     * 화면 분기가 전부 죽어 있었다.
+     *
+     * <p><b>이름으로 판별하지 않는 이유</b>: 관리자가 부서 이름을 바꾸는 순간 조용히 깨진다.
+     * 그래서 이름이 아니라 <b>구조적 속성</b>으로 못박는다 — 이름·설명은 바꿔도 이 표시는 남는다.
+     */
+    @Column(name = "system_default", nullable = false)
+    @Builder.Default
+    private boolean systemDefault = false;
+
     /** 부서 생성 */
     public static Department create(String name, String description, Long parentId) {
         return Department.builder()
@@ -63,6 +79,23 @@ public class Department extends BaseTimeEntity {
                 .description(description)
                 .parentId(parentId)
                 .build();
+    }
+
+    /** 시스템 기본 부서 생성 — {@code DataInitializer} 전용 (첫 기동에 한 번) */
+    public static Department createSystemDefault(String name, String description) {
+        return Department.builder()
+                .name(name)
+                .description(description)
+                .systemDefault(true)
+                .build();
+    }
+
+    /**
+     * 이미 만들어져 있던 기본 부서에 표시를 붙인다 — {@code DataInitializer} 전용.
+     * 이 컬럼이 생기기 전에 만들어진 DB를 위한 멱등 보정이다.
+     */
+    public void markAsSystemDefault() {
+        this.systemDefault = true;
     }
 
     /** 팀장 지정 */

@@ -14,7 +14,12 @@ public record DepartmentResponse(
         Long leaderId,
         String leaderName,
         Long parentId,
-        boolean active
+        boolean active,
+        /**
+         * 시스템 기본 "미배정" 부서인가 — 프론트가 <b>이름 문자열로 판별하지 않게</b> 하려고 내린다.
+         * 이름은 바뀔 수 있고, 바뀌면 이름 비교는 조용히 깨진다 (2026-08-20).
+         */
+        boolean unassigned
 ) {
 
     public static DepartmentResponse of(Department department) {
@@ -26,7 +31,8 @@ public record DepartmentResponse(
                 leader != null ? leader.getId() : null,
                 leader != null ? leader.getName() : null,
                 department.getParentId(),
-                department.isActive()
+                department.isActive(),
+                department.isSystemDefault()
         );
     }
 }

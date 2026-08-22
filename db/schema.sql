@@ -77,6 +77,7 @@ CREATE TABLE `department` (
   `description` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `parent_id` bigint DEFAULT NULL,
+  `system_default` bit(1) NOT NULL DEFAULT b'0',
   `leader_id` bigint DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `FK2p51g6b22peoewswi0kgvp0kb` (`leader_id`),
