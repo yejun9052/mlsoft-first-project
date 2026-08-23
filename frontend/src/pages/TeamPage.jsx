@@ -46,6 +46,24 @@ export default function TeamPage() {
     [departmentsQuery.data, me?.departmentId],
   );
 
+  /**
+   * 팀장 자리에 무엇을 쓸 것인가 — 서로 다른 두 상태가 지금까지 **똑같이 "미지정"**으로 뭉개져 있었다.
+   *
+   * <ul>
+   *   <li><b>부서 미배정</b> — 애초에 소속이 정해지지 않았다. 팀장이 없는 것이 정상이고,
+   *       관리자가 할 일은 팀장 지정이 아니라 <b>부서 배정</b>이다</li>
+   *   <li><b>팀장 공석</b> — 실제 부서인데 {@code leader_id}가 비어 있다.
+   *       그 부서의 결재가 총관리자로 넘어가고 있다는 뜻이라 관리자가 <b>팀장을 지정</b>해야 한다</li>
+   * </ul>
+   *
+   * <p>둘을 같은 문구로 보여주면 무엇을 해야 하는지 알 수 없다 — 실제로 "팀장으로 지정했는데
+   * 팀 정보에는 미지정으로 나온다"는 신고가 여기서 나왔다.
+   *
+   * <p>판별은 서버가 내려주는 {@code unassigned} 플래그로 한다.
+   * 부서 이름은 관리자가 바꿀 수 있어 식별자가 아니다.
+   */
+  const leaderValue = dept?.unassigned ? '부서 미배정' : (dept?.leaderName ?? '미지정');
+
   // 이번 달 팀 연차 사용 — 승인 확정 / 대기(신규+소급취소) 선차감을 구분해 합산 (선차감 정책, docs/01)
   const { confirmedDays, pendingDays } = useMemo(() => {
     let confirmed = 0;
@@ -89,7 +107,7 @@ export default function TeamPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-6">
-            <Stat Icon={Crown} label="팀장" value={dept?.leaderName ?? '미지정'} />
+            <Stat Icon={Crown} label="팀장" value={leaderValue} />
             <Stat Icon={Users} label="인원" value={`${teamMembers.length}명`} />
             <Stat Icon={CalendarDays} label="이번 달 사용(확정)" value={`${confirmedDays}일`} />
             <Stat Icon={Clock3} label="이번 달 대기 중" value={`${pendingDays}일`} />

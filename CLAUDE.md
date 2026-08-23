@@ -89,7 +89,8 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 - 값 검증은 **저장 시점**에 한다 (`PolicyConfigKey.validate`). 읽는 시점에 터지면 잘못 넣은 관리자가 아니라 **사원의 연차 신청이 실패**한다
 - 읽기는 `PolicyConfigReader`의 타입별 접근자로만. **읽을 때도 같은 검증을 다시** 통과시키고 어긋나면 기본값 + WARN — 옛 값이 상한을 무력화하는 것을 막는다
 - 그 값을 읽는 기능이 아직 없으면 반드시 `PENDING_FEATURE`로 둔다 (관리자 화면에 "미동작" 배지)
-- 현재 ACTIVE: `advance_leave_enabled`, `advance_max_days`(당겨쓰기 누적 상한), `leave_max_dates_per_request`
+- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 7개와 PENDING_FEATURE 2개다(2026-08-23).
+  실제 키·동작 여부는 enum과 `GET /api/admin/configs`에서 확인하고 이 문서에 키 목록을 복제하지 않는다.
 
 ### 프론트엔드 데이터 흐름
 `api/*.js`(엔드포인트 1:1 함수, `res.data.data` 언랩) → `hooks/use*.js`(React Query 래퍼) → 페이지. 쿼리 키는 `['leaves', 서브리소스, ...파라미터]` 규칙이라 접두사로 일괄 invalidate 할 수 있다.
@@ -164,7 +165,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | 문서 | 내용 |
 |---|---|
 | `docs/01-요구사항-기획.md` | 요구사항·기능 명세·권한 체계 |
-| `docs/02-DB-설계.md` | 테이블 12개 + ENUM |
+| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 16개 테이블·ENUM 대조 |
 | `docs/03-API-설계.md` | 엔드포인트 + 공통 규칙(응답 포맷·페이징·에러 코드) |
 | `docs/04-코드-스타일-가이드.md` | 코드 컨벤션 (위 요약의 원본) |
 | `docs/05-디자인-가이드.md` | 디자인 토큰·화면 구조 |
@@ -172,9 +173,10 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | `docs/08-운영-검증-리포트.md` | 실사용 검증 이슈 (코드 주석의 `검증 R-5`, `Y-2` 등 참조처) |
 | `docs/09-스케줄러-설계.md` | 스케줄러 3개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감 |
 | `docs/10-코드리뷰-리포트.md` | 코드 리뷰 결과 (코드 주석의 `리뷰 I-1`, `F-3` 등 참조처) |
-| `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청이 흐르는 길·연차 잔액 상태 전이·기능별 구현 상태. 처음 볼 문서 |
-| `docs/12-남은-작업.md` | **열려 있는 작업만 추린 실행 목록** — 우선순위·의존 관계·착수 순서. 다음에 뭘 할지 정할 때 |
+| `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청 경로·연차 잔액 상태 전이·구조. 처음 볼 문서 |
+| `docs/12-남은-작업.md` | **현재 상태와 열려 있는 작업의 단일 원본** — 완료·부분·미구현·우선순위 |
 | `docs/13-QA-체크리스트.md` | 손으로 돌려볼 항목 — 자동 테스트가 못 잡는 렌더·권한·배포 설정. 브라우저로 확인할 때 |
+| `PROJECT_PROGRESS.md` | **세션 전환용 진행도 메모리** — 완료·미구현·정책 결정·다음 순서 |
 | `CHANGELOG.md` (루트) | **버전별 변경 이력** — 무엇이 언제 왜 바뀌었는지. 배포 전이라 `0.x` |
 | ~~`docs/구현-현황/`~~ | **폐기(2026-08-07)** — docs/11 §4와 docs/12가 대체. 상태 문서를 3개 병렬로 두니 아무도 안 고쳤다 |
 
@@ -186,6 +188,6 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 `SESSION.md`가 직전 세션 요약과 이월 작업 목록을 담고 있다. `/load-session`으로 복구하고 `/save-session`으로 기록한다(옵시디언 볼트 연동).
 
-`.claude/agents/`에 프로젝트 전용 서브 에이전트 4개가 있다 — `spring-backend`, `react-frontend`, `db-designer`, `style-reviewer`.
+`.claude/agents/`에 프로젝트 전용 서브 에이전트 4개가 있고, `.codex/agents/`에 Codex 감사·테스트·리뷰 역할 7개가 있다.
 
 **git push는 사용자가 명시적으로 지시할 때만 한다.** 로컬 커밋까지가 기본이다.

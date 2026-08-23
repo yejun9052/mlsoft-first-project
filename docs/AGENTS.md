@@ -3,7 +3,7 @@
 > 다른 컴퓨터에서 이 프로젝트를 열었을 때 필요한 서브 에이전트 안내.
 > **에이전트 정의는 `.claude/agents/`·`.codex/agents/`에 이미 포함되어 있으므로,
 > 이 폴더들을 git에 커밋하면 별도 세팅 없이 그대로 동작한다.**
-> 최종 갱신 2026-08-07 — Codex 3역할 추가.
+> 최종 갱신 2026-08-23 — Codex 7역할 기준.
 
 ## 구축된 프로젝트 에이전트 (`.claude/agents/`)
 
@@ -17,7 +17,7 @@
 각 에이전트는 `docs/` 문서(스타일 가이드, DB 설계, 디자인 가이드)를 기준으로 동작하도록 작성되어 있다.
 **설계 문서를 수정하면 에이전트 규칙도 자동으로 따라온다** (에이전트가 문서를 읽고 작업하기 때문).
 
-## Codex CLI 에이전트 (`.codex/agents/`) — 2026-08-06 신설
+## Codex CLI 에이전트 (`.codex/agents/`) — 2026-08-23 기준 7역할
 
 Claude와 **다른 모델에게 같은 코드를 독립적으로 보게 하는 것**이 목적이다.
 실제로 리뷰 I-10·I-11은 Codex가 감사 중 찾았고, 관리자 설정 작업에서도 결함 2건을 잡았다.
@@ -27,6 +27,10 @@ Claude와 **다른 모델에게 같은 코드를 독립적으로 보게 하는 �
 | **leave-invariant-auditor** | leave-invariant-auditor.md | 연차 잔액 불변식 전수 감사 — `advance_days = max(0, use − base − bonus)`가 모든 경로에서 유지되는지 |
 | **test-author** | test-author.md | JUnit 5 + Mockito 테스트 작성 (기존 스타일을 먼저 읽고 따름) |
 | **diff-reviewer** | diff-reviewer.md | **아직 커밋되지 않은 변경분만** 리뷰 — 정확성 → 누락된 호출부 → 불변식 순서 |
+| **code-author** | code-author.md | 설계 과제의 구현 초안 작성 (쓰기 작업이 필요한 경우) |
+| **failure-auditor** | failure-auditor.md | 실패 경로·예외·복구 경계 감사 |
+| **query-auditor** | query-auditor.md | 조회 성능·N+1·인덱스 감사 |
+| **security-auditor** | security-auditor.md | 인증·권한·입력 검증·시크릿 노출 감사 |
 
 루트 `AGENTS.md`는 Codex가 자동 로드하는 프로젝트 지침이다 (Claude Code의 `CLAUDE.md`에 대응).
 

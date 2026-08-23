@@ -21,7 +21,7 @@
 ### 인증·권한
 - JWT HttpOnly Cookie (`token`, SameSite=Lax, prod는 Secure) — OAuth2 성공 핸들러가 발급
 - 권한 표기: 전체(로그인) / TL(TEAM_LEADER) / SA(SYSTEM_ADMIN)
-- 온보딩 미완료(hire_date null) 유저는 `/api/auth/*` 외 차단
+- 온보딩 미완료(`onboarding_status != COMPLETED`) 유저는 `/api/auth/*` 외 차단. `hire_date` 존재 여부만으로 판별하지 않음
 
 ### 에러 코드 (ErrorCode enum과 1:1)
 | 코드 | HTTP | 메시지 |

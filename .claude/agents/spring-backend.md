@@ -26,10 +26,10 @@ description: MLsoft 연차 관리 시스템의 Spring Boot 백엔드 작업 전�
 - 권한: EMPLOYEE / TEAM_LEADER / SYSTEM_ADMIN (이전 프로젝트의 MANAGER 아님)
 - 연차는 신청(PENDING) 시 선차감, 거부 시 복구 정책. 잔여 부족 시 거부, `advance_leave_enabled=true`면 당겨쓰기(advance_days 누적)
 - 승인자는 primary(팀장=department.leader_id) + sub(신청자가 재직 중 TEAM_LEADER·SYSTEM_ADMIN 중 선택, EMPLOYEE 불가). **병렬 선착순 처리** — 먼저 처리한 1명으로 종료, 중복 처리는 ALREADY_PROCESSED
-- 기산일 리셋 시 미사용 연차 소멸 + leave_reset_history 기록, 1년 미만 신입은 매월 1일 월차 적립(최대 11일)
+- 기산일 리셋 시 미사용 연차 소멸 + leave_reset_history 기록, 1년 미만 신입은 기산일 기준 월차 스케줄러로 적립(최대 11일)
 - 스케줄러 대상 검색은 `last_reset_date + 1년 <= 오늘` 방식 (서버 다운 시 자동 catch-up) — "오늘이 입사일" 검색 금지
 - 일수 수치는 BigDecimal(DECIMAL(4,1)), 비교는 compareTo. User에 @Version 낙관적 락, 승인/취소는 status 조건부 갱신
 - 이메일은 커밋 후 비동기 발송(@Async + AFTER_COMMIT 이벤트), email_history에 status(PENDING/SENT/FAILED) 기록 — 메일 실패가 업무 트랜잭션을 롤백시키면 안 됨
 - OAuth: 이메일 도메인 + email_verified 검증, 퇴직자(is_active=false)는 토큰 발급 거부. ADMIN_EMAILS 환경변수 이메일은 첫 로그인 시 SYSTEM_ADMIN. hd claim 검증은 Workspace 계정 확보 후 활성화(⏳)
-- 온보딩 미완료(hire_date null) 유저는 신청·스케줄러 대상 제외
+- 온보딩 미완료(`onboarding_status != COMPLETED`) 유저는 신청·스케줄러 대상 제외. `hire_date` 존재 여부만으로 판별하지 않는다
 - 이전 프로젝트의 오타(`getPaddingLeave`, `add-brith-day-leave` 등)를 절대 복사하지 말 것

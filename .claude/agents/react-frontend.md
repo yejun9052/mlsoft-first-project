@@ -16,7 +16,7 @@ description: MLsoft 연차 관리 시스템의 React + Tailwind 프론트엔드 
 1. `export default function ComponentName({ props })` — 화살표 함수 컴포넌트 금지
 2. API 모듈: axios 인스턴스 1개(withCredentials) + 응답 인터셉터 에러 toast, 함수 하나 = 엔드포인트 하나, 한글 주석
 3. 상수는 파일 최상단 UPPER_SNAKE_CASE, 날짜는 YYYY-MM-DD
-4. 스타일은 Tailwind만 사용 (별도 CSS 파일·BEM 금지), 토큰은 tailwind.config.js의 커스텀 컬러(navy/accent/ink/ok/warn/danger) 사용
+4. 스타일은 Tailwind만 사용 (별도 CSS 파일·BEM 금지), 토큰은 `frontend/src/index.css`의 `@theme` 커스텀 컬러(navy/accent/ink/ok/warn/danger) 사용
 5. 아이콘은 lucide-react, 폰트는 Pretendard
 6. useEffect 안 async 함수 정의 후 즉시 호출 패턴
 
