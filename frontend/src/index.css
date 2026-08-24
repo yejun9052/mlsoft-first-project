@@ -198,3 +198,239 @@ option:disabled {
   scrollbar-width: thin;
   scrollbar-color: rgba(147, 180, 255, 0.18) transparent;
 }
+
+/* Calendar touch surface — keep vertical page scrolling native while a clear horizontal
+   gesture changes the visible month. */
+.calendar-touch-surface {
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
+
+.calendar-span-bar {
+  margin-top: var(--calendar-span-top, 40px);
+}
+
+.mobile-calendar-adjacent-day {
+  display: none;
+}
+
+.mobile-calendar-entry-dots,
+.mobile-calendar-day-summary {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .mobile-calendar-card {
+    flex: none;
+    border-color: transparent;
+    background-color: transparent;
+    box-shadow: none;
+  }
+
+  .mobile-calendar-card > div {
+    flex: none;
+    padding: 0;
+  }
+
+  .mobile-calendar-legend {
+    display: none;
+  }
+
+  .calendar-weekday-row {
+    gap: 3px;
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .calendar-touch-surface {
+    flex: none;
+    margin-top: 12px;
+  }
+
+  .mobile-calendar-grid {
+    height: auto;
+    gap: 3px;
+    grid-auto-rows: auto;
+  }
+
+  .calendar-day-cell,
+  .calendar-pad-cell {
+    aspect-ratio: 1 / 1;
+    min-height: 0;
+    padding: 6px;
+    border-radius: 8px;
+  }
+
+  .calendar-day-cell > div:nth-child(2) {
+    padding-top: 0 !important;
+  }
+
+  .calendar-entry-pill {
+    display: none;
+  }
+
+  .mobile-calendar-focused {
+    border-color: rgba(34, 211, 238, 0.72) !important;
+    background-color: rgba(34, 211, 238, 0.09) !important;
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.16);
+  }
+
+  .mobile-calendar-entry-dots {
+    display: flex;
+    min-height: 7px;
+    align-items: center;
+    gap: 3px;
+    margin-top: auto;
+    overflow: hidden;
+  }
+
+  .mobile-calendar-entry-dot {
+    display: block;
+    height: 6px;
+    width: 6px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+
+  .calendar-day-cell .calendar-entry-pill:nth-of-type(n + 2),
+  .calendar-day-cell-has-overflow .calendar-entry-pill {
+    display: none;
+  }
+
+  .calendar-overflow-trigger {
+    position: absolute;
+    inset-inline: 4px;
+    bottom: 4px;
+    z-index: 1;
+    justify-content: flex-start;
+    padding: 0;
+    font-size: 9px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .calendar-overflow-trigger svg {
+    height: 10px;
+    width: 10px;
+  }
+
+  .calendar-day-cell {
+    border-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(15, 15, 18, 0.9);
+  }
+
+  .calendar-pad-cell {
+    background-color: rgba(15, 15, 18, 0.62);
+  }
+
+  .mobile-calendar-adjacent-day {
+    display: block;
+    color: rgba(126, 147, 176, 0.45);
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .calendar-span-overlay {
+    gap: 3px;
+  }
+
+  .calendar-span-bar {
+    margin-top: calc(20px + var(--calendar-span-lane, 0) * 8px) !important;
+    height: 5px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+  }
+
+  .calendar-span-bar > span {
+    display: none;
+  }
+
+  .calendar-entry-pill {
+    border-radius: 4px;
+    padding: 3px 4px;
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .mobile-calendar-day-summary {
+    display: block;
+    margin-top: 24px;
+    padding: 0 2px 28px;
+  }
+
+  .mobile-calendar-day-summary-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobile-calendar-day-summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .mobile-calendar-day-summary-item {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+    border-radius: 10px;
+    background: rgba(15, 15, 18, 0.72);
+    padding: 9px 11px;
+  }
+
+  .mobile-calendar-summary-dot {
+    display: block;
+    height: 9px;
+    width: 9px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+
+  .mobile-calendar-day-summary-empty {
+    margin-top: 16px;
+    border-radius: 10px;
+    background: rgba(15, 15, 18, 0.6);
+    padding: 12px;
+    color: var(--color-ink-mute);
+    font-size: 12px;
+  }
+
+  .mobile-calendar-day-summary-add {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    padding: 14px 20px 14px 24px;
+    color: rgba(234, 243, 255, 0.86);
+    font-size: 16px;
+    font-weight: 500;
+    text-align: left;
+    transition: background-color 150ms ease;
+  }
+
+  .mobile-calendar-day-summary-add:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .calendar-entry-panel {
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-height: 88dvh;
+    overflow-y: auto;
+    border-radius: 20px 20px 0 0;
+  }
+}

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import CalendarPage from './CalendarPage.jsx';
@@ -12,6 +12,7 @@ vi.mock('../hooks/useAuth.js', () => ({ useCurrentUser: vi.fn() }));
 vi.mock('../hooks/useLeaves.js', () => ({
   useLeaveCalendar: vi.fn(),
   useLeaveSummary: vi.fn(),
+  useApplyLeave: vi.fn(() => ({ mutateAsync: vi.fn(), isPending: false })),
 }));
 vi.mock('../hooks/useSchedules.js', () => ({
   useScheduleCalendar: vi.fn(),
@@ -68,6 +69,8 @@ const SCHEDULES = [
   },
 ];
 
+const REAL_MATCH_MEDIA = window.matchMedia;
+
 function renderPage() {
   const router = createMemoryRouter(
     [{ path: '/calendar', element: <CalendarPage /> }],
@@ -87,6 +90,10 @@ describe('CalendarPage 하루 상세 모달', () => {
     useHolidays.mockReturnValue({
       data: [{ date: DATE, name: '테스트 공휴일' }],
     });
+  });
+
+  afterEach(() => {
+    window.matchMedia = REAL_MATCH_MEDIA;
   });
 
   it('페이지 제목은 캘린더로 표시한다', () => {
@@ -117,23 +124,23 @@ describe('CalendarPage 하루 상세 모달', () => {
   it('셀 표시 상한을 넘으면 초과 항목 수 손잡이가 보인다', () => {
     renderPage();
 
-    expect(screen.getByText('+1개')).toBeInTheDocument();
+    expect(screen.getByText('...더보기')).toBeInTheDocument();
   });
 
   // 손잡이가 보이는 것만으로는 부족하다. 셀이 상한을 안 지키면 **넘친 것까지 다 그려 놓고
-  // "+1개"도 함께 띄우는** 상태가 되는데, 그때 셀 높이가 날마다 들쭉날쭉해진다
-  it('셀에는 상한(3건)까지만 그리고 나머지는 손잡이 뒤에 둔다', () => {
+  // "...더보기"도 함께 띄우는 상태가 되는데, 그때 상세 모달 경로를 확인한다
+  it('셀에는 상한(2건)까지만 그리고 나머지는 손잡이 뒤에 둔다', () => {
     renderPage();
 
     // 모달을 열기 전 — 이 날짜의 항목은 연차 3 + 일정 1로 넷이다
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getAllByText(/^(홍길동|김동료|이동료)$/)).toHaveLength(3);
+    expect(screen.getAllByText(/^(홍길동|김동료|이동료)$/)).toHaveLength(2);
   });
 
   it('초과 손잡이를 누르면 그날의 연차·개인 일정·공휴일이 모두 보인다', () => {
     renderPage();
 
-    fireEvent.click(screen.getByText('+1개'));
+    fireEvent.click(screen.getByText('...더보기'));
 
     const dialog = screen.getByRole('dialog', { name: /2026년 8월 20일/ });
     expect(within(dialog).getByText('테스트 공휴일')).toBeInTheDocument();
@@ -150,7 +157,7 @@ describe('CalendarPage 하루 상세 모달', () => {
   it('서버가 마스킹한 타인 사유는 화면에서 만들어 내지 않는다', () => {
     renderPage();
 
-    fireEvent.click(screen.getByText('+1개'));
+    fireEvent.click(screen.getByText('...더보기'));
 
     const dialog = screen.getByRole('dialog', { name: /2026년 8월 20일/ });
     expect(within(dialog).queryByText('비공개')).not.toBeInTheDocument();
@@ -161,9 +168,32 @@ describe('CalendarPage 하루 상세 모달', () => {
   it('초과 손잡이는 상세만 열고 등록 패널을 열지 않는다', () => {
     renderPage();
 
-    fireEvent.click(screen.getByText('+1개'));
+    fireEvent.click(screen.getByText('...더보기'));
 
     expect(screen.getByRole('dialog', { name: /2026년 8월 20일/ })).toBeInTheDocument();
     expect(screen.queryByText('연차·일정 등록')).not.toBeInTheDocument();
+  });
+
+  it('모바일에서는 선택한 날짜의 일정과 추가 버튼을 하단에 보여준다', () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: `${DATE} 등록 날짜 선택` }));
+
+    const summary = screen.getByTestId('mobile-calendar-day-summary');
+    expect(within(summary).getByText('출장')).toBeInTheDocument();
+    expect(within(summary).getByText('오전 9시 고객사 미팅')).toBeInTheDocument();
+    expect(
+      within(summary).getByRole('button', { name: '8월 20일에 추가' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('...더보기')).not.toBeInTheDocument();
+
+    fireEvent.click(within(summary).getByRole('button', { name: '8월 20일에 추가' }));
+    expect(screen.getByRole('dialog', { name: '캘린더 등록 패널' })).toBeInTheDocument();
   });
 });

@@ -1,0 +1,37 @@
+# 자동 수집 증거 02 - 인증 벽(로그인 없이 접근) 확인
+수집 시각(로컬): 2026-08-24 22:08:24 +0900
+
+쿠키 없이(=로그인 안 한 상태) 프론트 프록시를 거쳐 API를 호출한 결과다.
+이 QA에서 화면 캡처가 막힌 이유의 1차 증거다.
+
+  GET /api/auth/me
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/departments
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/leaves/my
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/schedules
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/schedules/types
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/admin/configs
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+  GET /api/holidays
+      {"success":false,"message":"로그인이 필요합니다.","data":null} |HTTP 401
+
+## OAuth 진입점 (client_id 등 시크릿 값은 가림)
+  HTTP/1.1 302 Found
+  vary: Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+  set-cookie: JSESSIONID=***REDACTED***; Path=/; HttpOnly
+  x-content-type-options: nosniff
+  x-xss-protection: 0
+  cache-control: no-cache, no-store, max-age=0, must-revalidate
+  pragma: no-cache
+  expires: 0
+  x-frame-options: DENY
+  location: https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=***REDACTED***&scope=profile%20email&state=***REDACTED***&redirect_uri=http://localhost:8080/login/oauth2/code/google&code_challenge=***REDACTED***&code_challenge_method=S256
+  content-length: 0
+  date: Mon, 24 Aug 2026 13:08:24 GMT
+
+판정: 로그인 화면 이후 모든 화면은 Google OAuth 계정 없이는 열 수 없다.
+      따라서 아래 문서의 로그인 필요 항목은 자동 PASS로 만들 수 없고 UNKNOWN으로 남긴다.

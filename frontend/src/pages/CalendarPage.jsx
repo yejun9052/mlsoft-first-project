@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
@@ -11,6 +11,7 @@ import Modal from '../components/ui/Modal.jsx';
 import CalendarEntryPanel from '../components/leave/CalendarEntryPanel.jsx';
 import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../constants/status.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
+import useMediaQuery from '../hooks/useMediaQuery.js';
 import { useLeaveCalendar, useLeaveSummary } from '../hooks/useLeaves.js';
 import { useScheduleCalendar } from '../hooks/useSchedules.js';
 import { useDepartments } from '../hooks/useDepartments.js';
@@ -18,8 +19,10 @@ import { useHolidays } from '../hooks/useHolidays.js';
 
 // 요일 헤더 (일요일 시작)
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
-// 6주짜리 달에서도 행 높이가 흔들리지 않으면서 이름과 종류를 읽을 수 있는 상한이다.
-const MAX_VISIBLE = 3;
+// 하루 셀에서 직접 보여줄 일정 수. 초과 일정은 상세 모달에서 확인한다.
+const MAX_VISIBLE = 2;
+// 여러 다일 일정이 같은 주에 겹칠 때 화면에 유지할 막대 레인 수.
+const MAX_BAR_LANES = 3;
 // 검색어 디바운스 — 한 글자마다 요청을 날리지 않게
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -32,11 +35,25 @@ const SCHEDULE_PILL_CLASS = {
   TRAINING: 'bg-sky-400/18 text-sky-300',
 };
 
+const SCHEDULE_DOT_CLASS = {
+  FIELD_WORK: 'bg-amber-300',
+  BUSINESS_TRIP: 'bg-violet-300',
+  REMOTE: 'bg-emerald-300',
+  TRAINING: 'bg-sky-300',
+};
+
 function entryTone(entry) {
   if (entry.kind === 'SCHEDULE') {
     return SCHEDULE_PILL_CLASS[entry.typeKey] ?? 'bg-white/10 text-ink-body';
   }
   return entry.mine ? 'bg-accent/25 text-accent-light' : 'bg-ok/15 text-ok';
+}
+
+function entryDotTone(entry) {
+  if (entry.kind === 'SCHEDULE') {
+    return SCHEDULE_DOT_CLASS[entry.typeKey] ?? 'bg-ink-mute';
+  }
+  return entry.mine ? 'bg-accent-cyan' : 'bg-ok';
 }
 
 // 연·월별 캘린더 셀 데이터(연차 + 개인 일정 + 공휴일)를 날짜별로 묶는다.
@@ -56,6 +73,112 @@ function buildCalendarData(entries, holidays, year, month) {
     (map[day] ??= { entries: [], holiday: null }).holiday = holiday.name;
   }
   return map;
+}
+
+// 연속된 날짜를 차지하는 하나의 연차/일정을 주별 가로 막대 구간으로 만든다.
+// 주가 바뀌는 경우에만 화면상 구간이 나뉘며, 각 날짜에는 별도의 pill을 그리지 않는다.
+function getCalendarCellDate(year, month, index) {
+  const firstDay = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
+  return firstDay.add(index - firstDay.day(), 'day');
+}
+
+function buildCalendarSpanData(records, weeks, year, month) {
+  const prefix = String(year) + '-' + String(month).padStart(2, '0') + '-';
+  const datePosition = new Map();
+
+  weeks.forEach((week, weekIndex) => {
+    week.forEach((day, dayIndex) => {
+      if (day === null) return;
+      const date = prefix + String(day).padStart(2, '0');
+      datePosition.set(date, { weekIndex, dayIndex });
+    });
+  });
+
+  const segmentsByWeek = weeks.map(() => []);
+  const multiDayEventKeys = new Set();
+
+  records.forEach((record) => {
+    const sortedDates = [...new Set(record.dates ?? [])].sort();
+    let run = [];
+
+    const flushRun = () => {
+      const visibleDates = run.filter((date) => datePosition.has(date));
+      if (visibleDates.length === 0 || run.length < 2) {
+        run = [];
+        return;
+      }
+
+      const datesByWeek = new Map();
+      visibleDates.forEach((date) => {
+        const position = datePosition.get(date);
+        const weekDates = datesByWeek.get(position.weekIndex) ?? [];
+        weekDates.push({ date, ...position });
+        datesByWeek.set(position.weekIndex, weekDates);
+      });
+
+      datesByWeek.forEach((weekDates, weekIndex) => {
+        const firstDate = weekDates[0].date;
+        const lastDate = weekDates[weekDates.length - 1].date;
+        const firstVisibleIndex = visibleDates.indexOf(firstDate);
+        const lastVisibleIndex = visibleDates.indexOf(lastDate);
+        const firstRunIndex = run.indexOf(firstDate);
+        const lastRunIndex = run.indexOf(lastDate);
+
+        segmentsByWeek[weekIndex].push({
+          id: [record.id, weekIndex, firstDate].join('-'),
+          entry: { ...record.entry, key: record.id },
+          dates: weekDates.map(({ date }) => date),
+          startColumn: Math.min(...weekDates.map(({ dayIndex }) => dayIndex)),
+          endColumn: Math.max(...weekDates.map(({ dayIndex }) => dayIndex)),
+          rangeStart: run[0],
+          rangeEnd: run[run.length - 1],
+          continuesBefore: firstRunIndex > 0 || firstVisibleIndex > 0,
+          continuesAfter:
+            lastRunIndex < run.length - 1 || lastVisibleIndex < visibleDates.length - 1,
+        });
+      });
+
+      run = [];
+    };
+
+    sortedDates.forEach((date, index) => {
+      const previous = sortedDates[index - 1];
+      if (previous && dayjs(date).diff(dayjs(previous), 'day') !== 1) {
+        flushRun();
+      }
+      run.push(date);
+    });
+    flushRun();
+  });
+
+  segmentsByWeek.forEach((segments, weekIndex) => {
+    const lanes = [];
+    segments.sort((left, right) => left.startColumn - right.startColumn || left.endColumn - right.endColumn);
+
+    segments.forEach((segment) => {
+      let lane = 0;
+      while (
+        (lanes[lane] ?? []).some(
+          (placed) =>
+            placed.startColumn <= segment.endColumn && segment.startColumn <= placed.endColumn,
+        )
+      ) {
+        lane += 1;
+      }
+      (lanes[lane] ??= []).push(segment);
+      segment.lane = lane;
+    });
+
+    segmentsByWeek[weekIndex] = segments.filter((segment) => {
+      if (segment.lane >= MAX_BAR_LANES) return false;
+      segment.dates.forEach((date) => {
+        multiDayEventKeys.add(segment.entry.key + ':' + date);
+      });
+      return true;
+    });
+  });
+
+  return { segmentsByWeek, multiDayEventKeys };
 }
 
 function CalendarDayDetail({ detail, onClose }) {
@@ -103,11 +226,88 @@ function CalendarDayDetail({ detail, onClose }) {
   );
 }
 
+function MobileCalendarDaySummary({ date, cell, onAdd }) {
+  const dateObject = dayjs(date);
+  const entries = cell?.entries ?? [];
+  const weekday = WEEKDAYS[dateObject.day()];
+
+  return (
+    <section
+      data-testid="mobile-calendar-day-summary"
+      className="mobile-calendar-day-summary"
+      aria-label={`${date} 선택한 날짜 상세`}
+    >
+      <div className="mobile-calendar-day-summary-header">
+        <div>
+          <div className="flex items-baseline gap-2">
+            <strong className="text-[30px] font-bold leading-none tracking-[-0.05em] text-ink-hi">
+              {dateObject.date()}
+            </strong>
+            <span className="text-[14px] font-semibold text-ink-body">{weekday}요일</span>
+          </div>
+          <p className="mt-1 text-[12px] text-ink-mute">
+            {dateObject.format('YYYY년 M월')}
+            {cell?.holiday ? ` · ${cell.holiday}` : ''}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="rounded-badge bg-accent-cyan/12 px-3 py-2 text-[12px] font-semibold text-accent-cyan ring-1 ring-inset ring-accent-cyan/30"
+        >
+          + 추가
+        </button>
+      </div>
+
+      <div className="mobile-calendar-day-summary-list">
+        {entries.length > 0 ? (
+          entries.map((entry) => (
+            <article key={entry.key} className="mobile-calendar-day-summary-item">
+              <span
+                aria-hidden="true"
+                className={`mobile-calendar-summary-dot ${entryDotTone(entry)}`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <strong className="truncate text-[13px] font-semibold text-ink-hi">
+                    {entry.label}
+                  </strong>
+                  <span className="truncate text-[12px] text-ink-mute">
+                    {entry.personName}
+                    {entry.mine ? ' · 나' : ''}
+                  </span>
+                </div>
+                {entry.mine && entry.detail && (
+                  <p className="mt-0.5 truncate text-[11px] text-ink-mute">{entry.detail}</p>
+                )}
+              </div>
+            </article>
+          ))
+        ) : (
+          <p className="mobile-calendar-day-summary-empty">등록된 일정이 없습니다.</p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mobile-calendar-day-summary-add"
+      >
+        <span>{dateObject.format('M월 D일')}에 추가</span>
+        <span aria-hidden="true" className="text-[28px] font-light leading-none">
+          +
+        </span>
+      </button>
+    </section>
+  );
+}
+
 // 캘린더 — 회사 전체 연차·개인 일정·공휴일을 큰 월간 그리드로 조회 (docs/05 §②·§2-5b)
 // 날짜 셀을 클릭하면 드래그 가능한 등록 패널이 떠서, 캘린더를 보면서 날짜를 담아 등록한다.
 export default function CalendarPage() {
   const { data: me } = useCurrentUser();
   const summaryQuery = useLeaveSummary();
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   // 조회 기준 연·월 (초기값 = 오늘)
   const [year, setYear] = useState(dayjs().year());
@@ -117,6 +317,9 @@ export default function CalendarPage() {
   const [nameInput, setNameInput] = useState('');
   const [nameQuery, setNameQuery] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [mobileFocusedDate, setMobileFocusedDate] = useState(() => dayjs().format('YYYY-MM-DD'));
+  const touchStartRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setNameQuery(nameInput.trim()), SEARCH_DEBOUNCE_MS);
@@ -139,7 +342,7 @@ export default function CalendarPage() {
   const [dayDetail, setDayDetail] = useState(null);
 
   // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산
-  const { weeks, calData, blockedDates } = useMemo(() => {
+  const { weeks, calData, blockedDates, calendarSpans, multiDayEventKeys } = useMemo(() => {
     const base = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
     const daysInMonth = base.daysInMonth();
     const startOffset = base.day();
@@ -157,9 +360,41 @@ export default function CalendarPage() {
     }
 
     // 서버가 null로 마스킹한 사유·메모는 그대로 보존한다. 화면이 대신 값을 만들지 않는다.
+    const spanRecords = [
+      ...(calendarQuery.data ?? []).map((leave) => ({
+        id: ['L', leave.id].join(''),
+        dates: leave.dates ?? [],
+        entry: {
+          personName: leave.userName,
+          label: LEAVE_TYPE_LABEL[leave.leaveType] ?? leave.leaveType,
+          kind: 'LEAVE',
+          typeKey: leave.leaveType,
+          mine: leave.userId === me?.id,
+          detail: leave.reason,
+        },
+      })),
+      ...(scheduleQuery.data ?? []).map((schedule) => ({
+        id: ['S', schedule.id].join(''),
+        dates: schedule.dates ?? [],
+        entry: {
+          personName: schedule.userName,
+          label:
+            schedule.typeLabel ??
+            SCHEDULE_TYPE_LABEL[schedule.scheduleType] ??
+            schedule.scheduleType,
+          kind: 'SCHEDULE',
+          typeKey: schedule.scheduleType,
+          mine: schedule.userId === me?.id,
+          detail: schedule.memo,
+        },
+      })),
+    ];
+
     const flatLeaves = (calendarQuery.data ?? []).flatMap((leave) =>
       leave.dates.map((date) => ({
         date,
+        eventId: ['L', leave.id].join(''),
+        eventDateKey: ['L', leave.id].join('') + ':' + date,
         key: `L${leave.id}-${date}`,
         personName: leave.userName,
         label: LEAVE_TYPE_LABEL[leave.leaveType] ?? leave.leaveType,
@@ -173,6 +408,8 @@ export default function CalendarPage() {
     const flatSchedules = (scheduleQuery.data ?? []).flatMap((schedule) =>
       schedule.dates.map((date) => ({
         date,
+        eventId: ['S', schedule.id].join(''),
+        eventDateKey: ['S', schedule.id].join('') + ':' + date,
         key: `S${schedule.id}-${date}`,
         personName: schedule.userName,
         label:
@@ -188,6 +425,7 @@ export default function CalendarPage() {
 
     // 주말·공휴일 — 연차로 신청할 수 없는 날짜. 개인 일정은 등록할 수 있으므로
     // 셀 클릭을 막지 않고 패널이 모드에 따라 판단하게 넘긴다.
+    const spanData = buildCalendarSpanData(spanRecords, rows, year, month);
     const blocked = [];
     for (let day = 1; day <= daysInMonth; day += 1) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -200,6 +438,8 @@ export default function CalendarPage() {
     return {
       weeks: rows,
       calData: buildCalendarData([...flatLeaves, ...flatSchedules], holidays, year, month),
+      calendarSpans: spanData.segmentsByWeek,
+      multiDayEventKeys: spanData.multiDayEventKeys,
       blockedDates: blocked,
     };
   }, [year, month, calendarQuery.data, scheduleQuery.data, holidays, me?.id]);
@@ -208,6 +448,12 @@ export default function CalendarPage() {
   const today = dayjs();
   const isTodayMonth = year === today.year() && month === today.month() + 1;
   const todayDate = today.date();
+  const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}-`;
+  const mobileFocusedDateForView = mobileFocusedDate.startsWith(currentMonthPrefix)
+    ? mobileFocusedDate
+    : `${currentMonthPrefix}01`;
+  const mobileFocusedDay = Number(mobileFocusedDateForView.slice(8, 10));
+  const mobileFocusedCell = calData[mobileFocusedDay];
 
   // 월 이동 — 1월/12월 경계에서 연도까지 넘김
   function shiftMonth(delta) {
@@ -226,8 +472,44 @@ export default function CalendarPage() {
     setMonth(nextMonth);
   }
 
+  function goToToday() {
+    const now = dayjs();
+    setYear(now.year());
+    setMonth(now.month() + 1);
+    setMobileFocusedDate(now.format('YYYY-MM-DD'));
+  }
+
+  function handleCalendarTouchStart(event) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleCalendarTouchEnd(event) {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const horizontalDistance = Math.abs(deltaX);
+    const verticalDistance = Math.abs(deltaY);
+    if (horizontalDistance <= verticalDistance || horizontalDistance < 12) return;
+    event.preventDefault();
+    if (horizontalDistance < 50) return;
+    shiftMonth(deltaX < 0 ? 1 : -1);
+  }
+
   // 날짜 셀 본문은 계속 등록 전용이다. 상세는 초과 손잡이에서만 열어 두 동작이 충돌하지 않게 한다.
   function handleDayClick(dateStr) {
+    if (isMobile) {
+      setMobileFocusedDate(dateStr);
+      setSelectedDates([]);
+      setPanelOpen(false);
+      return;
+    }
+
     setSelectedDates((previous) =>
       previous.includes(dateStr)
         ? previous.filter((date) => date !== dateStr)
@@ -236,13 +518,22 @@ export default function CalendarPage() {
     setPanelOpen(true);
   }
 
-  function openDayDetail(event, date, cell) {
-    event.stopPropagation();
+  function openMobileEntry() {
+    setSelectedDates([mobileFocusedDateForView]);
+    setPanelOpen(true);
+  }
+
+  function showDayDetail(date, cell) {
     setDayDetail({
       date,
       holiday: cell?.holiday ?? null,
       entries: cell?.entries ?? [],
     });
+  }
+
+  function openDayDetail(event, date, cell) {
+    event.stopPropagation();
+    showDayDetail(date, cell);
   }
 
   function closePanel() {
@@ -260,13 +551,40 @@ export default function CalendarPage() {
 
   return (
     <div className="flex h-full flex-col">
+      <div className="mb-4 flex items-center justify-between px-1 sm:hidden">
+        <span
+          aria-live="polite"
+          aria-label={`${year}년 ${month}월`}
+          className="text-[28px] font-bold tracking-[-0.04em] text-ink-hi"
+        >
+          {month}월
+        </span>
+        <div className="flex items-center gap-1">
+          <IconButton
+            Icon={Search}
+            label="일정 검색"
+            size="md"
+            tone="muted"
+            onClick={() => setMobileFiltersOpen((previous) => !previous)}
+          />
+          <IconButton
+            Icon={CalendarDays}
+            label="오늘로 이동"
+            size="md"
+            tone="muted"
+            onClick={goToToday}
+          />
+        </div>
+      </div>
+
       <PageHeader
+        className="hidden sm:block"
         title="캘린더"
         subtitle="회사 전체 연차·일정과 공휴일 · 날짜를 클릭하면 바로 등록"
       />
 
       {/* 월 이동은 캘린더의 주 탐색이다. 헤더 보조 영역에서 분리해 위치·크기·대비를 함께 높인다. */}
-      <div className="mb-4 flex items-center justify-center gap-3 rounded-card border border-white/[0.12] bg-navy-card px-4 py-3 shadow-card">
+      <div className="mb-4 hidden items-center justify-center gap-3 rounded-card border border-white/[0.12] bg-navy-card px-4 py-3 shadow-card sm:flex">
         <IconButton
           Icon={ChevronLeft}
           label="이전 달"
@@ -289,7 +607,12 @@ export default function CalendarPage() {
         />
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div
+        className={[
+          'mb-3 flex-wrap items-center gap-2 sm:flex',
+          mobileFiltersOpen ? 'flex' : 'hidden',
+        ].join(' ')}
+      >
         <div className="relative min-w-[220px] flex-1 sm:max-w-[300px]">
           <Search
             size={15}
@@ -331,8 +654,8 @@ export default function CalendarPage() {
         )}
       </div>
 
-      <Card fill padding="tight">
-        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-mute">
+      <Card fill padding="tight" className="mobile-calendar-card">
+        <div className="mobile-calendar-legend mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-mute">
           <Legend swatch="bg-accent/25 text-accent-light" label="내 연차" />
           <Legend swatch="bg-ok/18" label="동료 연차" />
           <Legend swatch="bg-amber-400/18" label="외근" />
@@ -347,7 +670,7 @@ export default function CalendarPage() {
           />
         </div>
 
-        <div className="grid grid-cols-7 gap-2 border-b border-white/[0.12] pb-2">
+        <div className="calendar-weekday-row grid grid-cols-7 gap-2 border-b border-white/[0.12] pb-2">
           {WEEKDAYS.map((weekday, index) => (
             <div
               key={weekday}
@@ -360,14 +683,26 @@ export default function CalendarPage() {
           ))}
         </div>
 
-        <div className="mt-2 grid min-h-0 flex-1 auto-rows-fr grid-cols-7 gap-2">
+        <div
+          data-testid="calendar-touch-surface"
+          className="calendar-touch-surface relative mt-2 min-h-0 flex-1"
+          onTouchStart={handleCalendarTouchStart}
+          onTouchEnd={handleCalendarTouchEnd}
+          onTouchCancel={() => {
+            touchStartRef.current = null;
+          }}
+        >
+          <div className="mobile-calendar-grid grid h-full min-h-0 auto-rows-fr grid-cols-7 gap-2">
           {weeks.flat().map((day, index) => {
             if (day === null) {
+              const adjacentDate = getCalendarCellDate(year, month, index);
               return (
                 <div
                   key={`pad-${index}`}
-                  className="rounded-btn border border-transparent bg-navy-app/20"
-                />
+                  className="calendar-pad-cell rounded-btn border border-transparent bg-navy-app/20"
+                >
+                  <span className="mobile-calendar-adjacent-day">{adjacentDate.date()}</span>
+                </div>
               );
             }
 
@@ -376,9 +711,23 @@ export default function CalendarPage() {
             const isToday = isTodayMonth && day === todayDate;
             const holiday = cell?.holiday;
             const entries = cell?.entries ?? [];
-            const overflow = entries.length - MAX_VISIBLE;
+            const weekIndex = Math.floor(index / 7);
+            const weekSpans = calendarSpans[weekIndex] ?? [];
+            const columnIndex = index % 7;
+            const spanLaneCount = weekSpans.reduce(
+              (maxLane, span) =>
+                span.startColumn <= columnIndex && columnIndex <= span.endColumn
+                  ? Math.max(maxLane, span.lane + 1)
+                  : maxLane,
+              0,
+            );
+            const visibleEntries = entries.filter(
+              (entry) => !multiDayEventKeys.has(entry.eventDateKey),
+            );
+            const overflow = Math.max(entries.length - MAX_VISIBLE, 0);
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const selected = selectedDates.includes(dateStr);
+            const mobileFocused = isMobile && mobileFocusedDateForView === dateStr;
 
             return (
               <button
@@ -386,7 +735,9 @@ export default function CalendarPage() {
                 type="button"
                 onClick={() => handleDayClick(dateStr)}
                 aria-label={`${dateStr} 등록 날짜 선택`}
-                className={`flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-all duration-150 ${
+                className={`calendar-day-cell relative flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-all duration-150 ${
+                  overflow > 0 ? 'calendar-day-cell-has-overflow' : ''
+                } ${mobileFocused ? 'mobile-calendar-focused' : ''} ${
                   selected
                     ? 'border-accent-cyan/60 bg-accent-cyan/10 hover:border-accent-cyan'
                     : holiday
@@ -414,11 +765,18 @@ export default function CalendarPage() {
                   {selected && <Check size={14} className="shrink-0 text-accent-light" />}
                 </div>
 
-                <div className="flex min-h-0 flex-col gap-1 overflow-hidden">
-                  {entries.slice(0, MAX_VISIBLE).map((entry) => (
+                <div
+                  className="flex min-h-0 flex-col gap-1 overflow-hidden"
+                  style={
+                    spanLaneCount > 0
+                      ? { paddingTop: String(spanLaneCount * 24 + 4) + 'px' }
+                      : undefined
+                  }
+                >
+                  {visibleEntries.slice(0, MAX_VISIBLE).map((entry) => (
                     <span
                       key={entry.key}
-                      className={`flex items-center gap-1 rounded px-1.5 py-1 text-[12px] font-medium ${entryTone(entry)} ${
+                      className={`calendar-entry-pill flex items-center gap-1 rounded px-1.5 py-1 text-[12px] font-medium ${entryTone(entry)} ${
                         entry.mine ? 'ring-1 ring-inset ring-white/25' : ''
                       }`}
                     >
@@ -427,28 +785,104 @@ export default function CalendarPage() {
                     </span>
                   ))}
 
-                  {overflow > 0 && (
+                </div>
+                <div
+                  className="mobile-calendar-entry-dots"
+                  aria-label={visibleEntries.map((entry) => entry.label).join(', ')}
+                >
+                  {visibleEntries.slice(0, 4).map((entry) => (
                     <span
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${dateStr} 일정 ${entries.length + (holiday ? 1 : 0)}개 모두 보기`}
-                      onClick={(event) => openDayDetail(event, dateStr, cell)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          openDayDetail(event, dateStr, cell);
-                        }
-                      }}
-                      className="flex items-center gap-1 rounded-badge px-1.5 py-0.5 text-[12px] font-semibold text-accent-light transition-colors hover:bg-accent/15 hover:text-ink-hi"
-                    >
-                      <CalendarDays size={12} />
-                      +{overflow}개
-                    </span>
+                      key={`dot-${entry.key}`}
+                      title={`${entry.personName} · ${entry.label}`}
+                      className={`mobile-calendar-entry-dot ${entryDotTone(entry)}`}
+                    />
+                  ))}
+                  {holiday && (
+                    <span
+                      title={holiday}
+                      aria-label={holiday}
+                      className="mobile-calendar-entry-dot bg-danger"
+                    />
                   )}
                 </div>
+                {!isMobile && overflow > 0 && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${dateStr} 일정 ${entries.length + (holiday ? 1 : 0)}개 모두 보기`}
+                    onClick={(event) => openDayDetail(event, dateStr, cell)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openDayDetail(event, dateStr, cell);
+                      }
+                    }}
+                    className="calendar-overflow-trigger flex items-center gap-1 rounded-badge px-1.5 py-0.5 text-[12px] font-semibold text-accent-light transition-colors hover:bg-accent/15 hover:text-ink-hi"
+                  >
+                    <CalendarDays size={12} />
+                    ...더보기
+                  </span>
+                )}
               </button>
             );
           })}
+          </div>
+
+          <div
+            aria-label="연속 일정"
+            className="calendar-span-overlay pointer-events-none absolute inset-0 z-10 grid grid-cols-7 gap-2"
+            style={{
+              gridTemplateRows: 'repeat(' + weeks.length + ', minmax(0, 1fr))',
+            }}
+          >
+            {calendarSpans.flatMap((spans, weekIndex) =>
+              spans.map((segment) => {
+                const entry = segment.entry;
+                const label = entry.personName + ' · ' + entry.label;
+                const range = segment.rangeStart + ' ~ ' + segment.rangeEnd;
+                const rounding = [
+                  !segment.continuesBefore && 'rounded-l-md',
+                  !segment.continuesAfter && 'rounded-r-md',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
+
+                return (
+                  <span
+                    key={segment.id}
+                    role="img"
+                    aria-label={label + ' ' + range}
+                    title={label + ' (' + range + ')'}
+                    style={{
+                      gridColumn:
+                        String(segment.startColumn + 1) +
+                        ' / ' +
+                        String(segment.endColumn + 2),
+                      gridRow: weekIndex + 1,
+                      '--calendar-span-top': String(40 + segment.lane * 24) + 'px',
+                      '--calendar-span-lane': String(segment.lane),
+                      height: '22px',
+                    }}
+                    className={[
+                      'calendar-span-bar flex min-w-0 items-center overflow-hidden px-2 text-[11px] font-semibold shadow-sm',
+                      entryTone(entry),
+                      rounding,
+                      entry.mine ? 'ring-1 ring-inset ring-white/25' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {segment.continuesBefore && (
+                      <span aria-hidden="true" className="mr-1 shrink-0 opacity-75">
+                        ↔
+                      </span>
+                    )}
+                    <span className="truncate">{label}</span>
+                  </span>
+                );
+              }),
+            )}
+          </div>
         </div>
 
         {isFiltered && Object.keys(calData).length === 0 && (
@@ -457,6 +891,14 @@ export default function CalendarPage() {
           </p>
         )}
       </Card>
+
+      {isMobile && (
+        <MobileCalendarDaySummary
+          date={mobileFocusedDateForView}
+          cell={mobileFocusedCell}
+          onAdd={openMobileEntry}
+        />
+      )}
 
       {panelOpen && (
         <CalendarEntryPanel

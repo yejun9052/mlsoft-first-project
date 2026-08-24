@@ -196,7 +196,7 @@ export default function CalendarEntryPanel({
     <div
       role="dialog"
       aria-label="캘린더 등록 패널"
-      className="glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.15] shadow-card"
+      className="calendar-entry-panel glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.15] shadow-card"
       style={{ left: pos.x, top: pos.y }}
     >
       {/* 드래그 핸들 헤더 */}

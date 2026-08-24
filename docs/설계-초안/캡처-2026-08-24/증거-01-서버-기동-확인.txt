@@ -1,0 +1,24 @@
+# 자동 수집 증거 01 - 개발 서버 기동 확인
+수집 시각(로컬): 2026-08-24 22:07:57 +0900
+브랜치: design/cobalt-glass-redesign / 커밋: 2fefa83
+
+## 프론트엔드 http://localhost:5173/
+  HTTP 200 / 1076 bytes / 0.006723s
+  title 태그: <title>연차ON — MLsoft 연차 관리</title>
+
+## 백엔드 http://localhost:8080/
+  HTTP 401 / 71 bytes
+
+## SPA 라우트 응답 (Vite dev 서버는 모든 경로에 같은 index.html 셸을 준다)
+  / -> HTTP 200
+  /dashboard -> HTTP 200
+  /calendar -> HTTP 200
+  /team -> HTTP 200
+  /myinfo -> HTTP 200
+  /admin/policy -> HTTP 200
+  /history -> HTTP 200
+  /welfare -> HTTP 200
+  /login -> HTTP 200
+
+주의: 위 200은 '셸 HTML이 전달됐다'는 뜻일 뿐, 화면이 그려졌다는 증거가 아니다.
+     라우팅/렌더/권한 가드는 전부 브라우저 안 자바스크립트에서 일어난다.
