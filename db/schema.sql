@@ -31,6 +31,9 @@
 --       ② carried_bonus_days·monthly_granted_count의 DEFAULT 절이 사라진다 —
 --          이 값은 Hibernate가 아니라 backfill SQL이 넣은 것이다. 지우면 안전망이 없어진다.
 --       ③ AUTO_INCREMENT 시작값이 데이터 유무에 따라 달라진다.
+--
+-- 2026-08-25 추가 — 테이블 17개
+--   · holiday_api_credentials — 공휴일 API 키 AES-GCM 암호문 저장
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
@@ -115,6 +118,17 @@ CREATE TABLE `holidays` (
   `year` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_holidays_date` (`date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `holiday_api_credentials` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `encrypted_api_key` varchar(1024) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `active` bit(1) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_holiday_api_credentials_provider` (`provider`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -345,5 +359,3 @@ CREATE TABLE `welfare_requests` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
-

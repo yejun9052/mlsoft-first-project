@@ -19,6 +19,8 @@
 # | JWT_SECRET          | base64-encoded-256bit-random-string                 | JWT 서명 키 (필수, 32byte 이상)        |
 # | JWT_EXPIRATION_MS   | 86400000                                            | 토큰 만료(ms), 생략 시 24h             |
 # | HOLIDAY_API_KEY     | data-go-kr-service-key                              | 공공데이터포털 특일 정보 API 키        |
+# | HOLIDAY_CREDENTIAL_ENCRYPTION_KEY | base64-32-byte-aes-key | DB 자격 증명 암호화 키(소스/DB 저장 금지) |
+# | HOLIDAY_CREDENTIAL_SEED | false | 최초 DB 시드 1회만 true, 이후 false (DB 자격 증명 덮어쓰기 방지) |
 # | ADMIN_EMAILS        | admin@mlsoft.com,cto@mlsoft.com                     | 첫 로그인 시 SYSTEM_ADMIN 부여 (R-3)   |
 # | ALLOWED_DOMAIN      | mlsoft.com                                          | 로그인 허용 도메인 (개발 중 gmail.com 대체 가능, 생략 시 mlsoft.com) |
 # | FRONTEND_URL        | http://localhost:5173                               | 프론트 오리진 — CORS·OAuth 리다이렉트 (생략 시 좌측 기본값) |

@@ -48,6 +48,7 @@ FROM (
     SELECT 'admin_audit_log' AS table_name, 'POST:#6' AS expected_state, 'audit-log' AS required_by
     UNION ALL SELECT 'department', 'PRE', 'O-3 / department-system-default'
     UNION ALL SELECT 'email_history', 'PRE', 'email / retry backfill prerequisite'
+    UNION ALL SELECT 'holiday_api_credentials', 'POST:#12', 'holiday-api-credentials'
     UNION ALL SELECT 'holidays', 'POST:#3', 'missing-tables'
     UNION ALL SELECT 'leave_action_history', 'PRE', 'query-indexes'
     UNION ALL SELECT 'leave_dates', 'PRE', 'query-indexes'
@@ -84,6 +85,9 @@ SELECT
     required.required_by AS required_by
 FROM (
     SELECT 'admin_audit_log' AS table_name, 'target_label' AS column_name, 'POST:#6' AS expected_state, '#6 CREATE TABLE IF NOT EXISTS 구조 확인' AS required_by
+    UNION ALL SELECT 'holiday_api_credentials', 'provider', 'POST:#12', '#12 CREATE TABLE IF NOT EXISTS 구조 확인'
+    UNION ALL SELECT 'holiday_api_credentials', 'encrypted_api_key', 'POST:#12', '#12 CREATE TABLE IF NOT EXISTS 구조 확인'
+    UNION ALL SELECT 'holiday_api_credentials', 'active', 'POST:#12', '#12 CREATE TABLE IF NOT EXISTS 구조 확인'
     UNION ALL SELECT 'holidays', 'year', 'POST:#3', '#3 CREATE TABLE IF NOT EXISTS 구조 확인'
     UNION ALL SELECT 'schedule_entries', 'schedule_type', 'POST:#3', '#3 CREATE TABLE IF NOT EXISTS 구조 확인'
     UNION ALL SELECT 'department', 'active', 'PRE', '#1 O-3 UPDATE 선행'
@@ -139,6 +143,7 @@ FROM (
     UNION ALL SELECT 'admin_audit_log', 'idx_audit_actor_created', 'actor_id,created_at', 1, 'POST:#6', '#6 audit-log'
     UNION ALL SELECT 'admin_audit_log', 'idx_audit_created', 'created_at', 1, 'POST:#6', '#6 audit-log'
     UNION ALL SELECT 'admin_audit_log', 'idx_audit_target_created', 'target_user_id,created_at', 1, 'POST:#6', '#6 audit-log'
+    UNION ALL SELECT 'holiday_api_credentials', 'uk_holiday_api_credentials_provider', 'provider', 0, 'POST:#12', '#12 holiday-api-credentials'
     UNION ALL SELECT 'holidays', 'uk_holidays_date', 'date', 0, 'POST:#3', '#3 missing-tables'
     UNION ALL SELECT 'leave_action_history', 'idx_leave_history_actor_created', 'actor_id,created_at', 1, 'POST:#4', '#4 query-indexes'
     UNION ALL SELECT 'leave_action_history', 'idx_leave_history_created', 'created_at', 1, 'POST:#4', '#4 query-indexes'

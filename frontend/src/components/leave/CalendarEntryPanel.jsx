@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { GripVertical, X } from 'lucide-react';
+import { CalendarDays, GripVertical, X } from 'lucide-react';
 import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../../constants/status.js';
 import { useApplyLeave } from '../../hooks/useLeaves.js';
 import { useCreateSchedule, useScheduleTypes } from '../../hooks/useSchedules.js';
@@ -61,6 +61,7 @@ export default function CalendarEntryPanel({
   onRemoveDate,
   onClose,
   onSubmitted,
+  onOpenDatePicker,
 }) {
   const lastUsed = useMemo(readLastUsed, []);
   const [mode, setMode] = useState(lastUsed?.mode === 'SCHEDULE' ? 'SCHEDULE' : 'LEAVE');
@@ -280,6 +281,17 @@ export default function CalendarEntryPanel({
                 );
               })}
             </div>
+          )}
+          {onOpenDatePicker && (
+            <button
+              type="button"
+              onClick={onOpenDatePicker}
+              aria-label="날짜 더 선택하기"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-btn bg-accent-cyan/10 px-3 py-2.5 text-[13px] font-semibold text-accent-cyan ring-1 ring-inset ring-accent-cyan/30 transition-colors hover:bg-accent-cyan/15"
+            >
+              <CalendarDays size={15} />
+              날짜 더 선택하기
+            </button>
           )}
         </Field>
 

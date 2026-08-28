@@ -37,7 +37,6 @@ public class HolidayService {
      * 연도별 공휴일 (GET /api/holidays?year=).
      * 캐시가 비어 있으면 <b>1회만</b> 외부 조회를 시도한다. 실패해도 빈 목록을 돌려준다.
      */
-    @Transactional
     public List<HolidayResponse> getByYear(int year) {
         List<Holiday> cached = holidayRepository.findAllByYearOrderByDateAsc(year);
         if (!cached.isEmpty()) {

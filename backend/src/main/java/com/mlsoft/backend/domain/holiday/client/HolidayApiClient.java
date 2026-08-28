@@ -1,7 +1,7 @@
 package com.mlsoft.backend.domain.holiday.client;
 
+import com.mlsoft.backend.domain.holiday.credential.HolidayApiCredentialService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -50,7 +50,7 @@ public class HolidayApiClient {
     private final RestClient restClient = RestClient.builder()
             .requestFactory(timeoutBoundRequestFactory())
             .build();
-    private final String apiKey;
+    private final HolidayApiCredentialService credentialService;
 
     private static JdkClientHttpRequestFactory timeoutBoundRequestFactory() {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(
@@ -59,8 +59,8 @@ public class HolidayApiClient {
         return factory;
     }
 
-    public HolidayApiClient(@Value("${holiday.api-key:}") String apiKey) {
-        this.apiKey = apiKey;
+    public HolidayApiClient(HolidayApiCredentialService credentialService) {
+        this.credentialService = credentialService;
     }
 
     /**
@@ -69,7 +69,8 @@ public class HolidayApiClient {
      * {@code isHoliday=Y}인 것만 담는다 — 이 API는 공휴일이 아닌 기념일(식목일 등)도 함께 준다.
      */
     public List<HolidayItem> fetchByYear(int year) {
-        if (apiKey == null || apiKey.isBlank()) {
+        String apiKey = credentialService.resolveApiKey().orElse("");
+        if (apiKey.isBlank()) {
             log.warn("[공휴일] HOLIDAY_API_KEY가 비어 있어 조회를 건너뜁니다 (year={})", year);
             return List.of();
         }
@@ -86,14 +87,23 @@ public class HolidayApiClient {
             return parse(root, year);
         } catch (Exception e) {
             // 외부 API 장애를 우리 장애로 만들지 않는다 — 캐시에 있는 값으로 계속 돈다
-            log.warn("[공휴일] API 조회 실패 (year={}): {}", year, e.getMessage());
+            // 예외 메시지에는 요청 URI가 포함될 수 있어 serviceKey가 로그로 새지 않게 한다.
+            log.warn("[공휴일] API 조회 실패 (year={}, exception={})",
+                    year, e.getClass().getSimpleName());
             return List.of();
         }
     }
 
-    private List<HolidayItem> parse(JsonNode root, int year) {
+    static List<HolidayItem> parse(JsonNode root, int year) {
         if (root == null) {
             log.warn("[공휴일] 응답 본문이 비어 있습니다 (year={})", year);
+            return List.of();
+        }
+        JsonNode header = root.path("response").path("header");
+        String resultCode = header.path("resultCode").asString("");
+        if (!"00".equals(resultCode)) {
+            log.warn("[공휴일] API가 정상 응답이 아닙니다 (year={}, resultCode={}, resultMsg={})",
+                    year, resultCode, header.path("resultMsg").asString(""));
             return List.of();
         }
         JsonNode item = root.path("response").path("body").path("items").path("item");

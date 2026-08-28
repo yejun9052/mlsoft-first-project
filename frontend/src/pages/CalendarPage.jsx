@@ -43,6 +43,9 @@ const SCHEDULE_DOT_CLASS = {
 };
 
 function entryTone(entry) {
+  if (entry.kind === 'HOLIDAY') {
+    return 'bg-danger/18 text-danger';
+  }
   if (entry.kind === 'SCHEDULE') {
     return SCHEDULE_PILL_CLASS[entry.typeKey] ?? 'bg-white/10 text-ink-body';
   }
@@ -50,10 +53,19 @@ function entryTone(entry) {
 }
 
 function entryDotTone(entry) {
+  if (entry.kind === 'HOLIDAY') {
+    return 'bg-danger';
+  }
   if (entry.kind === 'SCHEDULE') {
     return SCHEDULE_DOT_CLASS[entry.typeKey] ?? 'bg-ink-mute';
   }
   return entry.mine ? 'bg-accent-cyan' : 'bg-ok';
+}
+
+function entryKindLabel(entry) {
+  if (entry.kind === 'HOLIDAY') return '공휴일';
+  if (entry.kind === 'SCHEDULE') return '개인 일정';
+  return '연차';
 }
 
 // 연·월별 캘린더 셀 데이터(연차 + 개인 일정 + 공휴일)를 날짜별로 묶는다.
@@ -65,12 +77,26 @@ function buildCalendarData(entries, holidays, year, month) {
   for (const entry of entries) {
     if (!entry.date.startsWith(prefix)) continue;
     const day = Number(entry.date.slice(8, 10));
-    (map[day] ??= { entries: [], holiday: null }).entries.push(entry);
+    (map[day] ??= { entries: [] }).entries.push(entry);
   }
   for (const holiday of holidays) {
     if (!holiday.date.startsWith(prefix)) continue;
     const day = Number(holiday.date.slice(8, 10));
-    (map[day] ??= { entries: [], holiday: null }).holiday = holiday.name;
+    const cell = (map[day] ??= { entries: [] });
+    if (!cell.entries.some((entry) => entry.kind === 'HOLIDAY')) {
+      cell.entries.push({
+        date: holiday.date,
+        eventId: `H${holiday.date}`,
+        eventDateKey: `H${holiday.date}:${holiday.date}`,
+        key: `H${holiday.date}`,
+        personName: '',
+        label: holiday.name,
+        kind: 'HOLIDAY',
+        typeKey: 'HOLIDAY',
+        mine: false,
+        detail: null,
+      });
+    }
   }
   return map;
 }
@@ -187,17 +213,6 @@ function CalendarDayDetail({ detail, onClose }) {
   return (
     <Modal title={`${formattedDate} 일정`} onClose={onClose} maxWidth={560}>
       <div className="space-y-3">
-        {detail.holiday && (
-          <div className="rounded-btn border border-danger/25 bg-danger/8 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="rounded-badge bg-danger/18 px-2.5 py-1 text-[11px] font-semibold text-danger">
-                공휴일
-              </span>
-              <span className="text-[14px] font-semibold text-ink-hi">{detail.holiday}</span>
-            </div>
-          </div>
-        )}
-
         {detail.entries.map((entry) => (
           <article
             key={entry.key}
@@ -205,10 +220,12 @@ function CalendarDayDetail({ detail, onClose }) {
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className={`rounded-badge px-2.5 py-1 text-[11px] font-semibold ${entryTone(entry)}`}>
-                {entry.kind === 'LEAVE' ? '연차' : '개인 일정'}
+                {entryKindLabel(entry)}
               </span>
-              <span className="text-[14px] font-semibold text-ink-hi">{entry.personName}</span>
-              {entry.mine && (
+              {entry.kind !== 'HOLIDAY' && (
+                <span className="text-[14px] font-semibold text-ink-hi">{entry.personName}</span>
+              )}
+              {entry.kind !== 'HOLIDAY' && entry.mine && (
                 <span className="text-[11px] font-semibold text-accent-light">나</span>
               )}
               <span className="text-[12px] text-ink-mute">{entry.label}</span>
@@ -247,7 +264,6 @@ function MobileCalendarDaySummary({ date, cell, onAdd }) {
           </div>
           <p className="mt-1 text-[12px] text-ink-mute">
             {dateObject.format('YYYY년 M월')}
-            {cell?.holiday ? ` · ${cell.holiday}` : ''}
           </p>
         </div>
         <button
@@ -272,10 +288,12 @@ function MobileCalendarDaySummary({ date, cell, onAdd }) {
                   <strong className="truncate text-[13px] font-semibold text-ink-hi">
                     {entry.label}
                   </strong>
-                  <span className="truncate text-[12px] text-ink-mute">
-                    {entry.personName}
-                    {entry.mine ? ' · 나' : ''}
-                  </span>
+                  {entry.kind !== 'HOLIDAY' && (
+                    <span className="truncate text-[12px] text-ink-mute">
+                      {entry.personName}
+                      {entry.mine ? ' · 나' : ''}
+                    </span>
+                  )}
                 </div>
                 {entry.mine && entry.detail && (
                   <p className="mt-0.5 truncate text-[11px] text-ink-mute">{entry.detail}</p>
@@ -339,6 +357,7 @@ export default function CalendarPage() {
   // 등록 패널 — 선택 날짜(YYYY-MM-DD)는 페이지가 소유, 패널 닫으면 선택도 초기화
   const [panelOpen, setPanelOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState([]);
+  const [mobileDateSelectionMode, setMobileDateSelectionMode] = useState(false);
   const [dayDetail, setDayDetail] = useState(null);
 
   // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산
@@ -502,31 +521,56 @@ export default function CalendarPage() {
   }
 
   // 날짜 셀 본문은 계속 등록 전용이다. 상세는 초과 손잡이에서만 열어 두 동작이 충돌하지 않게 한다.
-  function handleDayClick(dateStr) {
-    if (isMobile) {
-      setMobileFocusedDate(dateStr);
-      setSelectedDates([]);
-      setPanelOpen(false);
-      return;
-    }
-
+  function toggleSelectedDate(dateStr) {
     setSelectedDates((previous) =>
       previous.includes(dateStr)
         ? previous.filter((date) => date !== dateStr)
         : [...previous, dateStr].sort(),
     );
+  }
+
+  function handleDayClick(dateStr) {
+    if (isMobile) {
+      setMobileFocusedDate(dateStr);
+
+      if (mobileDateSelectionMode) {
+        toggleSelectedDate(dateStr);
+        return;
+      }
+
+      setSelectedDates([]);
+      setPanelOpen(false);
+      return;
+    }
+
+    toggleSelectedDate(dateStr);
     setPanelOpen(true);
   }
 
   function openMobileEntry() {
     setSelectedDates([mobileFocusedDateForView]);
+    setMobileDateSelectionMode(false);
+    setPanelOpen(true);
+  }
+
+  function openMobileDateSelection() {
+    if (!isMobile) return;
+    setSelectedDates((previous) =>
+      previous.length > 0 ? previous : [mobileFocusedDateForView],
+    );
+    setPanelOpen(false);
+    setMobileDateSelectionMode(true);
+  }
+
+  function completeMobileDateSelection() {
+    if (selectedDates.length === 0) return;
+    setMobileDateSelectionMode(false);
     setPanelOpen(true);
   }
 
   function showDayDetail(date, cell) {
     setDayDetail({
       date,
-      holiday: cell?.holiday ?? null,
       entries: cell?.entries ?? [],
     });
   }
@@ -539,6 +583,7 @@ export default function CalendarPage() {
   function closePanel() {
     setPanelOpen(false);
     setSelectedDates([]);
+    setMobileDateSelectionMode(false);
   }
 
   function clearSearch() {
@@ -654,6 +699,29 @@ export default function CalendarPage() {
         )}
       </div>
 
+      {isMobile && mobileDateSelectionMode && (
+        <div
+          data-testid="mobile-date-selection-toolbar"
+          className="mobile-date-selection-toolbar"
+          aria-label="모바일 날짜 선택"
+        >
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-ink-hi">날짜 선택</p>
+            <p aria-live="polite" className="mt-0.5 text-[11px] text-ink-mute">
+              {selectedDates.length}일 선택됨 · 날짜를 눌러 추가하거나 해제하세요
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={completeMobileDateSelection}
+            disabled={selectedDates.length === 0}
+            className="shrink-0 rounded-badge bg-accent-cyan px-3 py-2 text-[12px] font-bold text-navy-app transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            선택 완료
+          </button>
+        </div>
+      )}
+
       <Card fill padding="tight" className="mobile-calendar-card">
         <div className="mobile-calendar-legend mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-ink-mute">
           <Legend swatch="bg-accent/25 text-accent-light" label="내 연차" />
@@ -709,8 +777,8 @@ export default function CalendarPage() {
             const cell = calData[day];
             const isSunday = index % 7 === 0;
             const isToday = isTodayMonth && day === todayDate;
-            const holiday = cell?.holiday;
             const entries = cell?.entries ?? [];
+            const holiday = entries.find((entry) => entry.kind === 'HOLIDAY')?.label;
             const weekIndex = Math.floor(index / 7);
             const weekSpans = calendarSpans[weekIndex] ?? [];
             const columnIndex = index % 7;
@@ -735,6 +803,7 @@ export default function CalendarPage() {
                 type="button"
                 onClick={() => handleDayClick(dateStr)}
                 aria-label={`${dateStr} 등록 날짜 선택`}
+                aria-pressed={isMobile && mobileDateSelectionMode ? selected : undefined}
                 className={`calendar-day-cell relative flex flex-col gap-1.5 overflow-hidden rounded-btn border p-2 text-left transition-all duration-150 ${
                   overflow > 0 ? 'calendar-day-cell-has-overflow' : ''
                 } ${mobileFocused ? 'mobile-calendar-focused' : ''} ${
@@ -757,11 +826,6 @@ export default function CalendarPage() {
                   >
                     {day}
                   </span>
-                  {holiday && (
-                    <span className="truncate text-[12px] font-medium text-danger/85">
-                      {holiday}
-                    </span>
-                  )}
                   {selected && <Check size={14} className="shrink-0 text-accent-light" />}
                 </div>
 
@@ -793,23 +857,16 @@ export default function CalendarPage() {
                   {visibleEntries.slice(0, 4).map((entry) => (
                     <span
                       key={`dot-${entry.key}`}
-                      title={`${entry.personName} · ${entry.label}`}
+                      title={entry.kind === 'HOLIDAY' ? entry.label : `${entry.personName} · ${entry.label}`}
                       className={`mobile-calendar-entry-dot ${entryDotTone(entry)}`}
                     />
                   ))}
-                  {holiday && (
-                    <span
-                      title={holiday}
-                      aria-label={holiday}
-                      className="mobile-calendar-entry-dot bg-danger"
-                    />
-                  )}
                 </div>
                 {!isMobile && overflow > 0 && (
                   <span
                     role="button"
                     tabIndex={0}
-                    aria-label={`${dateStr} 일정 ${entries.length + (holiday ? 1 : 0)}개 모두 보기`}
+                    aria-label={`${dateStr} 일정 ${entries.length}개 모두 보기`}
                     onClick={(event) => openDayDetail(event, dateStr, cell)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
@@ -892,7 +949,7 @@ export default function CalendarPage() {
         )}
       </Card>
 
-      {isMobile && (
+      {isMobile && !mobileDateSelectionMode && (
         <MobileCalendarDaySummary
           date={mobileFocusedDateForView}
           cell={mobileFocusedCell}
@@ -909,7 +966,11 @@ export default function CalendarPage() {
             setSelectedDates((previous) => previous.filter((item) => item !== date))
           }
           onClose={closePanel}
-          onSubmitted={() => setSelectedDates([])}
+          onSubmitted={() => {
+            setSelectedDates([]);
+            setMobileDateSelectionMode(false);
+          }}
+          onOpenDatePicker={isMobile ? openMobileDateSelection : undefined}
         />
       )}
 

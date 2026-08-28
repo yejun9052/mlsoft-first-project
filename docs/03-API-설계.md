@@ -179,6 +179,15 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 통과한 경우에만 DB에서 공휴일을 조회한다(어차피 거부될 요청 때문에 DB를 볼 이유가 없다).
 `HOLIDAY_NOT_ALLOWED`(400).
 
+**API 키 보관** — `HolidayApiClient`는 `holiday_api_credentials`의 활성 암호문을
+`HOLIDAY_CREDENTIAL_ENCRYPTION_KEY`로 복호화해 사용한다. 암호화 설정이 아직 없는 로컬
+환경에서는 `HOLIDAY_API_KEY`를 fallback으로 사용할 수 있지만, 원문 키를 소스·DB의
+`holidays` 행·`admin_audit_log`에 기록하지 않는다. 저장된 자격 증명은 제공자별 한 행이며,
+날짜별 캘린더 이벤트에는 `date`·`name`만 투영된다.
+최초 시드·명시적 교체가 필요한 경우에만 `HOLIDAY_CREDENTIAL_SEED=true`를 사용하며,
+기본값은 false다. 외부 API 응답은 `response.header.resultCode == "00"`일 때만 성공으로
+처리하고, 인증·쿼터 오류는 빈 결과와 WARN으로 degrade한다.
+
 ## 처리 이력 (histories — 관리자·팀장 로그 화면)
 
 | Method | URL | 설명 | 권한 |

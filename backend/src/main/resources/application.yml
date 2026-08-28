@@ -69,6 +69,10 @@ jwt:
 #  fail-fast로 막고, 부가 기능 키는 없어도 뜨게 한다)
 holiday:
   api-key: ${HOLIDAY_API_KEY:}
+  # DB 저장 시 사용하는 Base64 인코딩 32바이트 AES 키. API 키와 함께 저장하지 않는다.
+  credential-encryption-key: ${HOLIDAY_CREDENTIAL_ENCRYPTION_KEY:}
+  # 최초 시드 때만 true로 켠다. 이후에는 DB 자격 증명을 환경변수가 덮어쓰지 않는다.
+  credential-seed-enabled: ${HOLIDAY_CREDENTIAL_SEED:false}
 
 # 앱 공통 설정 (AppProperties 바인딩 — 인증·CORS·쿠키)
 app:

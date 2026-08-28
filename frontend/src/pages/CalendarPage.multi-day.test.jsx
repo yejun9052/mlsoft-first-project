@@ -23,6 +23,8 @@ vi.mock('../hooks/useUsers.js', () => ({
   useApprovers: vi.fn(() => ({ data: [] })),
 }));
 
+const REAL_MATCH_MEDIA = window.matchMedia;
+
 describe('CalendarPage multi-day event bars', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -49,6 +51,7 @@ describe('CalendarPage multi-day event bars', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    window.matchMedia = REAL_MATCH_MEDIA;
   });
 
   it('renders one continuous bar instead of one pill per date', () => {
@@ -189,5 +192,31 @@ describe('CalendarPage multi-day event bars', () => {
       changedTouches: [{ clientX: 150, clientY: 220 }],
     });
     expect(screen.getByText('2026년 7월')).toBeInTheDocument();
+  });
+
+  it('renders a holiday as the same calendar entry type in the mobile day summary', () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    useHolidays.mockReturnValue({
+      data: [{ date: '2026-08-20', name: 'Test holiday' }],
+    });
+
+    const router = createMemoryRouter(
+      [{ path: '/calendar', element: <CalendarPage /> }],
+      { initialEntries: ['/calendar'] },
+    );
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /2026-08-20/ }));
+
+    const holidayCell = screen.getByRole('button', { name: /2026-08-20/ });
+    expect(holidayCell.querySelectorAll('.mobile-calendar-entry-dot')).toHaveLength(1);
+
+    const summary = screen.getByTestId('mobile-calendar-day-summary');
+    expect(within(summary).getByText('Test holiday')).toBeInTheDocument();
+    expect(within(summary).getByText('Test holiday').closest('article')).toBeInTheDocument();
   });
 });
