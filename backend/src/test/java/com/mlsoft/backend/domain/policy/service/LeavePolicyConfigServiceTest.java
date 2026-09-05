@@ -217,4 +217,34 @@ class LeavePolicyConfigServiceTest {
 
         assertEquals("3.0", response.value());
     }
+
+    @Test
+    @DisplayName("설정 변경 — D90 주기인데 대상 기준일이 30일이면 저장을 거부한다")
+    void update_reminderCycle_requiresMatchingListDays() {
+        given(leavePolicyConfigRepository.findByName(PolicyConfigKey.REMINDER_LIST_DAYS.getKey()))
+                .willReturn(Optional.of(LeavePolicyConfig.create(
+                        PolicyConfigKey.REMINDER_LIST_DAYS.getKey(), "30")));
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                leavePolicyConfigService.update(
+                        new LeavePolicyConfigUpdateRequest(
+                                PolicyConfigKey.REMINDER_AUTO_CYCLE.getKey(), "D90"),
+                        ACTOR_ID));
+
+        assertEquals(ErrorCode.REMINDER_LIST_DAYS_TOO_SHORT, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("설정 변경 — D90 주기가 이미 있으면 대상 기준일을 30일로 줄일 수 없다")
+    void update_reminderListDays_requiresMatchingCycle() {
+        given(leavePolicyConfigRepository.findByName(PolicyConfigKey.REMINDER_AUTO_CYCLE.getKey()))
+                .willReturn(Optional.of(LeavePolicyConfig.create(
+                        PolicyConfigKey.REMINDER_AUTO_CYCLE.getKey(), "D90")));
+        BusinessException ex = assertThrows(BusinessException.class, () ->
+                leavePolicyConfigService.update(
+                        new LeavePolicyConfigUpdateRequest(
+                                PolicyConfigKey.REMINDER_LIST_DAYS.getKey(), "30"),
+                        ACTOR_ID));
+
+        assertEquals(ErrorCode.REMINDER_LIST_DAYS_TOO_SHORT, ex.getErrorCode());
+    }
 }

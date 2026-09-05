@@ -87,7 +87,7 @@ public enum PolicyConfigKey {
                     + "끄면 잘못 입력한 사원은 관리자 반려를 기다려야 한다.",
             PolicyConfigStatus.ACTIVE),
 
-    // ── 소진 안내 메일 (docs/01 2-8 — 이메일 발송 구현 시 ACTIVE로 전환) ──────
+    // ── 소진 안내 메일 (docs/01 2-8) ─────────────────────────────────────────
 
     REMINDER_LIST_DAYS(
             "reminder_list_days", ConfigValueType.INTEGER, "30",
@@ -101,7 +101,7 @@ public enum PolicyConfigKey {
             List.of("NONE", "D30", "D60", "D90", "QUARTER"),
             "자동 발송 주기",
             "기산일이 임박한 사원에게 안내 메일을 자동 발송하는 주기. NONE이면 발송하지 않는다.",
-            PolicyConfigStatus.PENDING_FEATURE);
+            PolicyConfigStatus.ACTIVE);
 
     /** DB `leave_policy_config.name`에 저장되는 키 */
     private final String key;

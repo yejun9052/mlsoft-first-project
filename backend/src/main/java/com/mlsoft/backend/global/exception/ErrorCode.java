@@ -38,6 +38,7 @@ public enum ErrorCode {
     TOO_MANY_LEAVE_DATES(400, "한 번에 신청할 수 있는 날짜 수를 초과했습니다."),
     INVALID_CONFIG_VALUE(400, "설정 값 형식이 올바르지 않습니다."),
     CONFIG_VALUE_OUT_OF_RANGE(400, "설정 값이 허용 범위를 벗어났습니다."),
+    REMINDER_LIST_DAYS_TOO_SHORT(400, "자동 발송 주기보다 소진 안내 기준일이 짧습니다."),
 
     // 401 Unauthorized
     UNAUTHENTICATED(401, "로그인이 필요합니다."),

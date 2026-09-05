@@ -5,12 +5,16 @@ import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigResponse;
 import com.mlsoft.backend.domain.policy.dto.LeavePolicyConfigUpdateRequest;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.email.entity.ReminderCycle;
 import com.mlsoft.backend.domain.policy.repository.LeavePolicyConfigRepository;
+import com.mlsoft.backend.global.exception.BusinessException;
+import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.function.Function;
@@ -54,6 +58,7 @@ public class LeavePolicyConfigService {
         PolicyConfigKey key = PolicyConfigKey.from(request.name());
         String value = key.normalize(request.value());
         key.validate(value);
+        validateReminderSettings(key, value);
 
         // 카탈로그에 있는 키인데 행이 없으면(신규 설정 추가 직후) 여기서 만든다
         LeavePolicyConfig config = leavePolicyConfigRepository.findByName(key.getKey())
@@ -66,5 +71,42 @@ public class LeavePolicyConfigService {
         adminAuditService.recordConfigChange(actorId, key.getKey(), before, value);
         log.info("[설정 변경] key={}, value={}, actorId={}", key.getKey(), value, actorId);
         return LeavePolicyConfigResponse.of(key, config);
+    }
+
+    /**
+     * 자동 주기와 대상 목록 범위의 교차 검증.
+     * 개별 카탈로그 값만 보는 {@link PolicyConfigKey#validate(String)}의 책임을 넘지 않도록
+     * 두 값을 함께 저장하는 서비스에서 검증한다.
+     */
+    private void validateReminderSettings(PolicyConfigKey changedKey, String changedValue) {
+        if (changedKey != PolicyConfigKey.REMINDER_AUTO_CYCLE
+                && changedKey != PolicyConfigKey.REMINDER_LIST_DAYS) {
+            return;
+        }
+        String cycleValue = changedKey == PolicyConfigKey.REMINDER_AUTO_CYCLE
+                ? changedValue
+                : storedValue(PolicyConfigKey.REMINDER_AUTO_CYCLE);
+        String listDaysValue = changedKey == PolicyConfigKey.REMINDER_LIST_DAYS
+                ? changedValue
+                : storedValue(PolicyConfigKey.REMINDER_LIST_DAYS);
+
+        ReminderCycle.fromConfig(cycleValue).ifPresent(cycle -> {
+            int listDays;
+            try {
+                listDays = new BigDecimal(listDaysValue).intValueExact();
+            } catch (ArithmeticException | NumberFormatException e) {
+                throw new BusinessException(ErrorCode.INVALID_CONFIG_VALUE);
+            }
+            if (listDays < cycle.rangeDays()) {
+                throw new BusinessException(ErrorCode.REMINDER_LIST_DAYS_TOO_SHORT);
+            }
+        });
+    }
+
+    /** 상대 설정이 아직 시딩되지 않았으면 카탈로그 기본값을 쓴다. */
+    private String storedValue(PolicyConfigKey key) {
+        return leavePolicyConfigRepository.findByName(key.getKey())
+                .map(LeavePolicyConfig::getValue)
+                .orElse(key.getDefaultValue());
     }
 }
