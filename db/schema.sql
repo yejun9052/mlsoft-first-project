@@ -34,6 +34,11 @@
 --
 -- 2026-08-25 추가 — 테이블 17개
 --   · holiday_api_credentials — 공휴일 API 키 AES-GCM 암호문 저장
+--
+-- 2026-09-05 추가 — 테이블 20개
+--   · mail_credentials — 메일 발신 계정 암호문 저장 (환경변수 fallback 지원)
+--   · email_templates — 관리자 편집 메일 양식
+--   · leave_reminder_dispatch — 연차 소진 안내 자동 발송 중복 방지 이력
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
@@ -57,7 +62,7 @@ CREATE TABLE `admin_audit_log` (
   `created_at` datetime(6) NOT NULL,
   -- 2026-08-16 USER_RESTORED 추가 (backfill-2026-08-16-user-restore.sql)
   -- AdminAction enum에 상수를 넣으면 이 목록도 함께 늘려야 한다 — ddl-auto: update는 기존 ENUM을 넓히지 않는다
-  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','EMAIL_BULK_SENT','EMAIL_RESENT','EMAIL_TEMPLATE_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `after_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `before_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `target_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -97,7 +102,7 @@ CREATE TABLE `email_history` (
   `error_message` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `retry_count` int NOT NULL DEFAULT '0',
   `sent_at` datetime(6) DEFAULT NULL,
-  `status` enum('FAILED','PENDING','SENT') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `status` enum('FAILED','PENDING','SENDING','SENT') COLLATE utf8mb4_unicode_ci NOT NULL,
   `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `from_id` bigint DEFAULT NULL,
   `user_id` bigint NOT NULL,
@@ -107,6 +112,23 @@ CREATE TABLE `email_history` (
   KEY `idx_email_history_retry` (`status`,`retry_count`,`id`),
   CONSTRAINT `FKl5edhxdva8d6sdxa70a5cvdo4` FOREIGN KEY (`from_id`) REFERENCES `users` (`id`),
   CONSTRAINT `FKokrrh26v7faaux2a2mk7qbsec` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `email_templates` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `body_template` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `subject_template` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `template_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `updated_by` bigint DEFAULT NULL,
+  `version` int NOT NULL DEFAULT '1',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_email_templates_template_key` (`template_key`),
+  KEY `FK_email_templates_updated_by` (`updated_by`),
+  CONSTRAINT `FK_email_templates_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -213,6 +235,28 @@ CREATE TABLE `leave_requests` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `leave_reminder_dispatch` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `cycle` enum('D30','D60','D90','QUARTER') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email_history_id` bigint DEFAULT NULL,
+  `next_reset_date` date NOT NULL,
+  `period_key` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `reference_date` date NOT NULL,
+  `remaining_days_snapshot` decimal(4,1) NOT NULL,
+  `result` enum('QUEUED','SKIPPED_NO_EMAIL') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `sent_at` datetime(6) DEFAULT NULL,
+  `updated_at` datetime(6) DEFAULT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_leave_reminder_dispatch_user_cycle_period` (`user_id`,`cycle`,`period_key`),
+  KEY `FK_leave_reminder_dispatch_email_history` (`email_history_id`),
+  CONSTRAINT `FK_leave_reminder_dispatch_email_history` FOREIGN KEY (`email_history_id`) REFERENCES `email_history` (`id`),
+  CONSTRAINT `FK_leave_reminder_dispatch_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `leave_reset_history` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
@@ -228,6 +272,18 @@ CREATE TABLE `leave_reset_history` (
   KEY `FK5xtwcopwf0vymrxo9u9pc5ip3` (`user_id`),
   KEY `idx_leave_reset_history_reset_date` (`reset_date`),
   CONSTRAINT `FK5xtwcopwf0vymrxo9u9pc5ip3` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mail_credentials` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `active` bit(1) NOT NULL,
+  `encrypted_secret` varchar(1024) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `username` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mail_credentials_provider` (`provider`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
