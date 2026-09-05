@@ -3,8 +3,9 @@ package com.mlsoft.backend.domain.leave.scheduler;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.leave.service.AnnualLeaveResetService;
 import com.mlsoft.backend.domain.leave.service.BirthdayLeaveGrantService;
+import com.mlsoft.backend.domain.email.service.LeaveReminderService;
 import com.mlsoft.backend.domain.leave.service.MonthlyLeaveGrantService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,9 +19,9 @@ import java.util.function.ToIntFunction;
 /**
  * 연차 스케줄러 진입점 (docs/09 §1·§7).
  *
- * <p>매일 00:10 KST에 세 잡을 <b>고정된 순서</b>로 돌린다. 순서는 취향이 아니라 데이터 의존성이다:
+ * <p>매일 00:10 KST에 네 잡을 <b>고정된 순서</b>로 돌린다. 순서는 취향이 아니라 데이터 의존성이다:
  * <pre>
- * ① 기산일 리셋  →  ② 월차 적립  →  ③ 생일 반차
+ * ① 기산일 리셋  →  ② 월차 적립  →  ③ 생일 반차  →  ④ 연차 소진 안내
  * </pre>
  * <ul>
  *   <li><b>① → ②</b>: 1주년 당일에 둘이 겹친다. 리셋이 먼저면 월차의 "1년 미만" 조건에서 자연히
@@ -40,14 +41,44 @@ import java.util.function.ToIntFunction;
 @Slf4j
 @Component
 @Profile("!test")
-@RequiredArgsConstructor
 public class LeaveScheduler {
 
     private final Clock clock;
     private final AnnualLeaveResetService annualLeaveResetService;
     private final MonthlyLeaveGrantService monthlyLeaveGrantService;
     private final BirthdayLeaveGrantService birthdayLeaveGrantService;
+    private final LeaveReminderService leaveReminderService;
     private final HolidayService holidayService;
+
+    /** Spring용 생성자 — 리마인더 잡을 생일 반차 뒤에 배치한다. */
+    @Autowired
+    public LeaveScheduler(
+            Clock clock,
+            AnnualLeaveResetService annualLeaveResetService,
+            MonthlyLeaveGrantService monthlyLeaveGrantService,
+            BirthdayLeaveGrantService birthdayLeaveGrantService,
+            HolidayService holidayService,
+            LeaveReminderService leaveReminderService
+    ) {
+        this.clock = clock;
+        this.annualLeaveResetService = annualLeaveResetService;
+        this.monthlyLeaveGrantService = monthlyLeaveGrantService;
+        this.birthdayLeaveGrantService = birthdayLeaveGrantService;
+        this.holidayService = holidayService;
+        this.leaveReminderService = leaveReminderService;
+    }
+
+    /** 기존 진입점 단위 테스트와의 호환 생성자. 리마인더를 검증하지 않는 테스트에서 사용한다. */
+    public LeaveScheduler(
+            Clock clock,
+            AnnualLeaveResetService annualLeaveResetService,
+            MonthlyLeaveGrantService monthlyLeaveGrantService,
+            BirthdayLeaveGrantService birthdayLeaveGrantService,
+            HolidayService holidayService
+    ) {
+        this(clock, annualLeaveResetService, monthlyLeaveGrantService,
+                birthdayLeaveGrantService, holidayService, null);
+    }
 
     /** 매일 00:10 KST — 날짜가 바뀐 직후, 근무 시작 전에 끝난다 */
     @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Seoul")
@@ -61,6 +92,10 @@ public class LeaveScheduler {
                 userId -> monthlyLeaveGrantService.grant(userId, today));
         runPerUser("생일 반차", birthdayLeaveGrantService.findTargetIds(today),
                 userId -> birthdayLeaveGrantService.grant(userId, today) ? 1 : 0);
+        if (leaveReminderService != null) {
+            runPerUser("연차 소진 안내", leaveReminderService.findTargetIds(today),
+                    userId -> leaveReminderService.dispatch(userId, today));
+        }
 
         log.info("[스케줄러] 일일 잡 종료 — 기준일={}", today);
     }

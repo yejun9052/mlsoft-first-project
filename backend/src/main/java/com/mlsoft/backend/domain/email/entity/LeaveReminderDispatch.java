@@ -94,12 +94,6 @@ public class LeaveReminderDispatch extends BaseTimeEntity {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /** 자동 발송 업무 이력 선점 행 생성 */
-    public static LeaveReminderDispatch create(User user, ReminderCycle cycle, String periodKey) {
-        LocalDate today = LocalDate.now();
-        return create(user, cycle, periodKey, today, today, BigDecimal.ZERO);
-    }
-
     /** 대상 판정 스냅샷을 포함한 자동 발송 업무 이력 생성 */
     public static LeaveReminderDispatch create(User user, ReminderCycle cycle, String periodKey,
                                                LocalDate referenceDate, LocalDate nextResetDate,
@@ -118,11 +112,6 @@ public class LeaveReminderDispatch extends BaseTimeEntity {
     /** 생성된 이메일 아웃박스 이력을 연결한다 */
     public void attachEmailHistory(EmailHistory emailHistory) {
         this.emailHistory = emailHistory;
-    }
-
-    /** 메일 발송 완료 시각을 기록한다 */
-    public void markSent() {
-        this.sentAt = LocalDateTime.now();
     }
 
     /** 테스트·재처리에서 기준 시각을 명시해 발송 완료를 기록한다 */

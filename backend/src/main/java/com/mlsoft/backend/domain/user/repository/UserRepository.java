@@ -127,6 +127,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<Long> findIdsWithoutBirthdayLeave(@Param("year") int year);
 
     /**
+     * 연차 소진 안내 후보 id — 재직·온보딩 확정·기산일 존재·잔여 양수만 DB에서 먼저 좁힌다.
+     * 기산일 + 1년의 정확한 날짜 계산(윤년 포함)은 서비스에서 다시 확인한다.
+     */
+    @Query("select u.id from User u where u.isActive = true and u.onboardingStatus = COMPLETED "
+            + "and u.lastResetDate is not null "
+            + "and u.lastResetDate >= :lastResetFrom and u.lastResetDate <= :lastResetTo "
+            + "and (u.baseDays + coalesce(u.bonusDays, 0) - u.useDays) > 0 "
+            + "order by u.id")
+    List<Long> findIdsForReminderWindow(
+            @Param("lastResetFrom") LocalDate lastResetFrom,
+            @Param("lastResetTo") LocalDate lastResetTo);
+
+    /**
      * 전체 목록 검색 — keyword(이름·이메일)·role 필터, 퇴직자 제외 (GET /api/users, SA).
      * {@code UserResponse}가 행마다 부서명을 읽으므로 함께 적재한다 (리뷰 D-2).
      */

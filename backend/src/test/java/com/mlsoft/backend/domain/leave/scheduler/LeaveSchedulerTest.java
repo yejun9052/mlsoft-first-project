@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.leave.scheduler;
 
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
+import com.mlsoft.backend.domain.email.service.LeaveReminderService;
 import com.mlsoft.backend.domain.leave.service.AnnualLeaveResetService;
 import com.mlsoft.backend.domain.leave.service.BirthdayLeaveGrantService;
 import com.mlsoft.backend.domain.leave.service.MonthlyLeaveGrantService;
@@ -44,6 +45,8 @@ class LeaveSchedulerTest {
     @Mock
     private BirthdayLeaveGrantService birthdayLeaveGrantService;
     @Mock
+    private LeaveReminderService leaveReminderService;
+    @Mock
     private HolidayService holidayService;
 
     private LeaveScheduler leaveScheduler;
@@ -51,7 +54,8 @@ class LeaveSchedulerTest {
     @BeforeEach
     void setUp() {
         leaveScheduler = new LeaveScheduler(Clock.fixed(FIXED_INSTANT, KST),
-                annualLeaveResetService, monthlyLeaveGrantService, birthdayLeaveGrantService, holidayService);
+                annualLeaveResetService, monthlyLeaveGrantService, birthdayLeaveGrantService,
+                holidayService, leaveReminderService);
     }
 
     @Test
@@ -63,13 +67,16 @@ class LeaveSchedulerTest {
         given(monthlyLeaveGrantService.findTargetIds(TODAY)).willReturn(List.of());
         given(birthdayLeaveGrantService.findTargetIds(TODAY)).willReturn(List.of(1L));
         given(birthdayLeaveGrantService.grant(1L, TODAY)).willReturn(true);
+        given(leaveReminderService.findTargetIds(TODAY)).willReturn(List.of());
 
         leaveScheduler.runDailyJobs();
 
-        InOrder inOrder = inOrder(annualLeaveResetService, monthlyLeaveGrantService, birthdayLeaveGrantService);
+        InOrder inOrder = inOrder(annualLeaveResetService, monthlyLeaveGrantService,
+                birthdayLeaveGrantService, leaveReminderService);
         inOrder.verify(annualLeaveResetService).reset(1L, TODAY);
         inOrder.verify(monthlyLeaveGrantService).findTargetIds(TODAY);
         inOrder.verify(birthdayLeaveGrantService).grant(1L, TODAY);
+        inOrder.verify(leaveReminderService).findTargetIds(TODAY);
     }
 
     @Test
