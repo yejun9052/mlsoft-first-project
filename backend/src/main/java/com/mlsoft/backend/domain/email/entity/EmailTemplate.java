@@ -80,6 +80,16 @@ public class EmailTemplate extends BaseTimeEntity {
                 .build();
     }
 
+    /** 관리자 수정으로 처음 저장하는 양식 — 최초 버전부터 수정자를 남긴다. */
+    public static EmailTemplate create(String templateKey, String subject, String body, User updatedBy) {
+        return EmailTemplate.builder()
+                .templateKey(templateKey)
+                .subjectTemplate(subject)
+                .bodyTemplate(body)
+                .updatedBy(updatedBy)
+                .build();
+    }
+
     /** 제목·본문을 함께 변경한다 */
     public void update(String subject, String body) {
         update(subject, body, null);
@@ -93,13 +103,4 @@ public class EmailTemplate extends BaseTimeEntity {
         this.version += 1;
     }
 
-    /** 양식 제목의 호환 조회명 */
-    public String getSubject() {
-        return subjectTemplate;
-    }
-
-    /** 양식 본문의 호환 조회명 */
-    public String getBody() {
-        return bodyTemplate;
-    }
 }

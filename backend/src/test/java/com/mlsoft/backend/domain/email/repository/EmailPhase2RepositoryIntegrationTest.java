@@ -94,6 +94,6 @@ class EmailPhase2RepositoryIntegrationTest {
                 .orElseThrow();
 
         assertEquals(saved.getId(), found.getId());
-        assertEquals("잔여 연차: {remainingDays}", found.getBody());
+        assertEquals("잔여 연차: {remainingDays}", found.getBodyTemplate());
     }
 }

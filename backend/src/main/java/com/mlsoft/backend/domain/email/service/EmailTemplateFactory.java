@@ -37,13 +37,15 @@ public class EmailTemplateFactory {
     private static final String SERVICE_NAME = "MLsoft 연차관리";
     private static final String MASKED_REASON = "권한이 없어 표시되지 않습니다.";
     private static final String FOOTER_NOTE = "이 메일은 " + SERVICE_NAME + " 시스템이 자동으로 발송했습니다.";
-    private static final String REMINDER_TEMPLATE_KEY = "LEAVE_BALANCE_REMINDER";
+    public static final String REMINDER_TEMPLATE_KEY = "LEAVE_BALANCE_REMINDER";
     private static final String DEFAULT_REMINDER_SUBJECT =
             "[연차 소진 안내] {name}님, 잔여 연차가 {remainingDays}일 있습니다.";
     private static final String DEFAULT_REMINDER_BODY =
             "{name}님, 현재 사용 가능한 연차가 {remainingDays}일 남아 있습니다.\n"
                     + "다음 기산일은 {nextResetDate}이며 {daysUntilReset}일 후입니다.\n"
                     + "기산일에 적용되는 이월·소멸 정책은 서비스의 연차 정책을 확인해 주세요.";
+    private static final List<String> REMINDER_VARIABLES = List.of(
+            "{name}", "{remainingDays}", "{nextResetDate}", "{daysUntilReset}", "{serviceUrl}");
 
     // 색은 앱 토큰(index.css)에서 가져오되 밝은 배경 기준으로 고른 값이다
     private static final String COLOR_PAGE_BG = "#f4f6fa";
@@ -144,6 +146,15 @@ public class EmailTemplateFactory {
                 : emailTemplateRepository.findByTemplateKey(REMINDER_TEMPLATE_KEY).orElse(null);
         String subjectTemplate = template == null ? DEFAULT_REMINDER_SUBJECT : template.getSubjectTemplate();
         String bodyTemplate = template == null ? DEFAULT_REMINDER_BODY : template.getBodyTemplate();
+        return createReminder(data, subjectTemplate, bodyTemplate);
+    }
+
+    /** 저장되지 않은 양식을 관리자 미리보기에서 실제 발송과 같은 규칙으로 렌더링한다. */
+    public EmailMessage createReminder(
+            ReminderTemplateData data,
+            String subjectTemplate,
+            String bodyTemplate
+    ) {
         String subject = replaceVariables(subjectTemplate, data);
         String body = escape(replaceVariables(bodyTemplate, data))
                 .replace("\r\n", "\n")
@@ -151,9 +162,19 @@ public class EmailTemplateFactory {
         return new EmailMessage(subject, reminderDocument(body));
     }
 
-    /** W4 양식 미리보기에서 사용할 명시적 별칭 */
-    public EmailMessage renderReminder(ReminderTemplateData data) {
-        return createReminder(data);
+    /** 관리자 양식 화면이 사용하는 placeholder의 단일 출처. */
+    public List<String> reminderVariables() {
+        return REMINDER_VARIABLES;
+    }
+
+    /** DB 양식이 없을 때 관리자 화면에 보여줄 기본 제목. */
+    public String defaultReminderSubject() {
+        return DEFAULT_REMINDER_SUBJECT;
+    }
+
+    /** DB 양식이 없을 때 관리자 화면에 보여줄 기본 본문. */
+    public String defaultReminderBody() {
+        return DEFAULT_REMINDER_BODY;
     }
 
     private String replaceVariables(String template, ReminderTemplateData data) {
