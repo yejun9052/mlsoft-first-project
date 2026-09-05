@@ -231,16 +231,19 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 ## 이메일 (emails — 관리자)
 
-> **아래 4개는 설계이고 아직 구현되지 않았다** — 대응하는 컨트롤러가 없다. 현재 이메일은
-> `EmailNotificationPublisher`의 건별 알림과 `EmailRetryScheduler`의 자동 재시도까지만 동작하며,
-> 관리자용 조회·발송 API는 없다 (docs/12 `USER-5`).
+> 관리자 이메일 API는 `EmailAdminController`가 제공한다. 모든 응답은 `CommonResponse`이며
+> SYSTEM_ADMIN만 접근할 수 있다. 본문·제목은 아웃박스 `PENDING`으로 먼저 저장한 뒤 커밋 후 발송한다.
 
 | Method | URL | 설명 | 권한 | 상태 |
 |---|---|---|---|---|
-| GET | `/api/emails/reminder-targets` | 기산일 임박 + 연차 잔여 대상자 리스트 | SA | 설계(미구현) |
-| POST | `/api/emails/bulk` | 일괄 발송 `{userIds[], title, content}` (비동기) | SA | 설계(미구현) |
-| GET | `/api/emails` | 발송 이력 (페이징, type·status 필터) | SA | 설계(미구현) |
-| POST | `/api/emails/{id}/resend` | FAILED 건 재발송 | SA | 설계(미구현) |
+| GET | `/api/emails/reminder-targets` | `{userId,name,departmentName,remainingDays,nextResetDate,daysUntilReset,emailAvailable}` 대상 목록 | SA | 구현 |
+| POST | `/api/emails/bulk` | `{userIds[],title,content}` 일괄 발송 → `{requested,queued,skipped}` | SA | 구현 |
+| GET | `/api/emails` | 발송 이력 Page (`type`, `status` 필터, 수신자 주소 마스킹) | SA | 구현 |
+| POST | `/api/emails/{id}/resend` | `FAILED` 건만 retry_count를 0으로 초기화해 재발송 | SA | 구현 |
+
+이력 응답의 `type`은 `LEAVE`·`NOTICE`·`REMINDER`·`WELFARE`, `status`는
+`PENDING`·`SENDING`·`SENT`·`FAILED`다. `GET /api/emails`의 `data`는
+`{content:[{id,recipientName,recipientEmailMasked,type,status,title,retryCount,errorMessage,sentAt,createdAt}],page:{number,size,totalElements,totalPages}}`다.
 
 > 재발송은 **`FAILED`만** 허용한다 — `SENT` 재발송은 수신자에게 중복 수신이고 자동 발송 ledger의
 > "한 번만" 규칙과 충돌한다. 일괄 발송 상한은 회당 100건·일 400건이다
@@ -251,8 +254,9 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 | Method | URL | 설명 | 권한 | 상태 |
 |---|---|---|---|---|
-| GET | `/api/admin/email-templates` | 양식 목록·본문 조회 | SA | 설계(미구현) |
-| PUT | `/api/admin/email-templates/{key}` | 양식 수정 — 평문 저장 후 서버가 escaping | SA | 설계(미구현) |
+| GET | `/api/admin/email-templates` | 양식 목록·본문·version·수정자·placeholder 조회 | SA | 구현 |
+| PUT | `/api/admin/email-templates/{templateKey}` | `{subjectTemplate,bodyTemplate}` 수정 — 평문 저장 후 서버가 escaping | SA | 구현 |
+| POST | `/api/admin/email-templates/{templateKey}/preview` | 저장하지 않고 `{subject,html}` 미리보기 | SA | 구현 |
 
 ### 외부 연동 설정 (integrations — 관리자)
 
@@ -261,10 +265,14 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 | Method | URL | 설명 | 권한 | 상태 |
 |---|---|---|---|---|
-| GET | `/api/admin/integrations` | 마스킹 조회 (`••••` + 끝 4자) | SA | 설계(미구현) |
-| PUT | `/api/admin/integrations/{provider}` | 저장·회전 (쓰기 전용) | SA | 설계(미구현) |
-| POST | `/api/admin/integrations/mail/test` | 테스트 발송 — 요청한 관리자 본인에게만 | SA | 설계(미구현) |
-| POST | `/api/admin/integrations/holiday/verify` | 공휴일 키 검증 — 저장하지 않고 응답 코드만 확인 | SA | 설계(미구현) |
+| GET | `/api/admin/integrations` | SMTP·공휴일 키 마스킹 조회 + `encryptionConfigured` | SA | 구현 |
+| PUT | `/api/admin/integrations/{provider}` (`mail`·`holiday`) | 저장·회전 (쓰기 전용) | SA | 구현 |
+| POST | `/api/admin/integrations/mail/test` | 테스트 발송 — 인증 주체 본인에게만 큐 등록 | SA | 구현 |
+| POST | `/api/admin/integrations/holiday/verify` | 공휴일 키 검증 — 저장하지 않고 올해 조회 | SA | 구현 |
+
+연동 조회 응답은 `{mail:{provider,username,maskedSecret,active}|null,
+holiday:{provider,maskedKey,active}|null,encryptionConfigured}`이며, 테스트 메일의 성공
+메시지는 `테스트 메일을 큐에 넣었습니다`다.
 
 ## 시스템 설정 (admin)
 
