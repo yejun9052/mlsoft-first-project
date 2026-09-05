@@ -6,6 +6,7 @@ package com.mlsoft.backend.domain.email.entity;
  */
 public enum EmailStatus {
     PENDING, // 발송 대기
+    SENDING, // 발송 원자 선점 중
     SENT,    // 발송 완료
     FAILED   // 실패 — 재시도 대상
 }

@@ -25,7 +25,10 @@ public enum AdminAction {
     USER_RESTORED("퇴직 복구"),
     ONBOARDING_APPROVED("온보딩 승인"),
     ONBOARDING_REJECTED("온보딩 반려"),
-    CONFIG_CHANGED("시스템 설정 변경");
+    CONFIG_CHANGED("시스템 설정 변경"),
+    EMAIL_BULK_SENT("이메일 일괄 발송"),
+    EMAIL_TEMPLATE_CHANGED("이메일 양식 수정"),
+    EMAIL_RESENT("이메일 재발송");
 
     private final String label;
 }
