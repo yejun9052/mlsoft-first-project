@@ -104,7 +104,12 @@ public class MailCredentialService {
         String normalizedProvider = normalizeProvider(provider);
         String normalizedUsername = requireText(username, "username");
         String normalizedSecret = requireText(secret, "secret");
-        String encryptedSecret = cipher.encrypt(normalizedSecret);
+        String encryptedSecret;
+        try {
+            encryptedSecret = cipher.encrypt(normalizedSecret);
+        } catch (IllegalStateException e) {
+            throw new BusinessException(ErrorCode.CREDENTIAL_ENCRYPTION_NOT_CONFIGURED);
+        }
 
         MailCredential credential = repository.findByProvider(normalizedProvider)
                 .map(existing -> {
@@ -188,7 +193,7 @@ public class MailCredentialService {
 
     private String requireText(String value, String field) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException(field + "은 비어 있을 수 없습니다.");
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
         }
         return value.trim();
     }

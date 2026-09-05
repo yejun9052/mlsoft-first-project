@@ -1,6 +1,8 @@
 package com.mlsoft.backend.domain.holiday.credential;
 
 import com.mlsoft.backend.domain.credential.SecretCipher;
+import com.mlsoft.backend.global.exception.BusinessException;
+import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ import java.util.Optional;
 public class HolidayApiCredentialService {
 
     public static final String DATA_GO_KR_PROVIDER = "DATA_GO_KR";
+    private static final String SECRET_MASK = "••••";
 
     private final HolidayApiCredentialRepository repository;
     private final SecretCipher cipher;
@@ -48,6 +51,55 @@ public class HolidayApiCredentialService {
             }
         }
         return environmentApiKey.isBlank() ? Optional.empty() : Optional.of(environmentApiKey);
+    }
+
+    /** 현재 저장된 공휴일 API 키를 원문 없이 조회한다. */
+    @Transactional(readOnly = true)
+    public Optional<HolidayApiCredentialMaskDto> findMaskedCredential() {
+        Optional<HolidayApiCredential> stored =
+                repository.findByProvider(DATA_GO_KR_PROVIDER);
+        if (stored.isPresent()) {
+            HolidayApiCredential credential = stored.get();
+            String plain = "";
+            try {
+                if (cipher.isConfigured()) {
+                    plain = cipher.decrypt(credential.getEncryptedApiKey());
+                }
+            } catch (RuntimeException ignored) {
+                // 복호화 실패 시에도 원문을 추측할 수 없는 고정 마스크를 반환한다.
+            }
+            return Optional.of(new HolidayApiCredentialMaskDto(
+                    credential.getProvider(), maskKey(plain), credential.isActive()));
+        }
+        if (environmentApiKey.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.of(new HolidayApiCredentialMaskDto(
+                DATA_GO_KR_PROVIDER, maskKey(environmentApiKey), true));
+    }
+
+    /** 관리자 화면에서 입력한 공휴일 API 키를 암호화해 저장하거나 회전한다. */
+    @Transactional
+    public HolidayApiCredentialMaskDto saveOrRotate(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        String normalized = apiKey.trim();
+        String encrypted;
+        try {
+            encrypted = cipher.encrypt(normalized);
+        } catch (IllegalStateException e) {
+            throw new BusinessException(ErrorCode.CREDENTIAL_ENCRYPTION_NOT_CONFIGURED);
+        }
+        HolidayApiCredential credential = repository.findByProvider(DATA_GO_KR_PROVIDER)
+                .map(existing -> {
+                    existing.rotate(encrypted);
+                    return existing;
+                })
+                .orElseGet(() -> HolidayApiCredential.create(DATA_GO_KR_PROVIDER, encrypted));
+        HolidayApiCredential saved = repository.save(credential);
+        return new HolidayApiCredentialMaskDto(
+                saved.getProvider(), maskKey(normalized), saved.isActive());
     }
 
     /**
@@ -86,5 +138,16 @@ public class HolidayApiCredentialService {
                 cipher.encrypt(environmentApiKey)));
         log.info("[공휴일] API 자격 증명을 암호화해 DB에 저장했습니다.");
         return true;
+    }
+
+    private String maskKey(String value) {
+        if (value == null || value.isBlank()) {
+            return SECRET_MASK;
+        }
+        String normalized = value.trim();
+        String suffix = normalized.length() <= 4
+                ? normalized
+                : normalized.substring(normalized.length() - 4);
+        return SECRET_MASK + suffix;
     }
 }

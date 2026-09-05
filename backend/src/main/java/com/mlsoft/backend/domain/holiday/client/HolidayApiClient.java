@@ -70,7 +70,12 @@ public class HolidayApiClient {
      */
     public List<HolidayItem> fetchByYear(int year) {
         String apiKey = credentialService.resolveApiKey().orElse("");
-        if (apiKey.isBlank()) {
+        return fetchByYear(year, apiKey);
+    }
+
+    /** 저장하지 않은 관리자 입력 키로 같은 연도 조회를 수행한다. */
+    public List<HolidayItem> fetchByYear(int year, String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
             log.warn("[공휴일] HOLIDAY_API_KEY가 비어 있어 조회를 건너뜁니다 (year={})", year);
             return List.of();
         }
