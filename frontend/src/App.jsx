@@ -17,6 +17,8 @@ import AdminDepartmentsPage from './pages/AdminDepartmentsPage.jsx';
 import AdminPolicyPage from './pages/AdminPolicyPage.jsx';
 import AdminWelfarePoliciesPage from './pages/AdminWelfarePoliciesPage.jsx';
 import AdminHistoryPage from './pages/AdminHistoryPage.jsx';
+import AdminEmailsPage from './pages/AdminEmailsPage.jsx';
+import AdminIntegrationsPage from './pages/AdminIntegrationsPage.jsx';
 
 // 결재 관리 접근 가능 역할 (팀장·총관리자)
 const APPROVER_ROLES = [ROLE.TEAM_LEADER, ROLE.SYSTEM_ADMIN];
@@ -80,6 +82,9 @@ const routes = createRoutesFromElements(
       <Route path="/admin/departments" element={<AdminDepartmentsPage />} />
       <Route path="/admin/policy" element={<AdminPolicyPage />} />
       <Route path="/admin/welfare-policies" element={<AdminWelfarePoliciesPage />} />
+      {/* 이메일·외부 연동 — 자격 증명을 다루므로 팀장에게도 열지 않는다 */}
+      <Route path="/admin/emails" element={<AdminEmailsPage />} />
+      <Route path="/admin/integrations" element={<AdminIntegrationsPage />} />
     </Route>
 
     {/* 기본 진입·미정의 경로는 대시보드로 */}

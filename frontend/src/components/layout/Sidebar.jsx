@@ -11,6 +11,8 @@ import {
   UsersRound,
   Building2,
   Settings,
+  Mail,
+  KeyRound,
   ScrollText,
   LogOut,
 } from 'lucide-react';
@@ -32,7 +34,8 @@ const MENU_ITEMS = [
   { to: '/myinfo', label: '내 정보', Icon: UserRound },
 ];
 
-// 관리자 섹션 (역할별 노출 6개) — 결재 → 조직(구성원·부서) → 정책(연차·복리후생) → 로그 순
+// 관리자 섹션 (역할별 노출 8개) — 결재 → 조직(구성원·부서) → 정책(연차·복리후생) →
+// 발송·연동(이메일·외부 연동) → 로그 순
 const ADMIN_ITEMS = [
   {
     to: '/approvals',
@@ -44,6 +47,8 @@ const ADMIN_ITEMS = [
   { to: '/admin/departments', label: '부서 관리', Icon: Building2, roles: [ROLE.SYSTEM_ADMIN] },
   { to: '/admin/policy', label: '연차 정책', Icon: Settings, roles: [ROLE.SYSTEM_ADMIN] },
   { to: '/admin/welfare-policies', label: '복리후생 정책', Icon: Gift, roles: [ROLE.SYSTEM_ADMIN] },
+  { to: '/admin/emails', label: '이메일 관리', Icon: Mail, roles: [ROLE.SYSTEM_ADMIN] },
+  { to: '/admin/integrations', label: '외부 연동 설정', Icon: KeyRound, roles: [ROLE.SYSTEM_ADMIN] },
   {
     to: '/admin/history',
     label: '처리 이력',

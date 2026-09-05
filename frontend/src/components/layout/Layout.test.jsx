@@ -127,7 +127,7 @@ describe('Layout 모바일 서랍', () => {
   it.each([
     ['EMPLOYEE', 6],
     ['TEAM_LEADER', 8],
-    ['SYSTEM_ADMIN', 12],
+    ['SYSTEM_ADMIN', 14],
   ])('%s 역할은 좁은 화면에서도 허용된 메뉴 %i개만 본다', (role, expectedCount) => {
     installMatchMedia(true);
     renderLayout(role);
