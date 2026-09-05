@@ -242,6 +242,30 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | GET | `/api/emails` | 발송 이력 (페이징, type·status 필터) | SA | 설계(미구현) |
 | POST | `/api/emails/{id}/resend` | FAILED 건 재발송 | SA | 설계(미구현) |
 
+> 재발송은 **`FAILED`만** 허용한다 — `SENT` 재발송은 수신자에게 중복 수신이고 자동 발송 ledger의
+> "한 번만" 규칙과 충돌한다. 일괄 발송 상한은 회당 100건·일 400건이다
+> (개인 Gmail 일 500건에 건별 알림 몫을 남긴다). 결정 근거는
+> [`설계-초안/연차-소진-안내-메일-설계-2026-08-28.md`](설계-초안/연차-소진-안내-메일-설계-2026-08-28.md) §9.
+
+### 메일 양식 (email-templates — 관리자)
+
+| Method | URL | 설명 | 권한 | 상태 |
+|---|---|---|---|---|
+| GET | `/api/admin/email-templates` | 양식 목록·본문 조회 | SA | 설계(미구현) |
+| PUT | `/api/admin/email-templates/{key}` | 양식 수정 — 평문 저장 후 서버가 escaping | SA | 설계(미구현) |
+
+### 외부 연동 설정 (integrations — 관리자)
+
+공휴일 API 키와 메일 발신 계정을 한 화면(`/admin/integrations`)에서 관리한다.
+**비밀번호·키는 응답에 싣지 않는다** — 조회는 마스킹만 내려주고 저장은 쓰기 전용 필드다.
+
+| Method | URL | 설명 | 권한 | 상태 |
+|---|---|---|---|---|
+| GET | `/api/admin/integrations` | 마스킹 조회 (`••••` + 끝 4자) | SA | 설계(미구현) |
+| PUT | `/api/admin/integrations/{provider}` | 저장·회전 (쓰기 전용) | SA | 설계(미구현) |
+| POST | `/api/admin/integrations/mail/test` | 테스트 발송 — 요청한 관리자 본인에게만 | SA | 설계(미구현) |
+| POST | `/api/admin/integrations/holiday/verify` | 공휴일 키 검증 — 저장하지 않고 응답 코드만 확인 | SA | 설계(미구현) |
+
 ## 시스템 설정 (admin)
 
 | Method | URL | 설명 | 권한 |
