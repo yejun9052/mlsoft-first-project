@@ -6,11 +6,20 @@
 -- 암호문을 저장한다. 저장 후에는 HOLIDAY_CREDENTIAL_SEED를 false 또는 미설정으로 둔다.
 -- HOLIDAY_CREDENTIAL_ENCRYPTION_KEY는 DB와 별도 보관해야 하며, 두 값을 모두
 -- 잃으면 저장된 키를 복호화할 수 없다.
-CREATE TABLE IF NOT EXISTS `holiday_api_credentials` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `encrypted_api_key` varchar(1024) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `active` bit(1) NOT NULL,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_holiday_api_credentials_provider` (`provider`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- MySQL 8에는 CREATE TABLE IF NOT EXISTS만으로 스키마 차이를 알기 어렵다.
+-- information_schema에서 테이블 존재 여부를 확인해 없을 때만 DDL을 실행한다.
+SET @ddl := IF((SELECT COUNT(*) FROM information_schema.TABLES
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'holiday_api_credentials') = 0,
+               'CREATE TABLE `holiday_api_credentials` (
+                  `id` bigint NOT NULL AUTO_INCREMENT,
+                  `provider` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+                  `encrypted_api_key` varchar(1024) COLLATE utf8mb4_unicode_ci NOT NULL,
+                  `active` bit(1) NOT NULL,
+                  PRIMARY KEY (`id`),
+                  UNIQUE KEY `uk_holiday_api_credentials_provider` (`provider`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+               'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
