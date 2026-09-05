@@ -135,6 +135,20 @@ class EmailHistoryRepositoryIntegrationTest {
                 emailHistoryRepository.findById(historyId).orElseThrow().getStatus());
     }
 
+    @Test
+    @DisplayName("관리자 이력 검색은 type·status 생략과 필터를 모두 지원한다")
+    void 관리자이력검색_필터() {
+        User user = saveUser();
+        savePending(user);
+
+        assertEquals(1, emailHistoryRepository.searchForAdmin(
+                null, null, PageRequest.of(0, 20)).getTotalElements());
+        assertEquals(1, emailHistoryRepository.searchForAdmin(
+                EmailType.LEAVE, EmailStatus.PENDING, PageRequest.of(0, 20)).getTotalElements());
+        assertEquals(0, emailHistoryRepository.searchForAdmin(
+                EmailType.NOTICE, EmailStatus.PENDING, PageRequest.of(0, 20)).getTotalElements());
+    }
+
     private List<Long> findTargets() {
         return emailHistoryRepository.findDispatchTargetIds(
                 MAX_ATTEMPTS, EmailStatus.FAILED, EmailStatus.PENDING, STALE_BEFORE,

@@ -75,6 +75,19 @@ public final class ResponseMessage {
     public static final String LEAVE_POLICY_CONFIG_UPDATED = "연차 시스템 설정이 변경되었습니다.";
     public static final String LEAVE_RESET_HISTORY_FETCHED = "기산일 리셋 이력을 조회했습니다.";
 
+    // 이메일 관리자
+    public static final String EMAIL_REMINDER_TARGETS_FETCHED = "연차 소진 안내 대상을 조회했습니다.";
+    public static final String EMAIL_BULK_QUEUED = "이메일 일괄 발송을 큐에 넣었습니다.";
+    public static final String EMAIL_HISTORY_FETCHED = "이메일 발송 이력을 조회했습니다.";
+    public static final String EMAIL_RESENT = "이메일 재발송을 큐에 넣었습니다.";
+    public static final String EMAIL_TEMPLATES_FETCHED = "이메일 양식을 조회했습니다.";
+    public static final String EMAIL_TEMPLATE_UPDATED = "이메일 양식이 수정되었습니다.";
+    public static final String EMAIL_TEMPLATE_PREVIEW_CREATED = "이메일 양식 미리보기를 생성했습니다.";
+    public static final String INTEGRATIONS_FETCHED = "외부 연동 설정을 조회했습니다.";
+    public static final String INTEGRATION_UPDATED = "외부 연동 설정이 저장되었습니다.";
+    public static final String MAIL_TEST_QUEUED = "테스트 메일을 큐에 넣었습니다";
+    public static final String HOLIDAY_CREDENTIAL_VERIFIED = "공휴일 API 키를 검증했습니다.";
+
     private ResponseMessage() {
         // 인스턴스화 방지
     }

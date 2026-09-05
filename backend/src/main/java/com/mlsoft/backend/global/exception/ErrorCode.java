@@ -39,6 +39,14 @@ public enum ErrorCode {
     INVALID_CONFIG_VALUE(400, "설정 값 형식이 올바르지 않습니다."),
     CONFIG_VALUE_OUT_OF_RANGE(400, "설정 값이 허용 범위를 벗어났습니다."),
     REMINDER_LIST_DAYS_TOO_SHORT(400, "자동 발송 주기보다 소진 안내 기준일이 짧습니다."),
+    EMAIL_BULK_LIMIT_EXCEEDED(400, "이메일 일괄 발송 한도를 초과했습니다."),
+    EMAIL_RESEND_NOT_ALLOWED(400, "실패한 이메일만 재발송할 수 있습니다."),
+    EMAIL_TEMPLATE_INVALID(400, "이메일 양식 제목과 본문을 확인해주세요."),
+    EMAIL_TEMPLATE_BODY_TOO_LONG(400, "이메일 양식 본문은 20,000자 이내로 입력해주세요."),
+    EMAIL_TEMPLATE_NOT_FOUND(404, "이메일 양식을 찾을 수 없습니다."),
+    EMAIL_HISTORY_NOT_FOUND(404, "이메일 이력을 찾을 수 없습니다."),
+    EMAIL_PROVIDER_NOT_FOUND(400, "지원하지 않는 연동 제공자입니다."),
+    CREDENTIAL_ENCRYPTION_NOT_CONFIGURED(400, "자격 증명 암호화 키가 설정되지 않았습니다."),
 
     // 401 Unauthorized
     UNAUTHENTICATED(401, "로그인이 필요합니다."),

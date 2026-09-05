@@ -58,6 +58,14 @@ public class AdminAuditService {
                 AdminAuditLog.create(actor, AdminAction.CONFIG_CHANGED, null, configKey, beforeValue, afterValue));
     }
 
+    /** 이메일·연동처럼 사원 한 명을 직접 대상으로 하지 않는 관리자 조작 기록. */
+    @Transactional
+    public void recordEmailAction(Long actorId, AdminAction action, String targetLabel, String details) {
+        User actor = userRepository.getReferenceById(actorId);
+        adminAuditLogRepository.save(
+                AdminAuditLog.create(actor, action, null, targetLabel, null, details));
+    }
+
     /** 감사 로그 목록 (GET /api/admin/audit-logs, SA) — 최신순은 컨트롤러의 PageableDefault */
     @Transactional(readOnly = true)
     public Page<AdminAuditLogResponse> getLogs(AdminAction action, Long targetUserId, Pageable pageable) {

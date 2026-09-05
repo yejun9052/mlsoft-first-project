@@ -2,7 +2,10 @@ package com.mlsoft.backend.domain.email.repository;
 
 import com.mlsoft.backend.domain.email.entity.EmailHistory;
 import com.mlsoft.backend.domain.email.entity.EmailStatus;
+import com.mlsoft.backend.domain.email.entity.EmailType;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +18,27 @@ import java.util.List;
  * 이메일 발송 이력 저장소.
  */
 public interface EmailHistoryRepository extends JpaRepository<EmailHistory, Long> {
+
+    /** 관리자 이력 목록에서 수신자 정보를 함께 읽는다. */
+    @EntityGraph(attributePaths = "user")
+    @Query("""
+            select e from EmailHistory e
+             where (:type is null or e.emailType = :type)
+               and (:status is null or e.status = :status)
+            """)
+    Page<EmailHistory> searchForAdmin(
+            @Param("type") EmailType type,
+            @Param("status") EmailStatus status,
+            Pageable pageable);
+
+    /** 재발송·이력 응답에 필요한 수신자 연관을 함께 읽는다. */
+    @EntityGraph(attributePaths = "user")
+    @Query("select e from EmailHistory e where e.id = :historyId")
+    java.util.Optional<EmailHistory> findByIdWithUser(@Param("historyId") Long historyId);
+
+    /** 일괄 발송 일일 상한은 이메일 유형과 무관하게 전체 이력을 센다. */
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            LocalDateTime fromInclusive, LocalDateTime toExclusive);
 
     /**
      * 발송 직전의 원자 선점 — PENDING 또는 FAILED 한 건만 SENDING으로 바꾼다.

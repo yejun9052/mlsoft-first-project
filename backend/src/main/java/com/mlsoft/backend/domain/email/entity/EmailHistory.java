@@ -118,4 +118,15 @@ public class EmailHistory extends BaseTimeEntity {
                 ? errorMessage.substring(0, 500)
                 : errorMessage;
     }
+
+    /** 관리자가 FAILED 이력만 다시 발송 대기열에 넣는다. */
+    public void resetForResend() {
+        if (this.status != EmailStatus.FAILED) {
+            throw new IllegalStateException("FAILED 상태의 이력만 재발송할 수 있습니다.");
+        }
+        this.status = EmailStatus.PENDING;
+        this.retryCount = 0;
+        this.errorMessage = null;
+        this.sentAt = null;
+    }
 }
