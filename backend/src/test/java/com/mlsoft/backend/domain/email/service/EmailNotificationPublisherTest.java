@@ -139,6 +139,51 @@ class EmailNotificationPublisherTest {
                 "enum 이름이 그대로 새어 나갔다");
     }
 
+    @Test
+    @DisplayName("온보딩 승인 대기는 재직 SYSTEM_ADMIN에게 NOTICE로 보낸다")
+    void publishOnboardingPending_관리자수신_NOTICE() {
+        User applicant = user(1L, "신청자", Role.EMPLOYEE, true);
+        applicant.requestOnboardingApproval(LocalDate.of(1990, 1, 1), LocalDate.of(1995, 4, 1));
+        User admin = user(2L, "관리자", Role.SYSTEM_ADMIN, true);
+        given(userRepository.findByRoleAndIsActiveTrue(Role.SYSTEM_ADMIN)).willReturn(List.of(admin));
+        givenSavedHistoriesGetIds();
+
+        publisher().publishOnboardingPending(applicant);
+
+        EmailHistory history = captureSaved().getFirst();
+        assertEquals(admin, history.getUser());
+        assertEquals(com.mlsoft.backend.domain.email.entity.EmailType.NOTICE, history.getEmailType());
+        assertTrue(history.getTitle().contains("온보딩 승인 대기"));
+    }
+
+    @Test
+    @DisplayName("온보딩 반려는 사원 본인에게 캡처한 입사일을 포함해 보낸다")
+    void publishOnboardingRejected_본인수신_입사일포함() {
+        User applicant = user(1L, "신청자", Role.EMPLOYEE, true);
+        givenSavedHistoriesGetIds();
+
+        publisher().publishOnboardingRejected(applicant, LocalDate.of(1990, 1, 1));
+
+        EmailHistory history = captureSaved().getFirst();
+        assertEquals(applicant, history.getUser());
+        assertTrue(history.getContent().contains("1990-01-01"));
+        assertTrue(history.getTitle().contains("온보딩 반려"));
+    }
+
+    @Test
+    @DisplayName("온보딩 수정 결과는 확정·승인 대기 문구를 나눈다")
+    void publishOnboardingRevised_결과문구분기() {
+        User applicant = user(1L, "신청자", Role.EMPLOYEE, true);
+        applicant.requestOnboardingApproval(LocalDate.of(1990, 1, 1), LocalDate.of(1995, 4, 1));
+        User admin = user(2L, "관리자", Role.SYSTEM_ADMIN, true);
+        given(userRepository.findByRoleAndIsActiveTrue(Role.SYSTEM_ADMIN)).willReturn(List.of(admin));
+        givenSavedHistoriesGetIds();
+
+        publisher().publishOnboardingRevised(applicant);
+
+        assertTrue(captureSaved().getFirst().getContent().contains("승인 대기 상태로 다시"));
+    }
+
     // 2026-08-17: 신청자에게도 "결재하러 가기" 버튼이 갔다. 본문은 원래 수신자별로 만들고
     // 있었는데(사유 마스킹) 버튼만 그 갈래를 안 타서, 신청자가 자기 신청을 결재하러 가는
     // 링크를 받았다. 팩토리 단위 테스트와 별개로 **발행부가 신청자를 실제로 구분해 넘기는지**를
