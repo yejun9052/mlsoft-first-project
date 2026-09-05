@@ -7,6 +7,7 @@ import com.mlsoft.backend.domain.email.event.EmailDispatchEvent;
 import com.mlsoft.backend.domain.email.event.EmailTemplateData;
 import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
 import com.mlsoft.backend.domain.email.event.EmailTemplateKind;
+import com.mlsoft.backend.domain.email.event.ReminderTemplateData;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
@@ -221,6 +222,24 @@ public class EmailNotificationPublisher {
                 completed
                         ? "수정한 온보딩이 자동 승인 범위 안에서 확정되었습니다."
                         : "수정한 온보딩이 승인 대기 상태로 다시 접수되었습니다.");
+    }
+
+    /**
+     * 연차 소진 안내 한 건을 기존 아웃박스에 넣고, 생성된 이력을 호출자에게 돌려준다.
+     * 업무 이력(leave_reminder_dispatch)이 같은 트랜잭션에서 이 id를 연결할 수 있도록
+     * 저장·이벤트 발행 경계를 이 메서드에 둔다.
+     */
+    public EmailHistory publishLeaveBalanceReminder(User user, ReminderTemplateData templateData) {
+        EmailMessage message = emailTemplateFactory.createReminder(templateData);
+        EmailHistory history = emailHistoryRepository.save(
+                EmailHistory.create(user, null, EmailType.REMINDER, message.title(), message.content()));
+        eventPublisher.publishEvent(new EmailDispatchEvent(List.of(history.getId())));
+        return history;
+    }
+
+    /** 리마인더 도메인 서비스가 사용할 짧은 별칭 */
+    public EmailHistory publishReminder(User user, ReminderTemplateData templateData) {
+        return publishLeaveBalanceReminder(user, templateData);
     }
 
     private void publishOnboarding(

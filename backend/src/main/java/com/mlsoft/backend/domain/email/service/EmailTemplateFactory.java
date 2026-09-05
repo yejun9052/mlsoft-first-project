@@ -3,6 +3,10 @@ package com.mlsoft.backend.domain.email.service;
 import com.mlsoft.backend.config.AppProperties;
 import com.mlsoft.backend.domain.email.event.EmailTemplateData;
 import com.mlsoft.backend.domain.email.event.EmailTemplateKind;
+import com.mlsoft.backend.domain.email.event.ReminderTemplateData;
+import com.mlsoft.backend.domain.email.entity.EmailTemplate;
+import com.mlsoft.backend.domain.email.repository.EmailTemplateRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -33,6 +37,13 @@ public class EmailTemplateFactory {
     private static final String SERVICE_NAME = "MLsoft 연차관리";
     private static final String MASKED_REASON = "권한이 없어 표시되지 않습니다.";
     private static final String FOOTER_NOTE = "이 메일은 " + SERVICE_NAME + " 시스템이 자동으로 발송했습니다.";
+    private static final String REMINDER_TEMPLATE_KEY = "LEAVE_BALANCE_REMINDER";
+    private static final String DEFAULT_REMINDER_SUBJECT =
+            "[연차 소진 안내] {name}님, 잔여 연차가 {remainingDays}일 있습니다.";
+    private static final String DEFAULT_REMINDER_BODY =
+            "{name}님, 현재 사용 가능한 연차가 {remainingDays}일 남아 있습니다.\n"
+                    + "다음 기산일은 {nextResetDate}이며 {daysUntilReset}일 후입니다.\n"
+                    + "기산일에 적용되는 이월·소멸 정책은 서비스의 연차 정책을 확인해 주세요.";
 
     // 색은 앱 토큰(index.css)에서 가져오되 밝은 배경 기준으로 고른 값이다
     private static final String COLOR_PAGE_BG = "#f4f6fa";
@@ -49,9 +60,18 @@ public class EmailTemplateFactory {
             "'Apple SD Gothic Neo','Malgun Gothic','맑은 고딕',Arial,sans-serif";
 
     private final AppProperties appProperties;
+    private final EmailTemplateRepository emailTemplateRepository;
 
+    /** 단위 테스트와 기본 문구만 필요한 호출부를 위한 생성자 */
     public EmailTemplateFactory(AppProperties appProperties) {
+        this(appProperties, null);
+    }
+
+    /** DB 양식 조회를 포함한 Spring용 생성자 */
+    @Autowired
+    public EmailTemplateFactory(AppProperties appProperties, EmailTemplateRepository emailTemplateRepository) {
         this.appProperties = appProperties;
+        this.emailTemplateRepository = emailTemplateRepository;
     }
 
     /**
@@ -78,6 +98,7 @@ public class EmailTemplateFactory {
             case ONBOARDING_APPROVED -> "온보딩 확정";
             case ONBOARDING_REJECTED -> "온보딩 반려";
             case ONBOARDING_REVISED -> "온보딩 수정";
+            case LEAVE_BALANCE_REMINDER -> "연차 소진 안내";
         };
     }
 
@@ -106,7 +127,79 @@ public class EmailTemplateFactory {
             case BIRTHDAY_LEAVE_GRANTED -> birthdayMessage(data, forApplicant);
             case ONBOARDING_PENDING, ONBOARDING_APPROVED,
                  ONBOARDING_REJECTED, ONBOARDING_REVISED -> onboardingMessage(data, forApplicant);
+            case LEAVE_BALANCE_REMINDER -> createReminder(new ReminderTemplateData(
+                    data.applicantName(), data.days(), data.dates(), data.reason(), appProperties.frontendUrl()));
         };
+    }
+
+    /**
+     * 리마인더 양식을 조회·치환·HTML escaping하는 공개 경계.
+     *
+     * <p>관리자 미리보기와 실제 아웃박스 발송이 같은 메서드를 사용해야 양식 저장 후
+     * 미리보기와 발송 결과가 달라지지 않는다. DB 양식이 없으면 코드의 기본 문구를 쓴다.</p>
+     */
+    public EmailMessage createReminder(ReminderTemplateData data) {
+        EmailTemplate template = emailTemplateRepository == null
+                ? null
+                : emailTemplateRepository.findByTemplateKey(REMINDER_TEMPLATE_KEY).orElse(null);
+        String subjectTemplate = template == null ? DEFAULT_REMINDER_SUBJECT : template.getSubjectTemplate();
+        String bodyTemplate = template == null ? DEFAULT_REMINDER_BODY : template.getBodyTemplate();
+        String subject = replaceVariables(subjectTemplate, data);
+        String body = escape(replaceVariables(bodyTemplate, data))
+                .replace("\r\n", "\n")
+                .replace("\n", "<br>");
+        return new EmailMessage(subject, reminderDocument(body));
+    }
+
+    /** W4 양식 미리보기에서 사용할 명시적 별칭 */
+    public EmailMessage renderReminder(ReminderTemplateData data) {
+        return createReminder(data);
+    }
+
+    private String replaceVariables(String template, ReminderTemplateData data) {
+        if (template == null) {
+            return "";
+        }
+        String serviceUrl = data.serviceUrl();
+        if (serviceUrl == null || serviceUrl.isBlank()) {
+            serviceUrl = appProperties.frontendUrl();
+        }
+        return template
+                .replace("{name}", value(data.name()))
+                .replace("{remainingDays}", value(data.remainingDays()))
+                .replace("{nextResetDate}", value(data.nextResetDate()))
+                .replace("{daysUntilReset}", value(data.daysUntilReset()))
+                .replace("{serviceUrl}", value(serviceUrl));
+    }
+
+    private String value(String value) {
+        return value == null ? "" : value;
+    }
+
+    /** 양식 본문은 평문으로 저장하고 최종 HTML 단계에서만 escaping한다. */
+    private String reminderDocument(String bodyHtml) {
+        StringBuilder html = new StringBuilder(1024);
+        html.append("<div style=\"margin:0;padding:24px 12px;background:").append(COLOR_PAGE_BG)
+                .append(";font-family:").append(FONT_STACK).append("\">")
+                .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" ")
+                .append("style=\"max-width:520px;margin:0 auto;background:").append(COLOR_CARD_BG)
+                .append(";border:1px solid ").append(COLOR_BORDER)
+                .append(";border-radius:12px;border-collapse:separate;overflow:hidden\">")
+                .append("<tr><td style=\"background:").append(COLOR_HEADER_BG)
+                .append(";padding:16px 24px;color:#eaf3ff;font-size:15px;font-weight:700;letter-spacing:-0.2px\">")
+                .append(escape(heading(EmailTemplateKind.LEAVE_BALANCE_REMINDER)))
+                .append("</td></tr>")
+                .append("<tr><td style=\"padding:24px;font-size:14px;line-height:1.8;color:")
+                .append(COLOR_TEXT).append("\">")
+                .append(bodyHtml)
+                .append(button(EmailTemplateKind.LEAVE_BALANCE_REMINDER, true))
+                .append("</td></tr>")
+                .append("<tr><td style=\"padding:14px 24px;background:").append(COLOR_FOOTER_BG)
+                .append(";border-top:1px solid ").append(COLOR_BORDER)
+                .append(";color:").append(COLOR_LABEL).append(";font-size:11px\">")
+                .append(escape(FOOTER_NOTE))
+                .append("</td></tr></table></div>");
+        return html.toString();
     }
 
     /** 메일 제목 — 대괄호 안은 헤더 띠와 같은 값이다 (둘이 갈라지지 않게 한 곳에서 만든다) */
@@ -206,6 +299,7 @@ public class EmailTemplateFactory {
             case ONBOARDING_PENDING, ONBOARDING_APPROVED,
                  ONBOARDING_REJECTED, ONBOARDING_REVISED ->
                     new Destination("/dashboard", "온보딩 상태 확인하기");
+            case LEAVE_BALANCE_REMINDER -> new Destination("/dashboard", "연차 현황 보기");
         };
     }
 
