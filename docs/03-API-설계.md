@@ -63,6 +63,17 @@
 
 OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입이면 자동 가입(EMPLOYEE, 미배정) → ADMIN_EMAILS면 SYSTEM_ADMIN → is_active=false면 `/login?error=retired` → JWT 쿠키 발급 후 `/oauth-callback` 리다이렉트. 실패 시 `/login?error=...&message=...`
 
+### 온보딩 승인 (admin)
+
+승인 대기로 들어간 입사일을 총관리자가 확정·반려한다. 사원 본인이 쓰는 `/api/auth/onboarding`과
+경로가 갈리는 이유는 위와 같다 — 대기 사원은 `/api/auth/*` 밖으로 나가지 못한다.
+
+| Method | URL | 설명 | 권한 |
+|---|---|---|---|
+| GET | `/api/admin/onboardings` | 승인 대기 목록 (페이징, 오래 기다린 순) | SA |
+| POST | `/api/admin/onboardings/{userId}/approval` | 승인 — 신고 입사일을 확정하고 그 시점에 연차 부여 | SA |
+| POST | `/api/admin/onboardings/{userId}/rejection` | 반려 — 입력값을 지우고 다시 낼 수 있게 되돌린다 | SA |
+
 ## 사용자 (users)
 
 | Method | URL | 설명 | 권한 |
@@ -70,10 +81,12 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | GET | `/api/users` | 전체 목록 (페이징, keyword·role 필터) | SA |
 | GET | `/api/users/team-members` | 내 부서 팀원 목록 | 전체 |
 | GET | `/api/users/approvers` | 서브 승인자 후보 (재직 TL+SA) | 전체 |
+| GET | `/api/users/leader-candidates` | 팀장 후보 (재직 TL+SA — 승인자 후보와 달리 본인 포함) | SA |
 | GET | `/api/users/retired` | 퇴직자 목록 (페이징) | SA |
 | PATCH | `/api/users/me` | 내 정보 수정 (이름·생일) | 전체 |
 | PATCH | `/api/users/{id}/role` | 권한 변경 | SA |
 | PATCH | `/api/users/{id}/department` | 부서 변경 | SA |
+| PATCH | `/api/users/{id}/role-and-department` | 역할·부서 동시 변경 `{role, departmentId}` — 팀장 승격의 부분 성공 방지 | SA |
 | PATCH | `/api/users/{id}/base-days` | 연차 직접 설정 `{baseDays}` | SA |
 | POST | `/api/users/{id}/retire` | 퇴직 처리 (leader 해제·결재 이관 포함) | SA |
 | POST | `/api/users/{id}/restore` | 퇴직 복구 — 재직 상태로 되돌린다 | SA |
@@ -100,10 +113,12 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | POST | `/api/leaves` | 신청 `{leaveType, dates[], reason, subApproverId?}` — 선차감, 중복·잔여·휴일 검증 | 전체 |
 | GET | `/api/leaves/me` | 내 신청 내역 (페이징, status 필터) | 전체 |
 | GET | `/api/leaves/me/summary` | 잔여 현황 (base/bonus/use/잔여/대기/다음 기산일·차감 예정) | 전체 |
+| GET | `/api/leaves/me/annual-usage?year=` | 내 연차 사용 히트맵 — 승인 완료 날짜별 사용 일수 | 전체 |
 | GET | `/api/leaves/calendar?year=&month=&keyword=&departmentId=` | 캘린더용 승인 연차 (타인 사유 마스킹). `keyword`=신청자명 부분일치, `departmentId`=부서 — 둘 다 선택 | 전체 |
 | GET | `/api/leaves/pending` | 내가 승인자인 대기 목록 (취소 대기 포함, 페이징) | TL·SA |
 | GET | `/api/leaves` | 전체 신청 목록 (페이징·필터) | SA |
 | GET | `/api/leaves/team` | 내 팀 연차 현황 (기간 필터) | 전체 |
+| GET | `/api/leaves/team/annual-usage?year=` | 팀 연차 사용 히트맵 — 현재 부서의 날짜별 인원 수 | 전체 |
 | POST | `/api/leaves/{id}/approval` | 승인/반려 `{approved, comment}` — 조건부 갱신 | TL·SA(승인자) |
 | POST | `/api/leaves/{id}/cancel` | 취소 신청 `{reason}` — 미래=즉시, 과거 포함=CANCEL_PENDING | 본인 |
 | POST | `/api/leaves/{id}/cancel-approval` | 소급 취소 승인/반려 `{approved, comment}` | TL·SA(승인자) |
@@ -216,12 +231,16 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 
 ## 이메일 (emails — 관리자)
 
-| Method | URL | 설명 | 권한 |
-|---|---|---|---|
-| GET | `/api/emails/reminder-targets` | 기산일 임박 + 연차 잔여 대상자 리스트 | SA |
-| POST | `/api/emails/bulk` | 일괄 발송 `{userIds[], title, content}` (비동기) | SA |
-| GET | `/api/emails` | 발송 이력 (페이징, type·status 필터) | SA |
-| POST | `/api/emails/{id}/resend` | FAILED 건 재발송 | SA |
+> **아래 4개는 설계이고 아직 구현되지 않았다** — 대응하는 컨트롤러가 없다. 현재 이메일은
+> `EmailNotificationPublisher`의 건별 알림과 `EmailRetryScheduler`의 자동 재시도까지만 동작하며,
+> 관리자용 조회·발송 API는 없다 (docs/12 `USER-5`).
+
+| Method | URL | 설명 | 권한 | 상태 |
+|---|---|---|---|---|
+| GET | `/api/emails/reminder-targets` | 기산일 임박 + 연차 잔여 대상자 리스트 | SA | 설계(미구현) |
+| POST | `/api/emails/bulk` | 일괄 발송 `{userIds[], title, content}` (비동기) | SA | 설계(미구현) |
+| GET | `/api/emails` | 발송 이력 (페이징, type·status 필터) | SA | 설계(미구현) |
+| POST | `/api/emails/{id}/resend` | FAILED 건 재발송 | SA | 설계(미구현) |
 
 ## 시스템 설정 (admin)
 

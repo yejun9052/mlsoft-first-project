@@ -32,7 +32,7 @@ npm run build        # 프로덕션 빌드
 ## 아키텍처
 
 ### 계층 구조 (백엔드)
-`com.mlsoft.backend` 아래 **도메인별 패키지**(`domain/{auth,user,department,leave,policy,welfare,holiday,email}`)로 나뉘고, 각 도메인은 `controller / dto / entity / repository / service`를 갖는다. 공통 요소는 `global/`(응답·예외·BaseTimeEntity), `security/`(JWT·OAuth2), `config/`에 있다.
+`com.mlsoft.backend` 아래 **도메인별 패키지**(`domain/{audit,auth,common,department,email,holiday,leave,policy,schedule,user,welfare}`)로 나뉘고, 각 도메인은 `controller / dto / entity / repository / service`를 갖는다. 공통 요소는 `global/`(응답·예외·BaseTimeEntity), `security/`(JWT·OAuth2), `config/`에 있다.
 
 ### 인증 흐름
 Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) → `OAuth2SuccessHandler`가 **HttpOnly 쿠키로 JWT 발급** → 이후 요청은 `JwtFilter`가 쿠키를 읽어 `AuthUser` principal을 SecurityContext에 세팅. 세션 없음(STATELESS), CSRF 비활성.
@@ -165,7 +165,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | 문서 | 내용 |
 |---|---|
 | `docs/01-요구사항-기획.md` | 요구사항·기능 명세·권한 체계 |
-| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 16개 테이블·ENUM 대조 |
+| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 17개 테이블·ENUM 대조 |
 | `docs/03-API-설계.md` | 엔드포인트 + 공통 규칙(응답 포맷·페이징·에러 코드) |
 | `docs/04-코드-스타일-가이드.md` | 코드 컨벤션 (위 요약의 원본) |
 | `docs/05-디자인-가이드.md` | 디자인 토큰·화면 구조 |
