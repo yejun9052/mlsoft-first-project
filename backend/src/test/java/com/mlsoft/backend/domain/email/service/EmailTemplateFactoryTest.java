@@ -203,6 +203,51 @@ class EmailTemplateFactoryTest {
         assertTrue(message.content().contains(">연차 신청<"));
     }
 
+    @Test
+    @DisplayName("반려 온보딩 메일은 초기화 전 입사일을 본문에 남긴다")
+    void create_onboardingRejected_keepsHireDate() {
+        EmailTemplateData rejected = new EmailTemplateData(
+                EmailTemplateKind.ONBOARDING_REJECTED,
+                null,
+                "김도현",
+                "반려",
+                "1990-01-01",
+                "",
+                "",
+                "");
+
+        EmailMessage message = factory.create(rejected, true, AS_APPLICANT);
+
+        assertTrue(message.title().startsWith("[온보딩 반려]"));
+        assertTrue(message.content().contains("1990-01-01"));
+    }
+
+    @Test
+    @DisplayName("수정 온보딩은 자동 승인 범위 안·밖 문구를 구분한다")
+    void create_onboardingRevised_branchesBySummary() {
+        EmailTemplateData completed = new EmailTemplateData(
+                EmailTemplateKind.ONBOARDING_REVISED,
+                null,
+                "김도현",
+                "수정 후 확정",
+                "2026-08-20",
+                "",
+                "",
+                "수정한 온보딩이 자동 승인 범위 안에서 확정되었습니다.");
+        EmailTemplateData pending = new EmailTemplateData(
+                EmailTemplateKind.ONBOARDING_REVISED,
+                null,
+                "김도현",
+                "수정 후 승인 대기",
+                "1990-01-01",
+                "",
+                "",
+                "수정한 온보딩이 승인 대기 상태로 다시 접수되었습니다.");
+
+        assertTrue(factory.create(completed, true, AS_APPROVER).content().contains("자동 승인 범위 안에서 확정"));
+        assertTrue(factory.create(pending, true, AS_APPROVER).content().contains("승인 대기 상태로 다시"));
+    }
+
     // ==== 헬퍼 ====
 
     private EmailTemplateData leaveData(String itemName, String applicant, String reason) {

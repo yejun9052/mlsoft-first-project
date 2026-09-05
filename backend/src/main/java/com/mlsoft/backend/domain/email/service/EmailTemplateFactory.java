@@ -74,6 +74,10 @@ public class EmailTemplateFactory {
             case WELFARE_APPROVED -> "복리후생 승인";
             case WELFARE_REJECTED -> "복리후생 반려";
             case BIRTHDAY_LEAVE_GRANTED -> "생일 반차 지급";
+            case ONBOARDING_PENDING -> "온보딩 승인 대기";
+            case ONBOARDING_APPROVED -> "온보딩 확정";
+            case ONBOARDING_REJECTED -> "온보딩 반려";
+            case ONBOARDING_REVISED -> "온보딩 수정";
         };
     }
 
@@ -100,6 +104,8 @@ public class EmailTemplateFactory {
             case WELFARE_REJECTED -> resultMessage(
                     "복리후생 신청이 반려되었습니다.", data, reasonVisible, forApplicant);
             case BIRTHDAY_LEAVE_GRANTED -> birthdayMessage(data, forApplicant);
+            case ONBOARDING_PENDING, ONBOARDING_APPROVED,
+                 ONBOARDING_REJECTED, ONBOARDING_REVISED -> onboardingMessage(data, forApplicant);
         };
     }
 
@@ -134,7 +140,34 @@ public class EmailTemplateFactory {
                         data.applicantName() + " 님에게 생일 반차가 지급되었습니다.",
                         rows,
                         data.kind(),
-                        forApplicant));
+                forApplicant));
+    }
+
+    /** 온보딩 승인 흐름 전용 문구 — 수정 결과는 자동 승인 여부에 따라 발행부가 전달한다. */
+    private EmailMessage onboardingMessage(EmailTemplateData data, boolean forApplicant) {
+        String summary = switch (data.kind()) {
+            case ONBOARDING_PENDING -> "온보딩 정보가 승인 대기 상태로 접수되었습니다.";
+            case ONBOARDING_APPROVED -> "온보딩이 확정되었습니다.";
+            case ONBOARDING_REJECTED -> "온보딩이 반려되었습니다. 입사일 정보를 다시 입력해 주세요.";
+            case ONBOARDING_REVISED -> data.actorName().isBlank()
+                    ? "온보딩 정보가 수정되었습니다."
+                    : data.actorName();
+            default -> "";
+        };
+
+        List<Row> rows = new ArrayList<>();
+        rows.add(new Row("사원", data.applicantName()));
+        if (!data.itemName().isBlank()) {
+            rows.add(new Row("상태", data.itemName()));
+        }
+        if (!data.dates().isBlank()) {
+            rows.add(new Row("입사일", data.dates()));
+        }
+        if (!data.days().isBlank()) {
+            rows.add(new Row("부여 일수", data.days() + "일"));
+        }
+        return new EmailMessage(
+                subject(data), document(summary, rows, data.kind(), forApplicant));
     }
 
     /**
@@ -170,6 +203,9 @@ public class EmailTemplateFactory {
                     : new Destination("/approvals", "결재 내역 보기");
             // 생일 반차는 지급받은 본인과 관리자가 함께 받는다. 둘 다 볼 곳은 현황 화면 하나뿐이다
             case BIRTHDAY_LEAVE_GRANTED -> new Destination("/dashboard", "연차 현황 보기");
+            case ONBOARDING_PENDING, ONBOARDING_APPROVED,
+                 ONBOARDING_REJECTED, ONBOARDING_REVISED ->
+                    new Destination("/dashboard", "온보딩 상태 확인하기");
         };
     }
 

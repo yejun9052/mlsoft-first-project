@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
 import com.mlsoft.backend.domain.email.event.EmailTemplateKind;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.user.entity.Role;
+import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.welfare.entity.WelfareRequest;
@@ -159,7 +160,90 @@ public class EmailNotificationPublisher {
                         grantDate.toString(),
                         days.toPlainString(),
                         "",
-                        ""));
+                 ""));
+    }
+
+    /** 자동 승인 범위를 벗어난 온보딩의 승인 대기 알림 — 재직 SYSTEM_ADMIN 전원에게 보낸다. */
+    public void publishOnboardingPending(User user) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addSystemAdmins(recipients);
+        publishOnboarding(
+                EmailTemplateKind.ONBOARDING_PENDING,
+                recipients,
+                user,
+                user.getHireDate(),
+                "승인 대기",
+                "",
+                "");
+    }
+
+    /** 온보딩 승인 결과 — 대상 사원 본인에게만 보낸다. */
+    public void publishOnboardingApproved(User user) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addApplicant(recipients, user);
+        String days = user.getBaseDays() == null ? "" : user.getBaseDays().toPlainString();
+        publishOnboarding(
+                EmailTemplateKind.ONBOARDING_APPROVED,
+                recipients,
+                user,
+                user.getHireDate(),
+                "확정",
+                days,
+                "");
+    }
+
+    /** 반려 전 캡처한 입사일을 본문에 남긴다 — rejectOnboarding() 뒤에는 null이 된다. */
+    public void publishOnboardingRejected(User user, LocalDate rejectedHireDate) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addApplicant(recipients, user);
+        publishOnboarding(
+                EmailTemplateKind.ONBOARDING_REJECTED,
+                recipients,
+                user,
+                rejectedHireDate,
+                "반려",
+                "",
+                "");
+    }
+
+    /** 1회 수정 결과 — 자동 승인 범위 안이면 확정, 밖이면 승인 대기 재발생으로 구분한다. */
+    public void publishOnboardingRevised(User user) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addSystemAdmins(recipients);
+        boolean completed = user.getOnboardingStatus() == OnboardingStatus.COMPLETED;
+        publishOnboarding(
+                EmailTemplateKind.ONBOARDING_REVISED,
+                recipients,
+                user,
+                user.getHireDate(),
+                completed ? "수정 후 확정" : "수정 후 승인 대기",
+                "",
+                completed
+                        ? "수정한 온보딩이 자동 승인 범위 안에서 확정되었습니다."
+                        : "수정한 온보딩이 승인 대기 상태로 다시 접수되었습니다.");
+    }
+
+    private void publishOnboarding(
+            EmailTemplateKind kind,
+            Map<Long, Recipient> recipients,
+            User user,
+            LocalDate hireDate,
+            String state,
+            String days,
+            String summary
+    ) {
+        publish(
+                EmailType.NOTICE,
+                recipients,
+                new EmailTemplateData(
+                        kind,
+                        null,
+                        user.getName(),
+                        state,
+                        hireDate == null ? "" : hireDate.toString(),
+                        days,
+                        "",
+                        summary));
     }
 
     private void publishLeave(

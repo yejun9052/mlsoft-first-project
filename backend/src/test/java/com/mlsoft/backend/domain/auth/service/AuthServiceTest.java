@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.auth.service;
 
 import com.mlsoft.backend.domain.auth.dto.OnboardingRequest;
 import com.mlsoft.backend.domain.auth.dto.UserMeResponse;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
@@ -49,6 +50,9 @@ class AuthServiceTest {
 
     @Mock
     private PolicyConfigReader policyConfigReader;
+
+    @Mock
+    private EmailNotificationPublisher emailNotificationPublisher;
 
     @InjectMocks
     private AuthService authService;
@@ -204,6 +208,7 @@ class AuthServiceTest {
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getBaseDays()));
         assertFalse(user.isOnboardingCompleted()); // 인터셉터가 계속 막는다
         assertNull(user.getLastResetDate());       // 기산일도 세우지 않는다 — 스케줄러 대상 밖
+        org.mockito.Mockito.verify(emailNotificationPublisher).publishOnboardingPending(user);
     }
 
     @Test
@@ -330,6 +335,7 @@ class AuthServiceTest {
         assertTrue(user.isOnboardingRevised());
         assertEquals(revisedHireDate, user.getHireDate());
         assertNull(user.getLastResetDate());
+        org.mockito.Mockito.verify(emailNotificationPublisher).publishOnboardingRevised(user);
     }
 
     @Test
@@ -358,6 +364,7 @@ class AuthServiceTest {
         assertEquals(revisedHireDate, user.getLastResetDate());
         assertEquals(revisedHireDate, user.getHireDate());
         assertTrue(user.isOnboardingRevised());
+        org.mockito.Mockito.verify(emailNotificationPublisher).publishOnboardingRevised(user);
     }
 
     @Test

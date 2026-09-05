@@ -3,6 +3,7 @@ package com.mlsoft.backend.domain.auth.service;
 import com.mlsoft.backend.domain.audit.entity.AdminAction;
 import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.auth.dto.OnboardingApprovalResponse;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -35,6 +36,7 @@ public class OnboardingApprovalService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final AdminAuditService adminAuditService;
+    private final EmailNotificationPublisher emailNotificationPublisher;
 
     /** 승인 대기 목록 (GET /api/admin/onboardings, SA) — 오래 기다린 순 */
     @Transactional(readOnly = true)
@@ -56,6 +58,9 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         // 자동 승인과 완전히 같은 경로 — 부여 규칙이 갈라지지 않는다
         authService.grantInitialLeave(user, user.getHireDate(), user.getBirthDay(), LocalDate.now(KST));
+        if (emailNotificationPublisher != null) {
+            emailNotificationPublisher.publishOnboardingApproved(user);
+        }
         // 승인 한 번으로 연차가 부여되므로 부여량까지 기록에 남긴다 (리뷰 S-3)
         adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_APPROVED, user,
                 "승인 대기 (입사일 " + user.getHireDate() + ")",
@@ -75,6 +80,9 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         LocalDate rejected = user.getHireDate();
         user.rejectOnboarding();
+        if (emailNotificationPublisher != null) {
+            emailNotificationPublisher.publishOnboardingRejected(user, rejected);
+        }
         // 반려는 입력값을 지우므로, 무엇을 반려했는지가 여기 말고는 남지 않는다 (리뷰 S-3)
         adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_REJECTED, user,
                 "승인 대기 (입사일 " + rejected + ")", "반려 · 온보딩 초기화");

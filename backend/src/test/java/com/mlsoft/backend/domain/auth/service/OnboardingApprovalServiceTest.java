@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.auth.service;
 
 import com.mlsoft.backend.domain.audit.entity.AdminAction;
 import com.mlsoft.backend.domain.audit.service.AdminAuditService;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -46,6 +47,8 @@ class OnboardingApprovalServiceTest {
     private AuthService authService;
     @Mock
     private AdminAuditService adminAuditService;
+    @Mock
+    private EmailNotificationPublisher emailNotificationPublisher;
 
     @InjectMocks
     private OnboardingApprovalService onboardingApprovalService;
@@ -66,6 +69,7 @@ class OnboardingApprovalServiceTest {
         onboardingApprovalService.approve(1L, 99L);
 
         verify(authService).grantInitialLeave(eq(user), eq(hireDate), any(), any());
+        verify(emailNotificationPublisher).publishOnboardingApproved(user);
         assertTrue(user.isOnboardingCompleted());
     }
 
@@ -82,6 +86,7 @@ class OnboardingApprovalServiceTest {
         assertNull(user.getHireDate());
         assertNull(user.getBirthDay());
         verify(authService, never()).grantInitialLeave(any(), any(), any(), any());
+        verify(emailNotificationPublisher).publishOnboardingRejected(user, LocalDate.of(1990, 1, 1));
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.mlsoft.backend.domain.auth.dto.UserMeResponse;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
+import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -35,6 +36,7 @@ public class AuthService {
     private final LeavePolicyService leavePolicyService;
     /** 월차 상한·온보딩 판정은 설정 카탈로그의 타입별 접근자로만 읽는다 */
     private final PolicyConfigReader policyConfigReader;
+    private final EmailNotificationPublisher emailNotificationPublisher;
 
     /**
      * 내 정보 조회 (GET /api/auth/me).
@@ -101,6 +103,9 @@ public class AuthService {
 
         LocalDate previousHireDate = user.getHireDate();
         processOnboarding(user, request, LocalDate.now(KST), true);
+        if (emailNotificationPublisher != null) {
+            emailNotificationPublisher.publishOnboardingRevised(user);
+        }
 
         log.info("[온보딩 수정] userId={}, {} → {}, 결과={}",
                 userId, previousHireDate, request.hireDate(), user.getOnboardingStatus());
@@ -136,6 +141,9 @@ public class AuthService {
                 policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
         if (hireDate.isBefore(today.minusDays(autoApproveDays))) {
             user.requestOnboardingApproval(hireDate, request.birthDay());
+            if (emailNotificationPublisher != null) {
+                emailNotificationPublisher.publishOnboardingPending(user);
+            }
             log.info("[온보딩] 자동 승인 범위({}일) 밖 — 승인 대기: userId={}, hireDate={}",
                     autoApproveDays, user.getId(), hireDate);
             return;
