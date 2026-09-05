@@ -42,9 +42,11 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 2. DB role ≠ 토큰 role → SecurityContext 권한을 DB 기준으로 재구성 (승격·강등 즉시 반영)
 3. 온보딩 미확정 → `/api/auth/*` 외 403
 
-**온보딩 완료 판별은 `hire_date != null`이 아니라 `onboarding_status == COMPLETED`다** (리뷰 S-1). 입사일이 자가 신고라 자동 승인 기간(`onboarding_auto_approve_days`, 기본 90일) 밖의 값은 **연차 0으로 승인 대기**에 들어가고, 그 상태에서도 `hire_date`는 채워져 있다. 그래서 옛 기준을 쓰면 미확정 입사일이 스케줄러 3잡·승인자 후보의 입력이 된다. 새 코드에서 `getHireDate() != null`로 온보딩을 판별하지 말 것 — `isOnboardingCompleted()`를 쓴다.
+**온보딩 완료 판별은 `hire_date != null`이 아니라 `onboarding_status == COMPLETED`다** (리뷰 S-1). 입사일이 자가 신고라 자동 승인 기간(`onboarding_auto_approve_days`, 기본 90일) 밖의 값은 **연차 0으로 승인 대기**에 들어가고, 그 상태에서도 `hire_date`는 채워져 있다. 그래서 옛 기준을 쓰면 미확정 입사일이 스케줄러 4잡·승인자 후보의 입력이 된다. 새 코드에서 `getHireDate() != null`로 온보딩을 판별하지 말 것 — `isOnboardingCompleted()`를 쓴다.
 
 따라서 컨트롤러의 `@PreAuthorize`는 **역할 게이트 전용**이고, 소유권·승인자 식별 검증은 서비스 계층 책임이다.
+
+**이메일·외부 연동 관리자 API(`/api/emails/**`, `/api/admin/email-templates/**`, `/api/admin/integrations/**`)는 전부 `SYSTEM_ADMIN` 전용**이고, 자격 증명은 **마스킹된 값만 응답에 담는다** — 앱 비밀번호·API 키 원문은 어떤 조회 경로로도 내려가지 않는다(쓰기 전용 필드). 관리자 화면을 여는 것만으로 시크릿이 새는 경로를 만들지 않기 위해서다.
 
 ### 연차 잔액 모델
 `잔여 = base_days + bonus_days - use_days`. 핵심 규칙:
@@ -64,9 +66,10 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 ### 스케줄러 (`domain/leave/scheduler`, `domain/leave/service/*GrantService`·`*ResetService`)
 
-`LeaveScheduler`가 매일 00:10 KST에 **① 기산일 리셋 → ② 월차 적립 → ③ 생일 반차** 순으로 돈다. 설계·검산은 docs/09.
+`LeaveScheduler`가 매일 00:10 KST에 **① 기산일 리셋 → ② 월차 적립 → ③ 생일 반차 → ④ 연차 소진 안내** 순으로 돈다. 설계·검산은 docs/09.
 
 - **순서를 바꾸지 말 것** — 취향이 아니라 데이터 의존성이다. 리셋이 `bonus_days`를 갈아 끼우므로 생일 반차가 먼저면 그날 증발하고(생일==기산일인 사원), 월차가 먼저면 1주년에 하루짜리 유령 적립이 남는다
+- **④ 연차 소진 안내가 맨 뒤인 것도 같은 이유다** — 앞 세 잡이 잔액을 바꾸므로 먼저 돌면 안내 메일이 그날 갱신 전 잔여일을 적어 보낸다. 대상·중복 판정은 `LeaveReminderService`가 하고 `leave_reminder_dispatch`의 UNIQUE(user_id, cycle, period_key)가 같은 주기 재발송을 막는다
 - **사원 1명 = 1트랜잭션**(`REQUIRES_NEW`). `User`에 낙관적 락이 있어 전체를 한 트랜잭션으로 묶으면 1명의 충돌로 전원이 롤백된다. **그래서 사원별 루프가 진입점에 있다** — 서비스가 자기 메서드를 루프로 부르면 Spring 프록시를 안 타 이 경계가 생기지 않는다
 - **리셋의 `carriedUse`는 회차마다 그 회차 기산일로 다시 집계**한다. 최종 기산일 기준으로 한 번에 계산하면 1차 연도 귀속분이 한 회차 일찍 빠져 그 해 이력이 틀린다
 - **채무 계산은 `User.carryOverDebt` 하나뿐이다** — `resetAnnualLeave`와 `LeaveResetHistory.create`가 공유한다. 이력이 자기 식(`advance_days` 직접 차감)을 갖고 있던 것이 실제 결함이었다(기록이 5일 어긋남)
@@ -89,7 +92,7 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 - 값 검증은 **저장 시점**에 한다 (`PolicyConfigKey.validate`). 읽는 시점에 터지면 잘못 넣은 관리자가 아니라 **사원의 연차 신청이 실패**한다
 - 읽기는 `PolicyConfigReader`의 타입별 접근자로만. **읽을 때도 같은 검증을 다시** 통과시키고 어긋나면 기본값 + WARN — 옛 값이 상한을 무력화하는 것을 막는다
 - 그 값을 읽는 기능이 아직 없으면 반드시 `PENDING_FEATURE`로 둔다 (관리자 화면에 "미동작" 배지)
-- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 7개와 PENDING_FEATURE 2개다(2026-08-23).
+- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 9개, PENDING_FEATURE 0개다(2026-09-05). 소진 안내 2키(`reminder_list_days`·`reminder_auto_cycle`)는 리마인더 잡이 붙으면서 ACTIVE로 전환했다.
   실제 키·동작 여부는 enum과 `GET /api/admin/configs`에서 확인하고 이 문서에 키 목록을 복제하지 않는다.
 
 ### 프론트엔드 데이터 흐름
@@ -154,7 +157,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 - **테스트가 절대 못 잡는다.** H2는 매번 엔티티에서 스키마를 새로 만들어 새 상수가 항상 포함된다
 - **운영에서 fail-fast도 안 걸린다.** `ddl-auto: validate`는 ENUM 값 목록까지 검사하지 않아 기동은 정상이고, 그 값을 처음 저장하는 요청에서 500이 난다 — 컬럼 누락보다 더 조용히 터진다
 
-현재 ENUM 컬럼을 갖는 enum 10개(`AdminAction`·`RequestStatus`·`RequestAction`·`LeaveType`·`ScheduleType`·`Role`·`OnboardingStatus`·`WelfareTarget`·`EmailType`·`EmailStatus`)는 2026-08-16에 `db/schema.sql`과 전수 대조해 일치를 확인했다.
+현재 ENUM 컬럼을 갖는 enum은 12개다(위 10개 + `ReminderCycle`·`ReminderDispatchResult`). **이제 손으로 대조하지 않는다** — `SchemaEnumConsistencyTest`가 `@Enumerated(STRING)` 필드를 전수로 훑어 `db/schema.sql`의 `ENUM(...)` 값 목록과 맞는지 검사한다. 상수를 추가하고 `schema.sql`·backfill을 빼먹으면 **그 테스트가 먼저 깨진다** — 위에 적은 "테스트가 절대 못 잡는다"를 메운 그물이다. 다만 backfill의 `MODIFY COLUMN`까지 검사하지는 못하므로 운영 DB 반영은 여전히 사람이 확인한다.
 
 기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
