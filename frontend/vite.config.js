@@ -24,6 +24,26 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const moduleId = id.replaceAll('\\', '/');
+          const vendorPackages = [
+            '/node_modules/react/',
+            '/node_modules/react-dom/',
+            '/node_modules/react-router/',
+            '/node_modules/react-router-dom/',
+            '/node_modules/@tanstack/react-query/',
+            '/node_modules/axios/',
+          ];
+          return vendorPackages.some((packagePath) => moduleId.includes(packagePath))
+            ? 'vendor'
+            : undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/setupTests.js',
