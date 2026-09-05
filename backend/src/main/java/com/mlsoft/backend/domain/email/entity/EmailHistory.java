@@ -96,6 +96,13 @@ public class EmailHistory extends BaseTimeEntity {
                 .build();
     }
 
+    /** 조건부 UPDATE 선점과 같은 상태 전이를 단위 도메인 테스트에서도 표현한다. */
+    public void markSending() {
+        if (this.status == EmailStatus.PENDING || this.status == EmailStatus.FAILED) {
+            this.status = EmailStatus.SENDING;
+        }
+    }
+
     /** 발송 성공 처리 */
     public void markSent() {
         this.status = EmailStatus.SENT;

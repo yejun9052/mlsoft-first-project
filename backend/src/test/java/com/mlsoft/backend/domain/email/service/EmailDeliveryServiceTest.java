@@ -17,6 +17,12 @@ import org.springframework.mail.javamail.JavaMailSender;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -86,7 +92,60 @@ class EmailDeliveryServiceTest {
                 "상한 도달 후에는 시도 횟수가 더 늘지 않아야 한다");
     }
 
+    @Test
+    @DisplayName("같은 이력을 동시에 발송해도 조건부 선점은 한 번만 성공한다")
+    void send_동시호출_한건만선점() throws Exception {
+        EmailHistory history = pendingHistory(user(true));
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
+        AtomicInteger claimCalls = new AtomicInteger();
+        AtomicInteger successfulClaims = new AtomicInteger();
+        AtomicBoolean winner = new AtomicBoolean();
+        CyclicBarrier claimBarrier = new CyclicBarrier(2);
+        org.mockito.Mockito.lenient().when(emailHistoryRepository.claimForSending(
+                        any(),
+                        org.mockito.ArgumentMatchers.eq(EmailStatus.SENDING),
+                        org.mockito.ArgumentMatchers.eq(EmailStatus.PENDING),
+                        org.mockito.ArgumentMatchers.eq(EmailStatus.FAILED),
+                        org.mockito.ArgumentMatchers.eq(EmailDeliveryService.MAX_ATTEMPTS)))
+                .thenAnswer(invocation -> {
+                    claimCalls.incrementAndGet();
+                    try {
+                        claimBarrier.await(5, TimeUnit.SECONDS);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                    if (winner.compareAndSet(false, true)) {
+                        successfulClaims.incrementAndGet();
+                        return 1;
+                    }
+                    return 0;
+                });
+
+        EmailDeliveryService concurrentService = new EmailDeliveryService(
+                mailSender, emailHistoryRepository, new MailAppProperties(""), "");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            executor.submit(() -> concurrentService.send(1L));
+            executor.submit(() -> concurrentService.send(1L));
+        } finally {
+            executor.shutdown();
+            executor.awaitTermination(5, TimeUnit.SECONDS);
+        }
+
+        assertEquals(2, claimCalls.get());
+        assertEquals(1, successfulClaims.get());
+    }
+
     private EmailDeliveryService service(String username) {
+        // 실제 DB에서는 조건부 UPDATE가 1을 반환한 경우에만 발송한다. 단위 테스트 목도 같은
+        // 선점 결과를 명시해 발송 경계를 검증한다.
+        org.mockito.Mockito.lenient().when(emailHistoryRepository.claimForSending(
+                any(),
+                org.mockito.ArgumentMatchers.eq(EmailStatus.SENDING),
+                org.mockito.ArgumentMatchers.eq(EmailStatus.PENDING),
+                org.mockito.ArgumentMatchers.eq(EmailStatus.FAILED),
+                org.mockito.ArgumentMatchers.eq(EmailDeliveryService.MAX_ATTEMPTS)))
+                .thenReturn(1);
         return new EmailDeliveryService(
                 mailSender, emailHistoryRepository, new MailAppProperties(""), username);
     }

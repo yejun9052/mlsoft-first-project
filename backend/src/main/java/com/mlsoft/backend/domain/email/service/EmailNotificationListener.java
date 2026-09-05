@@ -35,8 +35,8 @@ public class EmailNotificationListener {
             try {
                 emailDeliveryService.send(historyId);
             } catch (RuntimeException e) {
-                // 한 건의 실패가 나머지 수신자를 막지 않는다. 이력은 PENDING으로 남아
-                // 재시도 스케줄러가 다시 집어 간다.
+                // 한 건의 실패가 나머지 수신자를 막지 않는다. 선점 뒤 예외가 나면
+                // 이력은 SENDING으로 남을 수 있고, 재시도 스케줄러가 만료 건을 FAILED로 복구한다.
                 log.error("[이메일] 발송 처리 실패 — historyId={}", historyId, e);
             }
         }

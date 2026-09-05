@@ -98,6 +98,43 @@ class EmailHistoryRepositoryIntegrationTest {
         assertEquals(List.of(), findTargets());
     }
 
+    @Test
+    @DisplayName("조건부 SENDING 선점은 같은 이력에서 한 번만 성공한다")
+    void sending선점_동일이력_한번만성공() {
+        User user = saveUser();
+        Long historyId = savePending(user);
+
+        int first = emailHistoryRepository.claimForSending(
+                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+        int second = emailHistoryRepository.claimForSending(
+                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+
+        assertEquals(1, first);
+        assertEquals(0, second);
+        assertEquals(EmailStatus.SENDING,
+                emailHistoryRepository.findById(historyId).orElseThrow().getStatus());
+    }
+
+    @Test
+    @DisplayName("오래 묶인 SENDING은 FAILED로 복구되어 재시도할 수 있다")
+    void staleSending_실패로복구() {
+        User user = saveUser();
+        Long historyId = savePending(user);
+        emailHistoryRepository.claimForSending(
+                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+        backdate(historyId, LocalDateTime.now().minusHours(1));
+
+        int recovered = emailHistoryRepository.recoverStaleSending(
+                EmailStatus.SENDING,
+                EmailStatus.FAILED,
+                LocalDateTime.now().minusMinutes(10),
+                "stale sending");
+
+        assertEquals(1, recovered);
+        assertEquals(EmailStatus.FAILED,
+                emailHistoryRepository.findById(historyId).orElseThrow().getStatus());
+    }
+
     private List<Long> findTargets() {
         return emailHistoryRepository.findDispatchTargetIds(
                 MAX_ATTEMPTS, EmailStatus.FAILED, EmailStatus.PENDING, STALE_BEFORE,
