@@ -1,5 +1,6 @@
 package com.mlsoft.backend.domain.holiday.credential;
 
+import com.mlsoft.backend.domain.credential.SecretCipher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,13 +21,13 @@ public class HolidayApiCredentialService {
     public static final String DATA_GO_KR_PROVIDER = "DATA_GO_KR";
 
     private final HolidayApiCredentialRepository repository;
-    private final HolidaySecretCipher cipher;
+    private final SecretCipher cipher;
     private final String environmentApiKey;
     private final boolean environmentSeedEnabled;
 
     public HolidayApiCredentialService(
             HolidayApiCredentialRepository repository,
-            HolidaySecretCipher cipher,
+            SecretCipher cipher,
             @Value("${holiday.api-key:}") String environmentApiKey,
             @Value("${holiday.credential-seed-enabled:false}") boolean environmentSeedEnabled) {
         this.repository = repository;
@@ -59,7 +60,7 @@ public class HolidayApiCredentialService {
             return false;
         }
         if (!cipher.isConfigured()) {
-            log.warn("[공휴일] HOLIDAY_CREDENTIAL_ENCRYPTION_KEY가 없어 API 키를 DB에 저장하지 않습니다.");
+            log.warn("[공휴일] APP_CREDENTIAL_ENCRYPTION_KEY(또는 이전 HOLIDAY_CREDENTIAL_ENCRYPTION_KEY)가 없어 API 키를 DB에 저장하지 않습니다.");
             return false;
         }
 
