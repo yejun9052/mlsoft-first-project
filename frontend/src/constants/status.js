@@ -84,3 +84,28 @@ export const ADMIN_ACTION_TONE = {
   ONBOARDING_REJECTED: 'danger',
   CONFIG_CHANGED: 'warn',
 };
+
+// 이메일 유형·상태 — 백엔드 EmailType/EmailStatus enum과 1:1 (docs/02 3-12).
+// 연차 신청 상태(STATUS_*)와 값이 겹치지 않아 별도 맵으로 둔다 —
+// 같은 맵에 합치면 'PENDING'이 "결재 대기"인지 "발송 대기"인지 읽는 쪽에서 갈린다.
+export const EMAIL_TYPE_LABEL = {
+  LEAVE: '연차',
+  WELFARE: '복리후생',
+  REMINDER: '소진 안내',
+  NOTICE: '공지',
+};
+
+export const EMAIL_STATUS_LABEL = {
+  PENDING: '발송 대기',
+  SENDING: '발송 중',
+  SENT: '발송 완료',
+  FAILED: '실패',
+};
+
+// 실패만 danger로 세운다 — 이력을 훑는 목적이 "무엇이 안 나갔는가"이기 때문이다.
+export const EMAIL_STATUS_TONE = {
+  PENDING: 'warn',
+  SENDING: 'accent',
+  SENT: 'ok',
+  FAILED: 'danger',
+};
