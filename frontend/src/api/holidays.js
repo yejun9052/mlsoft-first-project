@@ -10,5 +10,5 @@ export async function getHolidays({ year } = {}) {
 // 강제 재동기화 — SYSTEM_ADMIN 전용 (POST /api/holidays/sync)
 export async function syncHolidays({ year } = {}) {
   const res = await api.post('/holidays/sync', null, { params: { year } });
-  return res.data.data; // { year, saved }
+  return res.data.data; // { year, count }
 }

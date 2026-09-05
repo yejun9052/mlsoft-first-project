@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Check, Pencil, Save, X } from 'lucide-react';
+import { Check, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
 import TableCard from '../components/ui/TableCard.jsx';
@@ -23,6 +23,7 @@ import {
   useUpdateLeavePolicy,
   useUpdateLeavePolicyConfig,
 } from '../hooks/usePolicies.js';
+import { useHolidays, useSyncHolidays } from '../hooks/useHolidays.js';
 
 // 설정 항목의 라벨·타입·범위·설명은 전부 서버가 내려준다 (GET /api/admin/configs).
 // 한때 이 파일에 CONFIG_META로 하드코딩돼 있었는데, 그러면 서버에 설정을 추가할 때마다 여기도
@@ -55,6 +56,11 @@ const HISTORY_PAGE_SIZE = 10;
 export default function AdminPolicyPage() {
   const policiesQuery = useLeavePolicies();
   const configsQuery = useLeavePolicyConfigs();
+  const currentYear = new Date().getFullYear();
+  const [holidayYear, setHolidayYear] = useState(() => currentYear);
+  const holidaysQuery = useHolidays(holidayYear);
+  const syncHolidaysMutation = useSyncHolidays();
+  const [lastSynced, setLastSynced] = useState(null);
   // 리셋 이력은 해마다 사원 수만큼 쌓인다 — 한 화면에 다 깔면 위 두 표를 보려고 스크롤을 되감게 된다
   const [historyPage, setHistoryPage] = useState(0);
   const historiesQuery = useResetHistories({ page: historyPage, size: HISTORY_PAGE_SIZE });
@@ -63,9 +69,22 @@ export default function AdminPolicyPage() {
   const updateConfigMutation = useUpdateLeavePolicyConfig();
 
   const policies = policiesQuery.data ?? [];
+  const holidays = holidaysQuery.data ?? [];
   const histories = historiesQuery.data?.content ?? [];
   const historyPageInfo = historiesQuery.data?.page;
   usePageClamp(historyPage, setHistoryPage, historyPageInfo?.totalPages);
+
+  function syncHolidays() {
+    syncHolidaysMutation.mutate(
+      { year: holidayYear },
+      {
+        onSuccess: (result) => {
+          setLastSynced(result);
+          toast.success(`${result.count}건 적재`);
+        },
+      },
+    );
+  }
 
   // ① 근속년수별 정책 — 행별 인라인 수정(한 번에 한 행만)
   const [editingId, setEditingId] = useState(null);
@@ -315,7 +334,50 @@ export default function AdminPolicyPage() {
         </Card>
       </div>
 
-      {/* ③ 기산일 리셋·소멸 이력 */}
+      {/* ③ 공휴일 — 연도별 캐시 조회·관리자 수동 동기화 */}
+      <Card title="공휴일" right={<span className="text-[11px] text-ink-faint">data.go.kr 연도별 캐시</span>} className="mt-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-[150px]">
+            <label htmlFor="holiday-year" className="mb-1.5 block text-[12px] font-medium text-ink-mute">
+              공휴일 조회 연도
+            </label>
+            <Select
+              id="holiday-year"
+              value={holidayYear}
+              onChange={(event) => {
+                setHolidayYear(Number(event.target.value));
+                setLastSynced(null);
+              }}
+              aria-label="공휴일 조회 연도"
+            >
+              {[currentYear - 1, currentYear, currentYear + 1].map((year) => (
+                <option key={year} value={year}>
+                  {year}년
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex min-w-[150px] flex-col gap-1">
+            <span className="text-[12px] text-ink-mute">현재 적재 건수</span>
+            <span className="text-[18px] font-semibold tabular-nums text-ink-hi">
+              {holidaysQuery.isLoading ? '불러오는 중…' : `${holidays.length}건`}
+            </span>
+          </div>
+
+          <Button Icon={RefreshCw} onClick={syncHolidays} loading={syncHolidaysMutation.isPending}>
+            동기화
+          </Button>
+        </div>
+
+        {lastSynced && (
+          <p className="mt-4 border-t border-white/[0.10] pt-3 text-[12px] font-medium text-accent-light">
+            {lastSynced.year}년 공휴일 <span>{lastSynced.count}건 적재</span>
+          </p>
+        )}
+      </Card>
+
+      {/* ④ 기산일 리셋·소멸 이력 */}
       <TableCard
         title="기산일 리셋 · 소멸 이력"
         className="mt-5"
