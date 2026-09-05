@@ -1,6 +1,7 @@
 package com.mlsoft.backend.domain.holiday.controller;
 
 import com.mlsoft.backend.domain.holiday.dto.HolidayResponse;
+import com.mlsoft.backend.domain.holiday.dto.HolidaySyncResponse;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.global.response.CommonResponse;
 import com.mlsoft.backend.global.response.ResponseMessage;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 공휴일 API (docs/03 공휴일).
@@ -43,16 +43,16 @@ public class HolidayController {
 
     /**
      * 강제 재동기화 (SA) — 외부 API가 늦게 갱신됐거나 대체공휴일이 추가로 지정된 경우.
-     * 이미 있는 날짜는 건너뛰므로 여러 번 눌러도 안전하다.
+     * 해당 연도의 캐시를 외부 응답으로 교체하므로 여러 번 눌러도 최신 결과로 수렴한다.
      */
     @PostMapping("/sync")
     @PreAuthorize("hasRole('SYSTEM_ADMIN')")
-    public ResponseEntity<CommonResponse<Map<String, Integer>>> sync(
+    public ResponseEntity<CommonResponse<HolidaySyncResponse>> sync(
             @RequestParam(required = false) Integer year
     ) {
         int target = (year != null) ? year : LocalDate.now(KST).getYear();
-        int saved = holidayService.syncYear(target);
+        int count = holidayService.syncYear(target);
         return ResponseEntity.ok(CommonResponse.success(
-                ResponseMessage.HOLIDAY_SYNCED, Map.of("year", target, "saved", saved)));
+                ResponseMessage.HOLIDAY_SYNCED, new HolidaySyncResponse(target, count)));
     }
 }

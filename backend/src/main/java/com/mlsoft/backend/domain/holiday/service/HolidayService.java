@@ -32,6 +32,7 @@ public class HolidayService {
 
     private final HolidayRepository holidayRepository;
     private final HolidayApiClient holidayApiClient;
+    private final HolidayPersister holidayPersister;
 
     /**
      * 연도별 공휴일 (GET /api/holidays?year=).
@@ -42,7 +43,8 @@ public class HolidayService {
         if (!cached.isEmpty()) {
             return cached.stream().map(HolidayResponse::of).toList();
         }
-        // 캐시 미스 — 최초 1회 적재. 여기서 실패하면 빈 목록이고, 다음 요청에서 다시 시도한다.
+        // 캐시 미스 — 최초 1회 적재. 외부 조회와 저장의 트랜잭션 경계는 HolidayPersister가 맡는다.
+        // 여기서 실패하면 빈 목록이고, 다음 요청에서 다시 시도한다.
         syncYear(year);
         return holidayRepository.findAllByYearOrderByDateAsc(year).stream()
                 .map(HolidayResponse::of)
@@ -52,38 +54,29 @@ public class HolidayService {
     /**
      * 해당 연도를 외부 API에서 받아 저장한다 — 저장된 건수를 돌려준다.
      * <p>
-     * 이미 있는 날짜는 건너뛴다. 재동기화해도 행이 쌓이지 않고, 동시에 두 번 호출돼도
-     * DB UNIQUE(uk_holidays_date)가 마지막 방어선이 된다 (리뷰 D-3).
+     * 외부 조회는 트랜잭션 밖에서 실행하고, 성공한 결과만 별도 빈의 저장 메서드로 넘긴다.
+     * 따라서 외부 API가 실패해도 기존 캐시 행은 삭제되지 않는다. 저장 메서드를 이 서비스에
+     * 두고 자기 호출하면 Spring 프록시를 타지 않으므로 별도 빈으로 분리했다.
      */
-    @Transactional
     public int syncYear(int year) {
         List<HolidayApiClient.HolidayItem> fetched = holidayApiClient.fetchByYear(year);
-        if (fetched.isEmpty()) {
+        List<HolidayApiClient.HolidayItem> yearItems = fetched.stream()
+                .filter(item -> item.date() != null && item.date().getYear() == year)
+                .toList();
+        if (yearItems.isEmpty()) {
             log.warn("[공휴일] {}년 동기화 결과가 0건입니다 — 그 해 공휴일 검증이 동작하지 않습니다", year);
             return 0;
         }
 
-        Set<LocalDate> existing = holidayRepository.findAllByYearOrderByDateAsc(year).stream()
-                .map(Holiday::getDate)
-                .collect(Collectors.toSet());
-
-        List<Holiday> toSave = fetched.stream()
-                .filter(item -> !existing.contains(item.date()))
-                .map(item -> Holiday.create(item.date(), item.name()))
-                .toList();
-
-        if (toSave.isEmpty()) {
-            return 0;
-        }
         try {
-            holidayRepository.saveAll(toSave);
+            int saved = holidayPersister.replaceYear(year, yearItems);
+            log.info("[공휴일] {}년 {}건 적재", year, saved);
+            return saved;
         } catch (DataIntegrityViolationException e) {
-            // 동시 동기화로 UNIQUE에 걸린 경우 — 다른 쪽이 이미 넣었다는 뜻이라 실패가 아니다
+            // 동시 동기화로 UNIQUE에 걸린 경우 — 실패한 트랜잭션은 롤백되어 기존 캐시가 보존된다
             log.info("[공휴일] {}년 동시 동기화 감지 — 이미 적재됨", year);
             return 0;
         }
-        log.info("[공휴일] {}년 {}건 적재", year, toSave.size());
-        return toSave.size();
     }
 
     /**

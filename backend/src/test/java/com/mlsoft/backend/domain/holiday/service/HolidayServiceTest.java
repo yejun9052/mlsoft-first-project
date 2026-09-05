@@ -24,6 +24,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 
 /**
  * 공휴일 서비스 단위 테스트 (리뷰 I-6).
@@ -40,6 +42,9 @@ class HolidayServiceTest {
 
     @Mock
     private HolidayApiClient holidayApiClient;
+
+    @Mock
+    private HolidayPersister holidayPersister;
 
     @InjectMocks
     private HolidayService holidayService;
@@ -65,53 +70,46 @@ class HolidayServiceTest {
     void getByYear_캐시미스_적재후재조회() {
         given(holidayRepository.findAllByYearOrderByDateAsc(2026))
                 .willReturn(List.of())                                        // 최초 조회
-                .willReturn(List.of())                                        // syncYear 내부의 기존 날짜 조회
                 .willReturn(List.of(Holiday.create(신정, "1월 1일")));         // 적재 후 재조회
         given(holidayApiClient.fetchByYear(2026))
                 .willReturn(List.of(new HolidayApiClient.HolidayItem(신정, "1월 1일")));
+        given(holidayPersister.replaceYear(eq(2026), anyList())).willReturn(1);
 
         List<HolidayResponse> result = holidayService.getByYear(2026);
 
         assertEquals(1, result.size());
         verify(holidayApiClient).fetchByYear(2026);
+        verify(holidayPersister).replaceYear(eq(2026), anyList());
     }
 
     @Test
-    @DisplayName("조회 — 외부 API가 빈 목록을 주면 예외 없이 빈 결과 (화면·신청이 막히면 안 된다)")
-    void getByYear_API실패_빈결과() {
-        given(holidayRepository.findAllByYearOrderByDateAsc(2026)).willReturn(List.of());
+    @DisplayName("동기화 — 외부 API가 실패하면 기존 캐시 행을 유지한다")
+    void syncYear_API실패_기존캐시유지() {
+        List<Holiday> existing = List.of(Holiday.create(신정, "1월 1일"));
         given(holidayApiClient.fetchByYear(2026)).willReturn(List.of());
+        given(holidayRepository.findAllByYearOrderByDateAsc(2026)).willReturn(existing);
 
-        List<HolidayResponse> result = holidayService.getByYear(2026);
+        assertEquals(0, holidayService.syncYear(2026));
 
-        assertTrue(result.isEmpty());
-        verify(holidayRepository, never()).saveAll(anyList());
+        // 조회 실패에서는 저장 경계에 진입하지 않으므로 기존 행을 삭제할 수 없다.
+        assertEquals(existing, holidayRepository.findAllByYearOrderByDateAsc(2026));
+        verify(holidayPersister, never()).replaceYear(anyInt(), anyList());
     }
 
     @Test
-    @DisplayName("동기화 — 이미 있는 날짜는 건너뛴다 (재실행해도 행이 쌓이지 않음)")
-    void syncYear_기존날짜_스킵() {
+    @DisplayName("동기화 — 성공하면 선택한 연도의 캐시만 새 응답으로 교체한다")
+    void syncYear_성공_선택연도만교체() {
         given(holidayApiClient.fetchByYear(2026)).willReturn(List.of(
                 new HolidayApiClient.HolidayItem(신정, "1월 1일"),
                 new HolidayApiClient.HolidayItem(삼일절, "삼일절")));
-        given(holidayRepository.findAllByYearOrderByDateAsc(2026))
-                .willReturn(List.of(Holiday.create(신정, "1월 1일")));
+        given(holidayPersister.replaceYear(eq(2026), argThat(items -> items.size() == 2)))
+                .willReturn(2);
 
         int saved = holidayService.syncYear(2026);
 
-        assertEquals(1, saved); // 삼일절만 신규
-    }
-
-    @Test
-    @DisplayName("동기화 — 전부 이미 있으면 저장을 시도하지 않는다")
-    void syncYear_전부존재_저장없음() {
-        given(holidayApiClient.fetchByYear(2026))
-                .willReturn(List.of(new HolidayApiClient.HolidayItem(신정, "1월 1일")));
-        given(holidayRepository.findAllByYearOrderByDateAsc(2026))
-                .willReturn(List.of(Holiday.create(신정, "1월 1일")));
-
-        assertEquals(0, holidayService.syncYear(2026));
-        verify(holidayRepository, never()).saveAll(anyList());
+        assertEquals(2, saved);
+        verify(holidayPersister).replaceYear(eq(2026), argThat(items -> items.stream()
+                .allMatch(item -> item.date().getYear() == 2026)));
     }
 
     @Test
@@ -119,11 +117,19 @@ class HolidayServiceTest {
     void syncYear_동시실행_충돌흡수() {
         given(holidayApiClient.fetchByYear(2026))
                 .willReturn(List.of(new HolidayApiClient.HolidayItem(신정, "1월 1일")));
-        given(holidayRepository.findAllByYearOrderByDateAsc(2026)).willReturn(List.of());
-        given(holidayRepository.saveAll(anyList()))
+        given(holidayPersister.replaceYear(eq(2026), anyList()))
                 .willThrow(new DataIntegrityViolationException("uk_holidays_date"));
 
         assertEquals(0, holidayService.syncYear(2026));
+    }
+
+    @Test
+    @DisplayName("동기화 — 0건이면 저장하지 않고 기존 행을 건드리지 않는다")
+    void syncYear_빈응답_저장없음() {
+        given(holidayApiClient.fetchByYear(2026)).willReturn(List.of());
+
+        assertEquals(0, holidayService.syncYear(2026));
+        verify(holidayPersister, never()).replaceYear(anyInt(), anyList());
     }
 
     @Test
