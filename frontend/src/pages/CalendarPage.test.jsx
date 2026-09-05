@@ -81,6 +81,9 @@ function renderPage() {
 
 describe('CalendarPage 하루 상세 모달', () => {
   beforeEach(() => {
+    // 고정 fixture 날짜(2026-08-20)가 현재 월 그리드에 항상 보이도록 시간을 고정한다.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:00:00+09:00'));
     vi.clearAllMocks();
     useCurrentUser.mockReturnValue({ data: { id: 1 } });
     useLeaveSummary.mockReturnValue({ data: { remainingDays: '10.0' } });
@@ -93,6 +96,7 @@ describe('CalendarPage 하루 상세 모달', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     window.matchMedia = REAL_MATCH_MEDIA;
   });
 
