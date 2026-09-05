@@ -94,7 +94,7 @@ public enum PolicyConfigKey {
             BigDecimal.ZERO, new BigDecimal("365"), "일",
             "소진 안내 기준일",
             "기산일 N일 전부터 연차 소진 안내 대상 목록에 표시한다.",
-            PolicyConfigStatus.PENDING_FEATURE),
+            PolicyConfigStatus.ACTIVE),
 
     REMINDER_AUTO_CYCLE(
             "reminder_auto_cycle", "NONE",

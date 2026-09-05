@@ -84,12 +84,6 @@ public class LeaveReminderService {
                 .toList();
     }
 
-    /** W4에서 의미가 분명한 이름으로 호출할 수 있는 별칭. */
-    @Transactional(readOnly = true)
-    public List<ReminderTarget> getReminderTargets(LocalDate today) {
-        return findReminderTargets(today);
-    }
-
     /**
      * 사원 한 명의 자동 발송을 처리한다 — 사원별 {@code REQUIRES_NEW} 트랜잭션.
      * 중복 키 INSERT 충돌은 정상적인 선점 실패로 간주해 0을 반환한다.
@@ -150,12 +144,6 @@ public class LeaveReminderService {
                         ""));
         dispatch.attachEmailHistory(history);
         return 1;
-    }
-
-    /** W4/테스트에서 도메인 처리 이름을 직접 읽을 수 있도록 둔 별칭. */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public int dispatchForUser(Long userId, LocalDate today) {
-        return dispatch(userId, today);
     }
 
     private Optional<ReminderCycle> configuredCycle() {

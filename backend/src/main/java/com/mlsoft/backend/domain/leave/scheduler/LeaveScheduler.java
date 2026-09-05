@@ -68,18 +68,6 @@ public class LeaveScheduler {
         this.leaveReminderService = leaveReminderService;
     }
 
-    /** 기존 진입점 단위 테스트와의 호환 생성자. 리마인더를 검증하지 않는 테스트에서 사용한다. */
-    public LeaveScheduler(
-            Clock clock,
-            AnnualLeaveResetService annualLeaveResetService,
-            MonthlyLeaveGrantService monthlyLeaveGrantService,
-            BirthdayLeaveGrantService birthdayLeaveGrantService,
-            HolidayService holidayService
-    ) {
-        this(clock, annualLeaveResetService, monthlyLeaveGrantService,
-                birthdayLeaveGrantService, holidayService, null);
-    }
-
     /** 매일 00:10 KST — 날짜가 바뀐 직후, 근무 시작 전에 끝난다 */
     @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Seoul")
     public void runDailyJobs() {
@@ -92,10 +80,8 @@ public class LeaveScheduler {
                 userId -> monthlyLeaveGrantService.grant(userId, today));
         runPerUser("생일 반차", birthdayLeaveGrantService.findTargetIds(today),
                 userId -> birthdayLeaveGrantService.grant(userId, today) ? 1 : 0);
-        if (leaveReminderService != null) {
-            runPerUser("연차 소진 안내", leaveReminderService.findTargetIds(today),
-                    userId -> leaveReminderService.dispatch(userId, today));
-        }
+        runPerUser("연차 소진 안내", leaveReminderService.findTargetIds(today),
+                userId -> leaveReminderService.dispatch(userId, today));
 
         log.info("[스케줄러] 일일 잡 종료 — 기준일={}", today);
     }

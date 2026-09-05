@@ -237,11 +237,6 @@ public class EmailNotificationPublisher {
         return history;
     }
 
-    /** 리마인더 도메인 서비스가 사용할 짧은 별칭 */
-    public EmailHistory publishReminder(User user, ReminderTemplateData templateData) {
-        return publishLeaveBalanceReminder(user, templateData);
-    }
-
     private void publishOnboarding(
             EmailTemplateKind kind,
             Map<Long, Recipient> recipients,

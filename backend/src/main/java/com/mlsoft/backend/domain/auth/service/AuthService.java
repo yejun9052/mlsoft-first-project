@@ -103,9 +103,7 @@ public class AuthService {
 
         LocalDate previousHireDate = user.getHireDate();
         processOnboarding(user, request, LocalDate.now(KST), true);
-        if (emailNotificationPublisher != null) {
-            emailNotificationPublisher.publishOnboardingRevised(user);
-        }
+        emailNotificationPublisher.publishOnboardingRevised(user);
 
         log.info("[온보딩 수정] userId={}, {} → {}, 결과={}",
                 userId, previousHireDate, request.hireDate(), user.getOnboardingStatus());
@@ -141,9 +139,7 @@ public class AuthService {
                 policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
         if (hireDate.isBefore(today.minusDays(autoApproveDays))) {
             user.requestOnboardingApproval(hireDate, request.birthDay());
-            if (emailNotificationPublisher != null) {
-                emailNotificationPublisher.publishOnboardingPending(user);
-            }
+            emailNotificationPublisher.publishOnboardingPending(user);
             log.info("[온보딩] 자동 승인 범위({}일) 밖 — 승인 대기: userId={}, hireDate={}",
                     autoApproveDays, user.getId(), hireDate);
             return;

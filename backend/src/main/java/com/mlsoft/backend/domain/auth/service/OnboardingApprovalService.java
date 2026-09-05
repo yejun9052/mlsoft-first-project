@@ -58,9 +58,7 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         // 자동 승인과 완전히 같은 경로 — 부여 규칙이 갈라지지 않는다
         authService.grantInitialLeave(user, user.getHireDate(), user.getBirthDay(), LocalDate.now(KST));
-        if (emailNotificationPublisher != null) {
-            emailNotificationPublisher.publishOnboardingApproved(user);
-        }
+        emailNotificationPublisher.publishOnboardingApproved(user);
         // 승인 한 번으로 연차가 부여되므로 부여량까지 기록에 남긴다 (리뷰 S-3)
         adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_APPROVED, user,
                 "승인 대기 (입사일 " + user.getHireDate() + ")",
@@ -80,9 +78,7 @@ public class OnboardingApprovalService {
         User user = findPendingOrThrow(userId);
         LocalDate rejected = user.getHireDate();
         user.rejectOnboarding();
-        if (emailNotificationPublisher != null) {
-            emailNotificationPublisher.publishOnboardingRejected(user, rejected);
-        }
+        emailNotificationPublisher.publishOnboardingRejected(user, rejected);
         // 반려는 입력값을 지우므로, 무엇을 반려했는지가 여기 말고는 남지 않는다 (리뷰 S-3)
         adminAuditService.recordUserChange(actorId, AdminAction.ONBOARDING_REJECTED, user,
                 "승인 대기 (입사일 " + rejected + ")", "반려 · 온보딩 초기화");
