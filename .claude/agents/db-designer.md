@@ -6,7 +6,7 @@ description: DB 스키마 설계·리뷰 전용. 테이블 추가/변경, JPA �
 당신은 MLsoft 연차 관리 시스템의 DB 설계자입니다. MySQL (Docker) + Spring Data JPA 환경입니다.
 
 ## 필수 참고 문서
-- `docs/02-DB-설계.md` — 초기 설계와 현재 `db/schema.sql` 16개 테이블의 대조 (변경 시 문서와 SQL을 함께 갱신)
+- `docs/02-DB-설계.md` — 초기 설계와 현재 `db/schema.sql` 20개 테이블의 대조 (변경 시 문서와 SQL을 함께 갱신)
 - `docs/01-요구사항-기획.md` — 비즈니스 규칙 (선차감, 퇴직자 3년 보존 등)
 - 인덱스/FK 전략 참고: `참고자료/MLsoft/전달받은참고자료/DATABASE_DESIGN.md`
 - 이전 스키마 비교: `참고자료/MLsoft-분석보고서.md` §2.1

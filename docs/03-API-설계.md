@@ -208,10 +208,10 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
 | GET | `/api/leave-histories` | 연차 처리 로그 (페이징, action 필터) | SA |
-| GET | `/api/leave-histories/my-approvals` | 내가 결재자인 건의 로그 | TL |
+| GET | `/api/leave-histories/my-approvals` | 내가 결재자인 건의 로그 | TL·SA |
 | GET | `/api/leave-histories/my-actions` | 내가 처리한 로그 | 전체 |
 | GET | `/api/welfare-histories` | 복리후생 처리 로그 | SA |
-| GET | `/api/welfare-histories/my-approvals` | 내가 결재자인 건의 로그 | TL |
+| GET | `/api/welfare-histories/my-approvals` | 내가 결재자인 건의 로그 | TL·SA |
 | GET | `/api/welfare-histories/my-actions` | 내가 처리한 로그 | 전체 |
 
 ## 관리자 조작 감사 로그 (audit — 리뷰 S-3)
@@ -266,7 +266,9 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | Method | URL | 설명 | 권한 | 상태 |
 |---|---|---|---|---|
 | GET | `/api/admin/integrations` | SMTP·공휴일 키 마스킹 조회 + `encryptionConfigured` | SA | 구현 |
-| PUT | `/api/admin/integrations/{provider}` (`mail`·`holiday`) | 저장·회전 (쓰기 전용) | SA | 구현 |
+| PUT | `/api/admin/integrations/mail` | 메일 발신 계정 저장·회전 (쓰기 전용) | SA | 구현 |
+| PUT | `/api/admin/integrations/holiday` | 공휴일 API 키 저장·회전 (쓰기 전용) | SA | 구현 |
+| PUT | `/api/admin/integrations/{provider}` | 위 둘 외의 이름은 `EMAIL_PROVIDER_NOT_FOUND`(404) | SA | 구현 |
 | POST | `/api/admin/integrations/mail/test` | 테스트 발송 — 인증 주체 본인에게만 큐 등록 | SA | 구현 |
 | POST | `/api/admin/integrations/holiday/verify` | 공휴일 키 검증 — 저장하지 않고 올해 조회 | SA | 구현 |
 

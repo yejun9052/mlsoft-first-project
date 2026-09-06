@@ -11,7 +11,7 @@ updated: 2026-09-05
 
 ## 이번 세션 결과
 
-- 이메일 2단계 W1~W4를 끝냈다 — 테이블 3개·ENUM 확장 2건과 `SchemaEnumConsistencyTest`, `SecretCipher` 일반화와 메일 계정 DB 저장, `SENDING` 선점, 온보딩 알림 4지점, 리마인더 ④잡, 관리자 API 11개.
+- 이메일 2단계 W1~W4를 끝냈다 — 테이블 3개·ENUM 확장 2건과 `SchemaEnumConsistencyTest`, `SecretCipher` 일반화와 메일 계정 DB 저장, `SENDING` 선점, 온보딩 알림 4지점, 리마인더 ④잡, 관리자 API 13개(이메일 4·양식 3·연동 6).
 - 관리자 화면 2개(`/admin/emails`·`/admin/integrations`)를 붙였다. 둘 다 SYSTEM_ADMIN 전용이고 자격 증명은 마스킹된 값만 응답에 담는다.
 - 공휴일을 마무리했다 — 관리자 수동 동기화 UI와 외부 조회·저장 트랜잭션 분리. 정책 카탈로그는 ACTIVE 9개·PENDING_FEATURE 0개가 됐다.
 - 취약점 패치와 `CalendarPage` 테스트 시간 고정을 함께 반영했다. 검증은 백엔드 410건 · 프론트 39파일 254건 · lint 0 · build 정상 · npm audit 0.

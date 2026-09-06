@@ -32,7 +32,7 @@ npm run build        # 프로덕션 빌드
 ## 아키텍처
 
 ### 계층 구조 (백엔드)
-`com.mlsoft.backend` 아래 **도메인별 패키지**(`domain/{audit,auth,common,department,email,holiday,leave,policy,schedule,user,welfare}`)로 나뉘고, 각 도메인은 `controller / dto / entity / repository / service`를 갖는다. 공통 요소는 `global/`(응답·예외·BaseTimeEntity), `security/`(JWT·OAuth2), `config/`에 있다.
+`com.mlsoft.backend` 아래 **도메인별 패키지**(`domain/{audit,auth,common,credential,department,email,holiday,leave,policy,schedule,user,welfare}`)로 나뉘고, 각 도메인은 `controller / dto / entity / repository / service`를 갖는다. 공통 요소는 `global/`(응답·예외·BaseTimeEntity), `security/`(JWT·OAuth2), `config/`에 있다.
 
 ### 인증 흐름
 Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) → `OAuth2SuccessHandler`가 **HttpOnly 쿠키로 JWT 발급** → 이후 요청은 `JwtFilter`가 쿠키를 읽어 `AuthUser` principal을 SecurityContext에 세팅. 세션 없음(STATELESS), CSRF 비활성.
@@ -157,7 +157,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 - **테스트가 절대 못 잡는다.** H2는 매번 엔티티에서 스키마를 새로 만들어 새 상수가 항상 포함된다
 - **운영에서 fail-fast도 안 걸린다.** `ddl-auto: validate`는 ENUM 값 목록까지 검사하지 않아 기동은 정상이고, 그 값을 처음 저장하는 요청에서 500이 난다 — 컬럼 누락보다 더 조용히 터진다
 
-현재 ENUM 컬럼을 갖는 enum은 12개다(위 10개 + `ReminderCycle`·`ReminderDispatchResult`). **이제 손으로 대조하지 않는다** — `SchemaEnumConsistencyTest`가 `@Enumerated(STRING)` 필드를 전수로 훑어 `db/schema.sql`의 `ENUM(...)` 값 목록과 맞는지 검사한다. 상수를 추가하고 `schema.sql`·backfill을 빼먹으면 **그 테스트가 먼저 깨진다** — 위에 적은 "테스트가 절대 못 잡는다"를 메운 그물이다. 다만 backfill의 `MODIFY COLUMN`까지 검사하지는 못하므로 운영 DB 반영은 여전히 사람이 확인한다.
+현재 `@Enumerated(STRING)`으로 쓰이는 enum은 12종, `db/schema.sql`의 `ENUM(...)` 컬럼은 15개다(2026-09-06 실측). **이제 손으로 대조하지 않는다** — `SchemaEnumConsistencyTest`가 `@Enumerated(STRING)` 필드를 전수로 훑어 `db/schema.sql`의 `ENUM(...)` 값 목록과 맞는지 검사한다. 상수를 추가하고 `schema.sql`·backfill을 빼먹으면 **그 테스트가 먼저 깨진다** — 위에 적은 "테스트가 절대 못 잡는다"를 메운 그물이다. 다만 backfill의 `MODIFY COLUMN`까지 검사하지는 못하므로 운영 DB 반영은 여전히 사람이 확인한다.
 
 기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
@@ -168,13 +168,13 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | 문서 | 내용 |
 |---|---|
 | `docs/01-요구사항-기획.md` | 요구사항·기능 명세·권한 체계 |
-| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 17개 테이블·ENUM 대조 |
+| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 20개 테이블·ENUM 대조 |
 | `docs/03-API-설계.md` | 엔드포인트 + 공통 규칙(응답 포맷·페이징·에러 코드) |
 | `docs/04-코드-스타일-가이드.md` | 코드 컨벤션 (위 요약의 원본) |
 | `docs/05-디자인-가이드.md` | 디자인 토큰·화면 구조 |
 | `docs/07-기능-갭분석.md` | 이전 버전 대비 누락·모순 (코드 주석의 `갭분석 A-1` 등 참조처) |
 | `docs/08-운영-검증-리포트.md` | 실사용 검증 이슈 (코드 주석의 `검증 R-5`, `Y-2` 등 참조처) |
-| `docs/09-스케줄러-설계.md` | 스케줄러 3개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감 |
+| `docs/09-스케줄러-설계.md` | 스케줄러 4개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감 |
 | `docs/10-코드리뷰-리포트.md` | 코드 리뷰 결과 (코드 주석의 `리뷰 I-1`, `F-3` 등 참조처) |
 | `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청 경로·연차 잔액 상태 전이·구조. 처음 볼 문서 |
 | `docs/12-남은-작업.md` | **현재 상태와 열려 있는 작업의 단일 원본** — 완료·부분·미구현·우선순위 |

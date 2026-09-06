@@ -7,7 +7,7 @@
 ## 1. 현재 기준
 
 - 현재 코드 기준 테스트 수치: 백엔드 410건, 프론트 254건.
-- 코드 규모: 컨트롤러 18개, 엔티티 19개(+ENUM 12), `db/schema.sql` 테이블 20개, 화면 17개.
+- 코드 규모: 컨트롤러 18개(엔드포인트 83개), 엔티티 18개(+ENUM 12), `db/schema.sql` 테이블 20개, 화면 17개.
 - 마지막 자동 검증은 2026-09-05에 수행했다: 백엔드 410건, 프론트 전체 39개 테스트 파일·254건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
   `/dev` 서버는 이번 기록 작업에서 기동하지 않았고 운영 DB preflight도 실행하지 않았다.
 - 운영 DB preflight·backfill 13개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
@@ -19,7 +19,7 @@
 
 - 연차 잔액 불변식과 `advance_days` 파생값 통합, 당겨쓰기 상한·정책 설정 카탈로그 반영.
 - 연차 신청·승인·반려·취소·복리후생·결재자 결정·권한/온보딩 가드·감사 로그 구현.
-- 스케줄러 3개(기산일 리셋·월차 적립·생일 반차)와 catch-up 로직 구현.
+- 스케줄러 4개(기산일 리셋·월차 적립·생일 반차·연차 소진 안내)와 catch-up 로직 구현.
 - 공휴일 API/캐시, 개인 일정, 캘린더·대시보드 데이터 흐름 구현.
 - 공휴일 API 테스트 호출 완료. API 키는 제공자별 AES-GCM 암호문으로 별도 저장하고, `holidays`의 날짜·명칭은 캘린더의 `HOLIDAY` 일정 이벤트로 합치는 경계를 추가했다. API `resultCode` 검증과 파서 회귀 테스트도 추가했다. 운영 DB 시드는 `HOLIDAY_CREDENTIAL_SEED=true`인 1회 작업으로 제한하고, 키 회전 UI는 남아 있다.
 - 이메일 건별 알림, 커밋 후 비동기 발송, `PENDING/SENT/FAILED` 이력과 실패 재시도 구현.
@@ -47,7 +47,7 @@
   - `docs/설계-초안/README.md`: 날짜가 붙은 감사·QA·preflight 기록 색인
 - 온보딩 판별을 `hire_date`가 아니라 `onboarding_status == COMPLETED`로 통일.
 - 월차 설계를 `last_monthly_grant_date`가 아닌 `monthly_granted_count` 구현과 통일.
-- DB 설계에 `admin_audit_log`·`holiday_api_credentials`를 추가하고 현재 schema 17개 테이블과 대조.
+- DB 설계에 `admin_audit_log`·`holiday_api_credentials`를 추가하고 현재 schema 20개 테이블과 대조.
 - Claude/Codex 에이전트 수, Tailwind v4 CSS-first 규칙, 정책 설정 ACTIVE/PENDING 현황을 최신화.
 
 ## 3. 이전 Claude Code/Opus 세션에서 회수한 미구현·부분 구현
@@ -75,7 +75,7 @@
 ## 4. 운영·QA에서 아직 닫히지 않은 것
 
 - 사용자 QA I-1~I-4: Google OAuth 계정이 없어 실제 온보딩·승인·반려 화면 캡처와 결과 회수가 막혀 있다.
-- staging 백업 → preflight → 운영 대상 backfill 12개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
+- staging 백업 → preflight → 운영 대상 backfill 13개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
 - `email_history` 선행 테이블/컬럼과 `department.parent_id`를 포함한 backfill 전제조건을 실제 DB에서 확인해야 한다.
 - OAuth `hd` claim 검증, Flyway 도입, DB 백업 cron, 퇴직자 보존/파기 절차는 별도 운영 작업이다.
 - 사용자 QA 작업지의 계정 준비 절차·I-1 기대 화면·I-2 생일 입력 누락은 다음 QA 실행 전에 보완한다.
