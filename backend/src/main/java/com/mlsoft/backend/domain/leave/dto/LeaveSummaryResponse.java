@@ -46,9 +46,4 @@ public record LeaveSummaryResponse(
                 nextCycleReservationEnabled
         );
     }
-
-    /** 기존 호출부 호환용 — 다음 회차 집계를 하지 않는 호출은 예약 블록을 0으로 표시한다. */
-    public static LeaveSummaryResponse of(User user, BigDecimal pendingDays) {
-        return of(user, pendingDays, BigDecimal.ZERO, BigDecimal.ZERO, false);
-    }
 }

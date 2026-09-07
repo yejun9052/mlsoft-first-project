@@ -10,7 +10,7 @@
 - 코드 규모: 컨트롤러 18개(엔드포인트 83개), 엔티티 18개(+ENUM 12), `db/schema.sql` 테이블 20개, 화면 17개.
 - 마지막 자동 검증은 2026-09-07에 수행했다: 백엔드 439건, 프론트 전체 39개 테스트 파일·254건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
   `/dev` 서버는 이번 기록 작업에서 기동하지 않았고 운영 DB preflight도 실행하지 않았다.
-- 운영 DB preflight·backfill 14개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
+- 운영 DB preflight·backfill 15개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
 - 비밀 파일(`application-local.yml`, `.env.prod`, `*.key`, `*.pem`)은 열거나 커밋하지 않는다.
 
 ## 2. 지금까지 완료한 구현·검증
@@ -75,7 +75,7 @@
 ## 4. 운영·QA에서 아직 닫히지 않은 것
 
 - 사용자 QA I-1~I-4: Google OAuth 계정이 없어 실제 온보딩·승인·반려 화면 캡처와 결과 회수가 막혀 있다.
-- staging 백업 → preflight → 운영 대상 backfill 14개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
+- staging 백업 → preflight → 운영 대상 backfill 15개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
 - `email_history` 선행 테이블/컬럼과 `department.parent_id`를 포함한 backfill 전제조건을 실제 DB에서 확인해야 한다.
 - OAuth `hd` claim 검증, Flyway 도입, DB 백업 cron, 퇴직자 보존/파기 절차는 별도 운영 작업이다.
 - 사용자 QA 작업지의 계정 준비 절차·I-1 기대 화면·I-2 생일 입력 누락은 다음 QA 실행 전에 보완한다.

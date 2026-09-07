@@ -22,7 +22,7 @@ updated: 2026-09-05
 1. staging 시드를 실행한다 — `APP_CREDENTIAL_ENCRYPTION_KEY` 주입 후 공휴일 키와 메일 계정을 각각 저장한다.
 2. 이메일·연동 브라우저 QA(`docs/13` U절)와 공휴일 QA(N절)를 진행하고 결과만 문서에 회수한다.
 3. ~~컨트롤러 계층 테스트 보강~~ 완료(2026-09-07). `SENDING` 복구·공휴일 0건 구분도 함께 닫았다.
-4. 운영 DB 백업·preflight·backfill 14개·`ddl-auto=validate` 기동·smoke test.
+4. 운영 DB 백업·preflight·backfill 15개·`ddl-auto=validate` 기동·smoke test.
 
 ## 이월 작업 (이메일 2단계에서 남긴 것)
 
