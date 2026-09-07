@@ -33,6 +33,9 @@
 | TOO_MANY_LEAVE_DATES | 400 | 한 번에 신청할 수 있는 날짜 수를 초과했습니다 (설정 `leave_max_dates_per_request`) |
 | INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
 | CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
+| HOLIDAY_API_KEY_NOT_CONFIGURED | 400 | 공휴일 API 키가 설정되지 않았습니다 |
+| HOLIDAY_API_CALL_FAILED | 502 | 공휴일 API 호출에 실패했습니다 |
+| HOLIDAY_API_BAD_RESPONSE | 502 | 공휴일 API 응답이 올바르지 않습니다 |
 | OVERLAPPING_LEAVE_REQUEST | 409 | 이미 신청된 기간과 중복됩니다 |
 | ALREADY_PROCESSED | 400 | 이미 처리된 신청입니다 |
 | UNAUTHORIZED_DOMAIN | 401 | 허용되지 않은 도메인입니다 |
@@ -182,10 +185,12 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 **연 1회 조회 + DB 캐시** (검증 Y-6). 요청마다 외부를 부르면 data.go.kr 장애가 곧 우리 장애가 되고,
 공휴일은 연중 바뀌지 않는 데이터라 캐시가 자연스럽다. 캐시가 비어 있으면 조회 시 1회 적재를 시도한다.
 
-**실패를 예외로 만들지 않는다** — 키가 없거나 외부 API가 죽어도 빈 목록을 돌려준다.
-공휴일을 못 받았다고 캘린더가 안 그려지거나 사원의 연차 신청이 막히면 안 된다.
-대신 그 해 공휴일 검증이 느슨해지므로 WARN을 남긴다. `HOLIDAY_API_KEY`가 비어도 기동은 된다
-(보안에 직결되는 `COOKIE_SECURE`·`ALLOWED_DOMAIN`만 fail-fast로 막는다).
+**자동 조회 실패를 예외로 만들지 않는다** — 키가 없거나 외부 API가 죽어도 결과를 빈 목록으로
+degrade한다. 공휴일을 못 받았다고 캘린더가 안 그려지거나 사원의 연차 신청이 막히면 안 된다.
+대신 그 해 공휴일 검증이 느슨해지므로 WARN을 남긴다. 결과는 정상(`OK`) 0건과 키 없음·호출 실패·
+이상 응답을 구분하며, 관리자 수동 동기화·키 검증에서는 후자의 실패를 원인별 오류로 표면화한다.
+`HOLIDAY_API_KEY`가 비어도 기동은 된다 (보안에 직결되는 `COOKIE_SECURE`·`ALLOWED_DOMAIN`만
+fail-fast로 막는다).
 
 `isHoliday=Y`인 것만 저장한다 — 이 API는 공휴일이 아닌 기념일(식목일 등)도 함께 준다.
 결과가 1건이면 배열이 아니라 객체로 오는 알려진 특성도 함께 처리한다.
@@ -201,7 +206,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 날짜별 캘린더 이벤트에는 `date`·`name`만 투영된다.
 최초 시드·명시적 교체가 필요한 경우에만 `HOLIDAY_CREDENTIAL_SEED=true`를 사용하며,
 기본값은 false다. 외부 API 응답은 `response.header.resultCode == "00"`일 때만 성공으로
-처리하고, 인증·쿼터 오류는 빈 결과와 WARN으로 degrade한다.
+처리하고, 인증·쿼터 오류는 자동 경로에서 빈 결과와 WARN으로 degrade한다.
 
 ## 처리 이력 (histories — 관리자·팀장 로그 화면)
 

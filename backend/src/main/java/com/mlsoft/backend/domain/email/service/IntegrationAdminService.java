@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.List;
 
 /** 공휴일·SMTP 외부 연동의 관리자 업무 경계. */
 @Service
@@ -97,14 +96,30 @@ public class IntegrationAdminService {
                 ? holidayApiCredentialService.resolveApiKey().orElse("")
                 : apiKey.trim();
         if (key.isBlank()) {
-            return new HolidayVerifyResponse(false, 0);
+            throw new BusinessException(ErrorCode.HOLIDAY_API_KEY_NOT_CONFIGURED);
         }
         try {
-            List<HolidayApiClient.HolidayItem> holidays = holidayApiClient.fetchByYear(
+            HolidayApiClient.HolidayFetchResult result = holidayApiClient.fetchByYear(
                     LocalDate.now(KST).getYear(), key);
-            return new HolidayVerifyResponse(!holidays.isEmpty(), holidays.size());
+            throwIfHolidayFetchFailed(result == null ? null : result.outcome());
+            return new HolidayVerifyResponse(true, result.items().size());
         } catch (RuntimeException e) {
-            return new HolidayVerifyResponse(false, 0);
+            if (e instanceof BusinessException businessException) {
+                throw businessException;
+            }
+            throw new BusinessException(ErrorCode.HOLIDAY_API_CALL_FAILED);
+        }
+    }
+
+    private void throwIfHolidayFetchFailed(HolidayApiClient.Outcome outcome) {
+        if (outcome == null) {
+            throw new BusinessException(ErrorCode.HOLIDAY_API_BAD_RESPONSE);
+        }
+        switch (outcome) {
+            case OK -> { }
+            case NO_KEY -> throw new BusinessException(ErrorCode.HOLIDAY_API_KEY_NOT_CONFIGURED);
+            case CALL_FAILED -> throw new BusinessException(ErrorCode.HOLIDAY_API_CALL_FAILED);
+            case BAD_RESPONSE -> throw new BusinessException(ErrorCode.HOLIDAY_API_BAD_RESPONSE);
         }
     }
 

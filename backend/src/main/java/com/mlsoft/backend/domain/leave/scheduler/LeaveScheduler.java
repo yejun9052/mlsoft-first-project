@@ -95,7 +95,7 @@ public class LeaveScheduler {
     public void syncHolidaysForNewYear() {
         int year = LocalDate.now(clock).getYear();
         try {
-            log.info("[스케줄러] {}년 공휴일 {}건 적재", year, holidayService.syncYear(year));
+            log.info("[스케줄러] {}년 공휴일 {}건 적재", year, holidayService.syncYear(year).count());
         } catch (RuntimeException e) {
             // 외부 API 장애가 다른 잡을 막아서는 안 된다 — 조회 시점에 다시 시도된다
             log.error("[스케줄러] {}년 공휴일 동기화 실패", year, e);

@@ -47,6 +47,9 @@ public enum ErrorCode {
     EMAIL_HISTORY_NOT_FOUND(404, "이메일 이력을 찾을 수 없습니다."),
     EMAIL_PROVIDER_NOT_FOUND(400, "지원하지 않는 연동 제공자입니다."),
     CREDENTIAL_ENCRYPTION_NOT_CONFIGURED(400, "자격 증명 암호화 키가 설정되지 않았습니다."),
+    HOLIDAY_API_KEY_NOT_CONFIGURED(400, "공휴일 API 키가 설정되지 않았습니다."),
+    HOLIDAY_API_CALL_FAILED(502, "공휴일 API 호출에 실패했습니다. 잠시 후 다시 시도해주세요."),
+    HOLIDAY_API_BAD_RESPONSE(502, "공휴일 API 응답이 올바르지 않습니다. 연동 상태를 확인해주세요."),
 
     // 401 Unauthorized
     UNAUTHENTICATED(401, "로그인이 필요합니다."),
