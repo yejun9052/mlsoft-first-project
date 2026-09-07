@@ -228,3 +228,87 @@ describe('CalendarPage 하루 상세 모달', () => {
     expect(within(panel).getByText('8/21 (금)')).toBeInTheDocument();
   });
 });
+
+describe('CalendarPage 키보드 월 이동', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-20T12:00:00+09:00'));
+    vi.clearAllMocks();
+    useCurrentUser.mockReturnValue({ data: { id: 1 } });
+    useLeaveSummary.mockReturnValue({ data: { remainingDays: '10.0' } });
+    useLeaveCalendar.mockReturnValue({ data: LEAVES });
+    useScheduleCalendar.mockReturnValue({ data: SCHEDULES });
+    useDepartments.mockReturnValue({ data: [] });
+    useHolidays.mockReturnValue({
+      data: [{ date: DATE, name: '테스트 공휴일' }],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.matchMedia = REAL_MATCH_MEDIA;
+  });
+
+  it('캘린더에 포커스된 상태에서 방향키로 이전·다음 달을 이동한다', () => {
+    renderPage();
+
+    const surface = screen.getByTestId('calendar-touch-surface');
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+
+    fireEvent.keyDown(surface, { key: 'ArrowRight' });
+    expect(screen.getByText('2026년 9월')).toBeInTheDocument();
+
+    fireEvent.keyDown(surface, { key: 'ArrowLeft' });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+  });
+
+  it('PageUp·PageDown 키도 방향키와 같은 방식으로 월을 이동한다', () => {
+    renderPage();
+
+    const surface = screen.getByTestId('calendar-touch-surface');
+
+    fireEvent.keyDown(surface, { key: 'PageDown' });
+    expect(screen.getByText('2026년 9월')).toBeInTheDocument();
+
+    fireEvent.keyDown(surface, { key: 'PageUp' });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+  });
+
+  it('Home 키를 누르면 오늘이 있는 달로 돌아온다', () => {
+    renderPage();
+
+    const surface = screen.getByTestId('calendar-touch-surface');
+    fireEvent.keyDown(surface, { key: 'ArrowRight' });
+    fireEvent.keyDown(surface, { key: 'ArrowRight' });
+    expect(screen.getByText('2026년 10월')).toBeInTheDocument();
+
+    fireEvent.keyDown(surface, { key: 'Home' });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+  });
+
+  it('사유 입력 등에 포커스가 있을 때는 방향키로 월이 바뀌지 않는다', () => {
+    renderPage();
+
+    const searchInput = screen.getByLabelText('이름으로 일정 검색');
+    fireEvent.keyDown(searchInput, { key: 'ArrowRight' });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+
+    fireEvent.keyDown(searchInput, { key: 'ArrowLeft' });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+  });
+
+  it('Ctrl 등 조합키가 눌린 상태에서는 월이 바뀌지 않는다', () => {
+    renderPage();
+
+    const surface = screen.getByTestId('calendar-touch-surface');
+    fireEvent.keyDown(surface, { key: 'ArrowRight', ctrlKey: true });
+    expect(screen.getByText('2026년 8월')).toBeInTheDocument();
+  });
+
+  it('월 표시 요소는 aria-live 영역이라 월이 바뀌면 스크린 리더가 읽는다', () => {
+    renderPage();
+
+    const monthLabel = screen.getByText('2026년 8월');
+    expect(monthLabel).toHaveAttribute('aria-live', 'polite');
+  });
+});

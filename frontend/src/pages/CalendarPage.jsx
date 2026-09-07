@@ -498,6 +498,40 @@ export default function CalendarPage() {
     setMobileFocusedDate(now.format('YYYY-MM-DD'));
   }
 
+  // 입력 중인 요소인지 — 신청 사유 등을 쓰다가 방향키로 달이 넘어가면 안 된다
+  function isEditableTarget(target) {
+    if (!target) return false;
+    const tagName = target.tagName;
+    if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
+    return Boolean(target.isContentEditable);
+  }
+
+  // 캘린더 컨테이너 전용 키보드 월 이동. document 전역 리스너로 만들지 않는다 — 다른 화면으로 새는 것을 막기 위해서다.
+  function handleCalendarKeyDown(event) {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (panelOpen || dayDetail) return;
+    if (isEditableTarget(event.target)) return;
+
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'PageUp':
+        event.preventDefault();
+        shiftMonth(-1);
+        break;
+      case 'ArrowRight':
+      case 'PageDown':
+        event.preventDefault();
+        shiftMonth(1);
+        break;
+      case 'Home':
+        event.preventDefault();
+        goToToday();
+        break;
+      default:
+        break;
+    }
+  }
+
   function handleCalendarTouchStart(event) {
     const touch = event.touches[0];
     if (!touch) return;
@@ -753,12 +787,16 @@ export default function CalendarPage() {
 
         <div
           data-testid="calendar-touch-surface"
-          className="calendar-touch-surface relative mt-2 min-h-0 flex-1"
+          className="calendar-touch-surface relative mt-2 min-h-0 flex-1 rounded-btn outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/30"
+          role="group"
+          aria-label="월간 캘린더. 방향키 또는 Page Up/Down 키로 월을 이동하고, Home 키로 오늘이 있는 달로 이동합니다."
+          tabIndex={0}
           onTouchStart={handleCalendarTouchStart}
           onTouchEnd={handleCalendarTouchEnd}
           onTouchCancel={() => {
             touchStartRef.current = null;
           }}
+          onKeyDown={handleCalendarKeyDown}
         >
           <div className="mobile-calendar-grid grid h-full min-h-0 auto-rows-fr grid-cols-7 gap-2">
           {weeks.flat().map((day, index) => {
