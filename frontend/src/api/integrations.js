@@ -26,5 +26,5 @@ export async function sendTestMail() {
 // apiKey를 주면 그 키로, 생략하면 저장된 키로 올해를 조회해 본다.
 export async function verifyHolidayKey({ apiKey } = {}) {
   const res = await api.post('/admin/integrations/holiday/verify', apiKey ? { apiKey } : {});
-  return res.data.data; // {valid, count}
+  return res.data.data; // {count} — 실패는 오류 응답으로 온다
 }

@@ -66,7 +66,7 @@ beforeEach(() => {
 
   useUpdateIntegration.mockReturnValue(mutation(updateMutate, null));
   useSendTestMail.mockReturnValue(mutation(testMailMutate, null));
-  useVerifyHolidayKey.mockReturnValue(mutation(verifyMutate, { valid: true, count: 22 }));
+  useVerifyHolidayKey.mockReturnValue(mutation(verifyMutate, { count: 22 }));
 });
 
 describe('AdminIntegrationsPage 자격 증명 표시', () => {
@@ -161,13 +161,12 @@ describe('AdminIntegrationsPage 공휴일 키', () => {
     expect(verifyMutate).toHaveBeenCalledWith({ apiKey: 'test-service-key' }, expect.anything());
   });
 
-  it('검증에 실패하면 실패 안내를 보여준다', () => {
-    useVerifyHolidayKey.mockReturnValue(mutation(verifyMutate, { valid: false, count: 0 }));
+  it('검증에 성공하면 받은 건수를 보여준다', () => {
     renderPage();
 
     fireEvent.click(screen.getByRole('button', { name: '키 검증' }));
 
-    expect(screen.getByText(/검증 실패/)).toBeInTheDocument();
+    expect(screen.getByText(/검증 성공 — 올해 공휴일 22건/)).toBeInTheDocument();
   });
 
   it('키를 저장하면 입력을 비운다', () => {

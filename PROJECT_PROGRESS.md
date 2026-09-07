@@ -6,11 +6,11 @@
 
 ## 1. 현재 기준
 
-- 현재 코드 기준 테스트 수치: 백엔드 410건, 프론트 254건.
+- 현재 코드 기준 테스트 수치: 백엔드 439건, 프론트 254건.
 - 코드 규모: 컨트롤러 18개(엔드포인트 83개), 엔티티 18개(+ENUM 12), `db/schema.sql` 테이블 20개, 화면 17개.
-- 마지막 자동 검증은 2026-09-05에 수행했다: 백엔드 410건, 프론트 전체 39개 테스트 파일·254건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
+- 마지막 자동 검증은 2026-09-07에 수행했다: 백엔드 439건, 프론트 전체 39개 테스트 파일·254건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
   `/dev` 서버는 이번 기록 작업에서 기동하지 않았고 운영 DB preflight도 실행하지 않았다.
-- 운영 DB preflight·backfill 13개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
+- 운영 DB preflight·backfill 14개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
 - 비밀 파일(`application-local.yml`, `.env.prod`, `*.key`, `*.pem`)은 열거나 커밋하지 않는다.
 
 ## 2. 지금까지 완료한 구현·검증
@@ -75,7 +75,7 @@
 ## 4. 운영·QA에서 아직 닫히지 않은 것
 
 - 사용자 QA I-1~I-4: Google OAuth 계정이 없어 실제 온보딩·승인·반려 화면 캡처와 결과 회수가 막혀 있다.
-- staging 백업 → preflight → 운영 대상 backfill 13개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
+- staging 백업 → preflight → 운영 대상 backfill 14개 → prod `validate` 기동 → smoke test 순서가 남아 있다.
 - `email_history` 선행 테이블/컬럼과 `department.parent_id`를 포함한 backfill 전제조건을 실제 DB에서 확인해야 한다.
 - OAuth `hd` claim 검증, Flyway 도입, DB 백업 cron, 퇴직자 보존/파기 절차는 별도 운영 작업이다.
 - 사용자 QA 작업지의 계정 준비 절차·I-1 기대 화면·I-2 생일 입력 누락은 다음 QA 실행 전에 보완한다.
@@ -83,8 +83,8 @@
 ## 5. 다음 실행 순서
 
 1. 공휴일 코드 보완은 끝났다(2026-09-05: 관리자 수동 동기화 UI, 외부 조회·저장 트랜잭션 분리, degrade는 통과 유지로 확정). 남은 것은 staging credential 시드 실행(절차는 `docs/12` 공휴일 절)과 공휴일 브라우저 QA(`docs/13` N-5~N-9)이며, 키 회전 UI는 2번의 발신 계정 설정과 함께 `/admin/integrations`에 반영했다.
-2. ~~이메일 2단계~~ **완료(2026-09-05)** — W1~W4. 테이블 3개·ENUM 확장 2건과 `SchemaEnumConsistencyTest`, `SecretCipher` 일반화와 메일 계정 DB 저장, `SENDING` 선점, 온보딩 알림 4지점, 리마인더 ④잡, 관리자 API 11개, 관리자 화면 2개(`/admin/emails`·`/admin/integrations`). 정책 카탈로그는 ACTIVE 9개·PENDING_FEATURE 0개가 됐다. 남은 것은 아래 3~5번에 흡수했다.
-3. 컨트롤러 계층 테스트를 보강한다 — 지금은 `EmailAdminController`에만 있어 양식·연동 컨트롤러의 권한 게이트와 요청 매핑이 테스트로 고정돼 있지 않다. 함께 정리할 것 두 가지: `SENDING` 복구가 `created_at` 기준·단일 인스턴스 전제라는 점, 공휴일 0건 응답을 정상 0건과 장애로 구분하지 못하는 점.
+2. ~~이메일 2단계~~ **완료(2026-09-05)** — W1~W4. 테이블 3개·ENUM 확장 2건과 `SchemaEnumConsistencyTest`, `SecretCipher` 일반화와 메일 계정 DB 저장, `SENDING` 선점, 온보딩 알림 4지점, 리마인더 ④잡, 관리자 API 13개, 관리자 화면 2개(`/admin/emails`·`/admin/integrations`). 정책 카탈로그는 ACTIVE 9개·PENDING_FEATURE 0개가 됐다. 남은 것은 아래 3~5번에 흡수했다.
+3. ~~컨트롤러 테스트·`SENDING` 복구·공휴일 0건~~ **완료(2026-09-07)** — 양식·연동 컨트롤러 테스트 13건과 `SecurityAccessMatrixTest`의 실제 필터 체인 권한 검사, `sending_at` 기준 복구(backfill 14번), 공휴일 outcome 4종 구분(자동은 degrade·관리자 경로는 오류 표면화). **남은 전제**: 선점 소유자를 기록하지 않아 `SENDING` 복구는 여전히 단일 인스턴스 전제다 — 인스턴스를 늘리기 전에 다시 설계해야 한다.
 4. staging 시드를 실행한다 — `APP_CREDENTIAL_ENCRYPTION_KEY`를 주입한 뒤 공휴일 키와 메일 계정을 각각 저장한다(키가 없으면 화면이 경고를 띄우고 저장이 잠긴다). 그 뒤 사용자 직접 QA I-1~I-4와 새 공휴일·이메일 QA 배치(`docs/13` N절·U절)를 실행하고 결과를 `docs/13`에 회수한다.
 5. 이후 운영 DB 백업·preflight·backfill·`ddl-auto=validate` 기동·smoke test를 진행한다.
 

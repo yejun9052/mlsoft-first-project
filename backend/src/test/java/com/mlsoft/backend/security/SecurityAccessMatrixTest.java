@@ -142,6 +142,24 @@ class SecurityAccessMatrixTest {
     }
 
     @Test
+    @DisplayName("이메일·외부 연동 관리자 API는 팀장도 못 쓴다 (이메일 2단계)")
+    void 이메일연동API_관리자전용() throws Exception {
+        // 깨지면: 팀장이 전 직원 발송 대상·이력을 열람하고 메일 계정·공휴일 키까지 만진다
+        User leader = saveUser("integration-leader", Role.TEAM_LEADER, true, true);
+        User admin = saveUser("integration-admin", Role.SYSTEM_ADMIN, true, true);
+
+        mockMvc.perform(get("/api/emails").cookie(tokenCookie(leader)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/email-templates").cookie(tokenCookie(leader)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/integrations").cookie(tokenCookie(leader)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/admin/integrations").cookie(tokenCookie(admin)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("토큰은 관리자 · DB는 강등 → 같은 요청부터 403")
     void 강등_즉시반영_403() throws Exception {
         // 이 시스템의 특징적인 동작이다. 깨지면: 강등된 사람이 토큰 만료(24h)까지 관리자로 남는다.

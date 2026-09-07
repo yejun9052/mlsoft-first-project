@@ -268,17 +268,12 @@ function HolidayCard({ credential, encryptionConfigured }) {
           </Button>
         </div>
 
+        {/* 검증 실패는 서버 오류로 내려오고 전역 인터셉터가 사유를 toast로 띄운다 — 여기선 성공만 남긴다 */}
         {verifyResult && (
           <p className="mt-3 text-[12px]">
-            {verifyResult.valid ? (
-              <span className="text-ok">
-                검증 성공 — 올해 공휴일 {verifyResult.count}건을 받았습니다.
-              </span>
-            ) : (
-              <span className="text-danger">
-                검증 실패 — 키가 올바른지, 서비스 신청이 승인됐는지 확인해 주세요.
-              </span>
-            )}
+            <span className="text-ok">
+              검증 성공 — 올해 공휴일 {verifyResult.count}건을 받았습니다.
+            </span>
           </p>
         )}
       </div>

@@ -187,7 +187,7 @@ class EmailAdminControllerTest {
                 .willReturn(new MailIntegrationResponse("SMTP", "sender@mlsoft.com", "••••word", true));
         given(integrationAdminService.saveHoliday(any(HolidayCredentialUpdateRequest.class), eq(99L)))
                 .willReturn(new HolidayIntegrationResponse("DATA_GO_KR", "••••1234", true));
-        given(integrationAdminService.verifyHoliday(any())).willReturn(new HolidayVerifyResponse(true, 22));
+        given(integrationAdminService.verifyHoliday(any())).willReturn(new HolidayVerifyResponse(22));
 
         integrationMvc.perform(get("/api/admin/integrations"))
                 .andExpect(status().isOk())
@@ -207,7 +207,6 @@ class EmailAdminControllerTest {
         integrationMvc.perform(post("/api/admin/integrations/holiday/verify")
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.valid").value(true))
                 .andExpect(jsonPath("$.data.count").value(22));
     }
 

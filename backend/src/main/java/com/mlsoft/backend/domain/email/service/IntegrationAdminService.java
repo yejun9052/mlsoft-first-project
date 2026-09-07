@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.email.dto.MailIntegrationResponse;
 import com.mlsoft.backend.domain.email.dto.MailCredentialUpdateRequest;
 import com.mlsoft.backend.domain.email.dto.HolidayCredentialUpdateRequest;
 import com.mlsoft.backend.domain.holiday.client.HolidayApiClient;
+import com.mlsoft.backend.domain.holiday.dto.HolidaySyncResult;
 import com.mlsoft.backend.domain.holiday.credential.HolidayApiCredentialMaskDto;
 import com.mlsoft.backend.domain.holiday.credential.HolidayApiCredentialService;
 import com.mlsoft.backend.global.exception.ErrorCode;
@@ -101,25 +102,13 @@ public class IntegrationAdminService {
         try {
             HolidayApiClient.HolidayFetchResult result = holidayApiClient.fetchByYear(
                     LocalDate.now(KST).getYear(), key);
-            throwIfHolidayFetchFailed(result == null ? null : result.outcome());
-            return new HolidayVerifyResponse(true, result.items().size());
+            HolidaySyncResult.requireOk(result == null ? null : result.outcome());
+            return new HolidayVerifyResponse(result.items().size());
         } catch (RuntimeException e) {
             if (e instanceof BusinessException businessException) {
                 throw businessException;
             }
             throw new BusinessException(ErrorCode.HOLIDAY_API_CALL_FAILED);
-        }
-    }
-
-    private void throwIfHolidayFetchFailed(HolidayApiClient.Outcome outcome) {
-        if (outcome == null) {
-            throw new BusinessException(ErrorCode.HOLIDAY_API_BAD_RESPONSE);
-        }
-        switch (outcome) {
-            case OK -> { }
-            case NO_KEY -> throw new BusinessException(ErrorCode.HOLIDAY_API_KEY_NOT_CONFIGURED);
-            case CALL_FAILED -> throw new BusinessException(ErrorCode.HOLIDAY_API_CALL_FAILED);
-            case BAD_RESPONSE -> throw new BusinessException(ErrorCode.HOLIDAY_API_BAD_RESPONSE);
         }
     }
 

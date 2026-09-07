@@ -171,12 +171,11 @@ class IntegrationAdminControllerTest {
     @Test
     @DisplayName("공휴일 API 키 검증 계약")
     void 공휴일_키_검증_계약() throws Exception {
-        given(integrationAdminService.verifyHoliday(any())).willReturn(new HolidayVerifyResponse(true, 22));
+        given(integrationAdminService.verifyHoliday(any())).willReturn(new HolidayVerifyResponse(22));
 
         mvc.perform(post("/api/admin/integrations/holiday/verify")
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.valid").value(true))
                 .andExpect(jsonPath("$.data.count").value(22));
     }
 

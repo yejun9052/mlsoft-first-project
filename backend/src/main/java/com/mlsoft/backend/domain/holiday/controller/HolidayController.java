@@ -3,10 +3,7 @@ package com.mlsoft.backend.domain.holiday.controller;
 import com.mlsoft.backend.domain.holiday.dto.HolidayResponse;
 import com.mlsoft.backend.domain.holiday.dto.HolidaySyncResponse;
 import com.mlsoft.backend.domain.holiday.dto.HolidaySyncResult;
-import com.mlsoft.backend.domain.holiday.client.HolidayApiClient;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
-import com.mlsoft.backend.global.exception.BusinessException;
-import com.mlsoft.backend.global.exception.ErrorCode;
 import com.mlsoft.backend.global.response.CommonResponse;
 import com.mlsoft.backend.global.response.ResponseMessage;
 import lombok.RequiredArgsConstructor;
@@ -56,25 +53,10 @@ public class HolidayController {
     ) {
         int target = (year != null) ? year : LocalDate.now(KST).getYear();
         HolidaySyncResult result = holidayService.syncYear(target);
-        throwIfFailed(result == null ? null : result.outcome());
+        HolidaySyncResult.requireOk(result == null ? null : result.outcome());
         return ResponseEntity.ok(CommonResponse.success(
                 ResponseMessage.HOLIDAY_SYNCED,
                 new HolidaySyncResponse(target, result.count())));
     }
 
-    private void throwIfFailed(HolidayApiClient.Outcome outcome) {
-        if (outcome == null) {
-            throw new BusinessException(ErrorCode.HOLIDAY_API_BAD_RESPONSE);
-        }
-        if (outcome == HolidayApiClient.Outcome.OK) {
-            return;
-        }
-        ErrorCode errorCode = switch (outcome) {
-            case NO_KEY -> ErrorCode.HOLIDAY_API_KEY_NOT_CONFIGURED;
-            case CALL_FAILED -> ErrorCode.HOLIDAY_API_CALL_FAILED;
-            case BAD_RESPONSE -> ErrorCode.HOLIDAY_API_BAD_RESPONSE;
-            case OK -> ErrorCode.HOLIDAY_API_BAD_RESPONSE;
-        };
-        throw new BusinessException(errorCode);
-    }
 }

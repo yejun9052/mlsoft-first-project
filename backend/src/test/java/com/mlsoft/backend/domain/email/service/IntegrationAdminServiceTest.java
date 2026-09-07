@@ -57,7 +57,7 @@ class IntegrationAdminServiceTest {
 
         HolidayVerifyResponse response = integrationAdminService.verifyHoliday(null);
 
-        assertEquals(new HolidayVerifyResponse(true, 0), response);
+        assertEquals(new HolidayVerifyResponse(0), response);
     }
 
     @Test
