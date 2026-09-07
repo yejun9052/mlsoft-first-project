@@ -281,6 +281,9 @@ fail-fast로 막는다).
 holiday:{provider,maskedKey,active}|null,encryptionConfigured}`이며, 테스트 메일의 성공
 메시지는 `테스트 메일을 큐에 넣었습니다`다.
 
+키 검증 응답은 `{count}`뿐이다 — **성공 응답에만 도달하고, 실패는 `HOLIDAY_API_*` 오류로 나간다.**
+"유효 여부" 불리언을 두면 항상 참인 값이 화면에 분기를 만든다.
+
 ## 시스템 설정 (admin)
 
 | Method | URL | 설명 | 권한 |
