@@ -173,6 +173,28 @@ public class LeaveRequest extends BaseTimeEntity {
     }
 
     /**
+     * 반열린 구간 {@code [from, toExclusive)} 안에 포함되는 날짜의 일수.
+     *
+     * <p>회차 경계일은 다음 회차의 첫날이므로 양쪽 회차에 겹쳐서 집계되면 안 된다.
+     * 따라서 시작일은 포함하고 종료일은 제외하는 반열린 구간으로 경계를 표현한다.
+     * {@code from}이 null이면 하한을, {@code toExclusive}가 null이면 상한을 두지 않는다.
+     *
+     * @param from 포함할 시작일. null이면 하한 없음
+     * @param toExclusive 제외할 종료일. null이면 상한 없음
+     * @return 구간 안 날짜 수에 날짜당 차감 일수를 곱한 값
+     */
+    public BigDecimal daysWithin(LocalDate from, LocalDate toExclusive) {
+        if (from == null && toExclusive == null) {
+            return days;
+        }
+        long count = dates.stream()
+                .filter(date -> (from == null || !date.isBefore(from))
+                        && (toExclusive == null || date.isBefore(toExclusive)))
+                .count();
+        return leaveType.getDaysPerDate().multiply(BigDecimal.valueOf(count));
+    }
+
+    /**
      * 승인 — PENDING에서만 가능 (선착순 이중 처리 방지).
      */
     public void approve() {

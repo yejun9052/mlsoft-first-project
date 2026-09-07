@@ -85,6 +85,55 @@ class LeaveRequestRepositoryIntegrationTest {
                 leaveRequestRepository.sumPreDeductedDaysOnOrAfter(user, boundary, PRE_DEDUCTED)));
     }
 
+    @Test
+    @DisplayName("회차 창 집계 — 과거·현재·다음 회차 중 현재 회차 날짜만 센다")
+    void sumPreDeductedDaysWithin_현재회차창_현재분만집계() {
+        User user = saveUser();
+        LocalDate from = LocalDate.of(2026, 3, 1);
+        LocalDate toExclusive = from.plusYears(1);
+
+        save(user, LeaveType.ANNUAL, List.of(from.minusDays(1)));
+        save(user, LeaveType.ANNUAL, List.of(from, from.plusDays(1)));
+        save(user, LeaveType.ANNUAL, List.of(toExclusive, toExclusive.plusDays(1)));
+
+        List<Object[]> rows = leaveRequestRepository.countDatesWithinByType(
+                user, PRE_DEDUCTED, from, toExclusive);
+
+        assertEquals(1, rows.size());
+        assertEquals(LeaveType.ANNUAL, rows.get(0)[0]);
+        assertEquals(2L, ((Number) rows.get(0)[1]).longValue());
+        assertEquals(0, new BigDecimal("2.0").compareTo(
+                leaveRequestRepository.sumPreDeductedDaysWithin(
+                        user, from, toExclusive, PRE_DEDUCTED)));
+    }
+
+    @Test
+    @DisplayName("회차 창 집계 — CANCELLED·REJECTED 상태는 제외한다")
+    void sumPreDeductedDaysWithin_복구상태_집계제외() {
+        User user = saveUser();
+        LocalDate from = LocalDate.of(2026, 3, 1);
+        LocalDate toExclusive = from.plusYears(1);
+
+        save(user, LeaveType.ANNUAL, List.of(from));
+
+        LeaveRequest cancelled = save(user, LeaveType.ANNUAL, List.of(from.plusDays(1)));
+        cancelled.cancel("취소");
+        leaveRequestRepository.save(cancelled);
+
+        LeaveRequest rejected = save(user, LeaveType.ANNUAL, List.of(from.plusDays(2)));
+        rejected.reject();
+        leaveRequestRepository.save(rejected);
+
+        List<Object[]> rows = leaveRequestRepository.countDatesWithinByType(
+                user, PRE_DEDUCTED, from, toExclusive);
+
+        assertEquals(1, rows.size());
+        assertEquals(1L, ((Number) rows.get(0)[1]).longValue());
+        assertEquals(0, new BigDecimal("1.0").compareTo(
+                leaveRequestRepository.sumPreDeductedDaysWithin(
+                        user, from, toExclusive, PRE_DEDUCTED)));
+    }
+
     // ---- 헬퍼 ----
 
     private User saveUser() {

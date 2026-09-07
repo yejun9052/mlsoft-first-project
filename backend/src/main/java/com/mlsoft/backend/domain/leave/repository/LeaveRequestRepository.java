@@ -144,6 +144,18 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
                                              @Param("statuses") Collection<RequestStatus> statuses);
 
     /**
+     * 반열린 날짜 구간 {@code [from, toExclusive)} 안의 날짜를 종류별로 센다.
+     * 시작일은 포함하고 종료일은 제외해 회차 경계일이 두 회차에 중복 집계되지 않게 한다.
+     */
+    @Query("select lr.leaveType, count(d) from LeaveRequest lr join lr.dates d "
+            + "where lr.user = :user and lr.status in :statuses and d >= :from and d < :toExclusive "
+            + "group by lr.leaveType")
+    List<Object[]> countDatesWithinByType(@Param("user") User user,
+                                          @Param("statuses") List<RequestStatus> statuses,
+                                          @Param("from") LocalDate from,
+                                          @Param("toExclusive") LocalDate toExclusive);
+
+    /**
      * 기산일 이후 선차감 유지분 합계 — 리셋의 {@code carriedUse} (docs/09 §5).
      *
      * <p><b>신청 단위가 아니라 날짜 단위</b>로 센다. 신청 단위로 하면 {@code 2/28~3/2}처럼 기산일을
@@ -158,6 +170,18 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
     default BigDecimal sumPreDeductedDaysOnOrAfter(User user, LocalDate from,
                                                    Collection<RequestStatus> statuses) {
         return countDatesOnOrAfterByType(user, from, statuses).stream()
+                .map(row -> ((LeaveType) row[0]).getDaysPerDate()
+                        .multiply(BigDecimal.valueOf((Long) row[1])))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * 반열린 날짜 구간의 선차감 유지분 합계.
+     * 날짜별 종류의 단가를 자바에서 곱해 합산한다.
+     */
+    default BigDecimal sumPreDeductedDaysWithin(User user, LocalDate from, LocalDate toExclusive,
+                                                List<RequestStatus> statuses) {
+        return countDatesWithinByType(user, statuses, from, toExclusive).stream()
                 .map(row -> ((LeaveType) row[0]).getDaysPerDate()
                         .multiply(BigDecimal.valueOf((Long) row[1])))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
