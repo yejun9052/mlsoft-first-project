@@ -50,7 +50,8 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 ### 연차 잔액 모델
 `잔여 = base_days + bonus_days - use_days`. 핵심 규칙:
-- **신청(PENDING) 시점에 `use_days` 선차감**, 반려·취소 시 복구
+- **신청(PENDING) 시점에 `use_days` 선차감**, 반려·취소 시 복구. 단 **현재 회차 창 `[last_reset_date, +1년)` 안의 날짜만** 차감한다 — 다음 기산일 이후 날짜는 아직 부여되지 않은 배정이라 현재 잔액을 먹으면 안 된다. 복구·리셋 이월도 같은 창을 쓴다. **불변식: `use_days` = 살아 있는 신청 중 현재 회차 창 안의 날짜 합** (설계-초안/미래-차감-연차-분리-설계-2026-09-07.md)
+- 다음 회차 예약분은 **필드로 두지 않고** `leave_dates`에서 집계한다. 예약 한도는 `정책 연차 − 현재 advance_days`이고 당겨쓰기를 적용하지 않는다. 예약은 다음 1회차까지만 받는다(`next_cycle_reservation_enabled`)
 - 잔여 부족 + 당겨쓰기 허용이면 부족분이 `advance_days`에 잡힘 → 다음 기산일에 새 `base_days`에서 차감
 - **`advance_days`는 파생값이다** — `advance_days = max(0, use_days − base_days − bonus_days)`.
   `User.syncAdvanceDays()` 하나만 이 필드에 쓰고, 잔액 3필드(base/bonus/use)를 바꾸는 도메인 메서드 6개가
@@ -92,7 +93,7 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 - 값 검증은 **저장 시점**에 한다 (`PolicyConfigKey.validate`). 읽는 시점에 터지면 잘못 넣은 관리자가 아니라 **사원의 연차 신청이 실패**한다
 - 읽기는 `PolicyConfigReader`의 타입별 접근자로만. **읽을 때도 같은 검증을 다시** 통과시키고 어긋나면 기본값 + WARN — 옛 값이 상한을 무력화하는 것을 막는다
 - 그 값을 읽는 기능이 아직 없으면 반드시 `PENDING_FEATURE`로 둔다 (관리자 화면에 "미동작" 배지)
-- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 9개, PENDING_FEATURE 0개다(2026-09-05). 소진 안내 2키(`reminder_list_days`·`reminder_auto_cycle`)는 리마인더 잡이 붙으면서 ACTIVE로 전환했다.
+- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 10개, PENDING_FEATURE 0개다(2026-09-07). 소진 안내 2키(`reminder_list_days`·`reminder_auto_cycle`)는 리마인더 잡이 붙으면서 ACTIVE로 전환했다.
   실제 키·동작 여부는 enum과 `GET /api/admin/configs`에서 확인하고 이 문서에 키 목록을 복제하지 않는다.
 
 ### 프론트엔드 데이터 흐름

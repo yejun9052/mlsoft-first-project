@@ -6,9 +6,9 @@
 
 ## 1. 현재 기준
 
-- 현재 코드 기준 테스트 수치: 백엔드 439건, 프론트 254건.
+- 현재 코드 기준 테스트 수치: 백엔드 455건, 프론트 270건.
 - 코드 규모: 컨트롤러 18개(엔드포인트 83개), 엔티티 18개(+ENUM 12), `db/schema.sql` 테이블 20개, 화면 17개.
-- 마지막 자동 검증은 2026-09-07에 수행했다: 백엔드 439건, 프론트 전체 39개 테스트 파일·254건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
+- 마지막 자동 검증은 2026-09-07에 수행했다: 백엔드 455건, 프론트 전체 41개 테스트 파일·270건 통과, lint 경고 0, build 성공(vendor 청크 분리, npm audit 0건).
   `/dev` 서버는 이번 기록 작업에서 기동하지 않았고 운영 DB preflight도 실행하지 않았다.
 - 운영 DB preflight·backfill 15개·`ddl-auto=validate` 기동 검증은 아직 실제 staging에서 실행하지 않았다.
 - 비밀 파일(`application-local.yml`, `.env.prod`, `*.key`, `*.pem`)은 열거나 커밋하지 않는다.
@@ -86,7 +86,8 @@
 2. ~~이메일 2단계~~ **완료(2026-09-05)** — W1~W4. 테이블 3개·ENUM 확장 2건과 `SchemaEnumConsistencyTest`, `SecretCipher` 일반화와 메일 계정 DB 저장, `SENDING` 선점, 온보딩 알림 4지점, 리마인더 ④잡, 관리자 API 13개, 관리자 화면 2개(`/admin/emails`·`/admin/integrations`). 정책 카탈로그는 ACTIVE 9개·PENDING_FEATURE 0개가 됐다. 남은 것은 아래 3~5번에 흡수했다.
 3. ~~컨트롤러 테스트·`SENDING` 복구·공휴일 0건~~ **완료(2026-09-07)** — 양식·연동 컨트롤러 테스트 13건과 `SecurityAccessMatrixTest`의 실제 필터 체인 권한 검사, `sending_at` 기준 복구(backfill 14번), 공휴일 outcome 4종 구분(자동은 degrade·관리자 경로는 오류 표면화). **남은 전제**: 선점 소유자를 기록하지 않아 `SENDING` 복구는 여전히 단일 인스턴스 전제다 — 인스턴스를 늘리기 전에 다시 설계해야 한다.
 4. staging 시드를 실행한다 — `APP_CREDENTIAL_ENCRYPTION_KEY`를 주입한 뒤 공휴일 키와 메일 계정을 각각 저장한다(키가 없으면 화면이 경고를 띄우고 저장이 잠긴다). 그 뒤 사용자 직접 QA I-1~I-4와 새 공휴일·이메일 QA 배치(`docs/13` N절·U절)를 실행하고 결과를 `docs/13`에 회수한다.
-5. 이후 운영 DB 백업·preflight·backfill·`ddl-auto=validate` 기동·smoke test를 진행한다.
+5. ~~미래 차감 연차 분리~~ **완료(2026-09-07)** — 회차 창을 신청·복구·리셋이 공유하고, 다음 회차 예약을 별도로 센다. 설계는 `docs/설계-초안/미래-차감-연차-분리-설계-2026-09-07.md`, 기존 데이터는 backfill 15번이 재계산한다. 브라우저 확인은 `docs/13` V절.
+6. 이후 운영 DB 백업·preflight·backfill·`ddl-auto=validate` 기동·smoke test를 진행한다.
 
 ## 6. 기록 위치
 
