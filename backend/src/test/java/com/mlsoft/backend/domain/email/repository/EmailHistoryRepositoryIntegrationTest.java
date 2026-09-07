@@ -20,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -103,16 +104,41 @@ class EmailHistoryRepositoryIntegrationTest {
     void sending선점_동일이력_한번만성공() {
         User user = saveUser();
         Long historyId = savePending(user);
+        LocalDateTime claimedAt = LocalDateTime.of(2026, 9, 7, 12, 0);
 
         int first = emailHistoryRepository.claimForSending(
-                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+                historyId, claimedAt, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
         int second = emailHistoryRepository.claimForSending(
-                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+                historyId, claimedAt, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
 
         assertEquals(1, first);
         assertEquals(0, second);
-        assertEquals(EmailStatus.SENDING,
-                emailHistoryRepository.findById(historyId).orElseThrow().getStatus());
+        EmailHistory history = emailHistoryRepository.findById(historyId).orElseThrow();
+        assertEquals(EmailStatus.SENDING, history.getStatus());
+        assertEquals(claimedAt, history.getSendingAt());
+    }
+
+    @Test
+    @DisplayName("재시도로 집힌 오래된 이력은 선점 직후 복구하지 않는다")
+    void staleSending_오래된생성시각이어도_최근선점은유지() {
+        User user = saveUser();
+        Long historyId = savePending(user);
+        LocalDateTime claimedAt = LocalDateTime.of(2026, 9, 7, 12, 0);
+        backdate(historyId, claimedAt.minusHours(1));
+
+        int claimed = emailHistoryRepository.claimForSending(
+                historyId, claimedAt, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+        int recovered = emailHistoryRepository.recoverStaleSending(
+                EmailStatus.SENDING,
+                EmailStatus.FAILED,
+                claimedAt.minusMinutes(10),
+                "stale sending");
+
+        assertEquals(1, claimed);
+        assertEquals(0, recovered);
+        EmailHistory history = emailHistoryRepository.findById(historyId).orElseThrow();
+        assertEquals(EmailStatus.SENDING, history.getStatus());
+        assertEquals(claimedAt, history.getSendingAt());
     }
 
     @Test
@@ -120,9 +146,9 @@ class EmailHistoryRepositoryIntegrationTest {
     void staleSending_실패로복구() {
         User user = saveUser();
         Long historyId = savePending(user);
+        LocalDateTime claimedAt = LocalDateTime.of(2026, 9, 7, 9, 0);
         emailHistoryRepository.claimForSending(
-                historyId, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
-        backdate(historyId, LocalDateTime.now().minusHours(1));
+                historyId, claimedAt, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
 
         int recovered = emailHistoryRepository.recoverStaleSending(
                 EmailStatus.SENDING,
@@ -131,8 +157,36 @@ class EmailHistoryRepositoryIntegrationTest {
                 "stale sending");
 
         assertEquals(1, recovered);
-        assertEquals(EmailStatus.FAILED,
-                emailHistoryRepository.findById(historyId).orElseThrow().getStatus());
+        EmailHistory history = emailHistoryRepository.findById(historyId).orElseThrow();
+        assertEquals(EmailStatus.FAILED, history.getStatus());
+        assertNull(history.getSendingAt());
+    }
+
+    @Test
+    @DisplayName("선점 시각이 없는 과거 SENDING도 복구한다")
+    void staleSending_선점시각없음_복구() {
+        User user = saveUser();
+        Long historyId = savePending(user);
+        LocalDateTime claimedAt = LocalDateTime.of(2026, 9, 7, 12, 0);
+        emailHistoryRepository.claimForSending(
+                historyId, claimedAt, EmailStatus.SENDING, EmailStatus.PENDING, EmailStatus.FAILED, MAX_ATTEMPTS);
+        entityManager.flush();
+        entityManager.createNativeQuery(
+                        "update email_history set sending_at = null where id = :id")
+                .setParameter("id", historyId)
+                .executeUpdate();
+        entityManager.clear();
+
+        int recovered = emailHistoryRepository.recoverStaleSending(
+                EmailStatus.SENDING,
+                EmailStatus.FAILED,
+                LocalDateTime.now().minusMinutes(10),
+                "stale sending");
+
+        assertEquals(1, recovered);
+        EmailHistory history = emailHistoryRepository.findById(historyId).orElseThrow();
+        assertEquals(EmailStatus.FAILED, history.getStatus());
+        assertNull(history.getSendingAt());
     }
 
     @Test

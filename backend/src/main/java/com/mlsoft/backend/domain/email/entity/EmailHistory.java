@@ -82,6 +82,10 @@ public class EmailHistory extends BaseTimeEntity {
     /** 실제 발송 시각 */
     private LocalDateTime sentAt;
 
+    /** SENDING으로 선점한 시각 — 오래된 이력 생성 시각과 구분한다. */
+    @Column(name = "sending_at")
+    private LocalDateTime sendingAt;
+
     /** 발송 이력 생성 — PENDING, 시도 횟수 0으로 시작 */
     public static EmailHistory create(User user, User fromUser, EmailType emailType,
                                       String title, String content) {
@@ -100,6 +104,7 @@ public class EmailHistory extends BaseTimeEntity {
     public void markSending() {
         if (this.status == EmailStatus.PENDING || this.status == EmailStatus.FAILED) {
             this.status = EmailStatus.SENDING;
+            this.sendingAt = LocalDateTime.now();
         }
     }
 
@@ -107,6 +112,7 @@ public class EmailHistory extends BaseTimeEntity {
     public void markSent() {
         this.status = EmailStatus.SENT;
         this.sentAt = LocalDateTime.now();
+        this.sendingAt = null;
         this.errorMessage = null;
     }
 
@@ -114,6 +120,7 @@ public class EmailHistory extends BaseTimeEntity {
     public void markFailed(String errorMessage) {
         this.status = EmailStatus.FAILED;
         this.retryCount += 1;
+        this.sendingAt = null;
         this.errorMessage = errorMessage != null && errorMessage.length() > 500
                 ? errorMessage.substring(0, 500)
                 : errorMessage;
@@ -128,5 +135,6 @@ public class EmailHistory extends BaseTimeEntity {
         this.retryCount = 0;
         this.errorMessage = null;
         this.sentAt = null;
+        this.sendingAt = null;
     }
 }

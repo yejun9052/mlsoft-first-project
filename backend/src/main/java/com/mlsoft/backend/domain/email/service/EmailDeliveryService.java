@@ -102,8 +102,10 @@ public class EmailDeliveryService {
         }
 
         // 조회와 실제 발송 사이에 다른 인스턴스가 먼저 선점할 수 있다. 갱신 건수 1일 때만 진행한다.
+        LocalDateTime claimedAt = LocalDateTime.now();
         int claimed = emailHistoryRepository.claimForSending(
                 historyId,
+                claimedAt,
                 EmailStatus.SENDING,
                 EmailStatus.PENDING,
                 EmailStatus.FAILED,

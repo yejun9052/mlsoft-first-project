@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,6 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -49,6 +52,36 @@ class EmailDeliveryServiceTest {
         verify(mailSender, never()).send(any(MimeMessage.class));
         assertEquals(EmailStatus.FAILED, history.getStatus());
         assertEquals(1, history.getRetryCount());
+        assertNull(history.getSendingAt());
+    }
+
+    @Test
+    @DisplayName("발송 성공 후 SENDING 선점 시각을 비운다")
+    void send_성공_sending시각초기화() {
+        EmailHistory history = pendingHistory(user(true));
+        MimeMessage mimeMessage = org.mockito.Mockito.mock(MimeMessage.class);
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
+        given(mailSender.createMimeMessage()).willReturn(mimeMessage);
+
+        service("sender@gmail.com").send(1L);
+
+        assertEquals(EmailStatus.SENT, history.getStatus());
+        assertNotNull(history.getSentAt());
+        assertNull(history.getSendingAt());
+    }
+
+    @Test
+    @DisplayName("발송 실패 후 SENDING 선점 시각을 비운다")
+    void send_실패_sending시각초기화() {
+        EmailHistory history = pendingHistory(user(true));
+        given(emailHistoryRepository.findById(1L)).willReturn(Optional.of(history));
+        given(mailSender.createMimeMessage()).willThrow(new IllegalStateException("SMTP 실패"));
+
+        service("sender@gmail.com").send(1L);
+
+        assertEquals(EmailStatus.FAILED, history.getStatus());
+        assertEquals(1, history.getRetryCount());
+        assertNull(history.getSendingAt());
     }
 
     @Test
@@ -103,6 +136,7 @@ class EmailDeliveryServiceTest {
         CyclicBarrier claimBarrier = new CyclicBarrier(2);
         org.mockito.Mockito.lenient().when(emailHistoryRepository.claimForSending(
                         any(),
+                        any(LocalDateTime.class),
                         org.mockito.ArgumentMatchers.eq(EmailStatus.SENDING),
                         org.mockito.ArgumentMatchers.eq(EmailStatus.PENDING),
                         org.mockito.ArgumentMatchers.eq(EmailStatus.FAILED),
@@ -141,6 +175,7 @@ class EmailDeliveryServiceTest {
         // 선점 결과를 명시해 발송 경계를 검증한다.
         org.mockito.Mockito.lenient().when(emailHistoryRepository.claimForSending(
                 any(),
+                any(LocalDateTime.class),
                 org.mockito.ArgumentMatchers.eq(EmailStatus.SENDING),
                 org.mockito.ArgumentMatchers.eq(EmailStatus.PENDING),
                 org.mockito.ArgumentMatchers.eq(EmailStatus.FAILED),

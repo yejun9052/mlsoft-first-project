@@ -47,13 +47,15 @@ public interface EmailHistoryRepository extends JpaRepository<EmailHistory, Long
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update EmailHistory e
-               set e.status = :sending
+               set e.status = :sending,
+                   e.sendingAt = :now
              where e.id = :historyId
                and e.retryCount < :maxAttempts
                and e.status in (:pending, :failed)
             """)
     int claimForSending(
             @Param("historyId") Long historyId,
+            @Param("now") LocalDateTime now,
             @Param("sending") EmailStatus sending,
             @Param("pending") EmailStatus pending,
             @Param("failed") EmailStatus failed,
@@ -64,9 +66,10 @@ public interface EmailHistoryRepository extends JpaRepository<EmailHistory, Long
     @Query("""
             update EmailHistory e
                set e.status = :failed,
+                   e.sendingAt = null,
                    e.errorMessage = :errorMessage
              where e.status = :sending
-               and e.createdAt < :staleBefore
+               and (e.sendingAt is null or e.sendingAt < :staleBefore)
             """)
     int recoverStaleSending(
             @Param("sending") EmailStatus sending,

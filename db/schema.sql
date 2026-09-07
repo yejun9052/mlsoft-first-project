@@ -101,6 +101,7 @@ CREATE TABLE `email_history` (
   `email_type` enum('LEAVE','NOTICE','REMINDER','WELFARE') COLLATE utf8mb4_unicode_ci NOT NULL,
   `error_message` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `retry_count` int NOT NULL DEFAULT '0',
+  `sending_at` datetime(6) DEFAULT NULL,
   `sent_at` datetime(6) DEFAULT NULL,
   `status` enum('FAILED','PENDING','SENDING','SENT') COLLATE utf8mb4_unicode_ci NOT NULL,
   `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
