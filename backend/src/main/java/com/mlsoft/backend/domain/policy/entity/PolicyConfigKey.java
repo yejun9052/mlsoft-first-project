@@ -52,6 +52,12 @@ public enum PolicyConfigKey {
             "연차 신청 한 건에 담을 수 있는 날짜 개수. 실수·악의로 대량 신청이 접수되는 것을 막는다.",
             PolicyConfigStatus.ACTIVE),
 
+    NEXT_CYCLE_RESERVATION_ENABLED(
+            "next_cycle_reservation_enabled", "true",
+            "다음 회차 연차 예약 허용",
+            "다음 기산일 이후 날짜의 연차 신청을 허용한다. 끄면 현재 회차 안에서만 신청할 수 있다.",
+            PolicyConfigStatus.ACTIVE),
+
     // ── 기산일 리셋·월차 (docs/09 스케줄러) ──────────────────────────────────
 
     BONUS_CARRY_OVER_ENABLED(

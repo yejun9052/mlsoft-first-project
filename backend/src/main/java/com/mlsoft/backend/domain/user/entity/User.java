@@ -349,27 +349,25 @@ public class User extends BaseTimeEntity {
     /**
      * 기산일 리셋 (미래 승인분 이월 포함 — docs/09 §4·§5, 리뷰 I-11).
      *
-     * <p><b>채무는 "이전 연도에 귀속되는 사용분"으로만 계산한다.</b> 이것이 I-11의 답이다:
+     * <p><b>채무는 리셋 직전의 현재 회차 사용분으로 계산한다.</b> 다음 회차 예약분은 신청 시
+     * {@code use_days}에 들어가지 않으므로 {@code carriedUse}를 빼지 않는다(설계 §3):
      * <pre>
-     * oldYearUse  = use − carriedUse            ← 이월분을 빼야 그 해 실제 사용분이 된다
-     * oldYearDebt = max(0, oldYearUse − base − bonus)
+     * oldYearUse  = use
+     * oldYearDebt = max(0, use − base − bonus)
      * newBase     = 정책연차 − oldYearDebt
      * newUse      = carriedUse
      * </pre>
      *
-     * <p>기존 {@code advance_days}를 그대로 빼면 <b>같은 일수를 두 번 센다.</b> 이월되는 날짜는
-     * 이전 연도에 선차감돼 이미 advance를 만들었는데, {@code carriedUse}로 새 연도에 또 차감되기
-     * 때문이다. 그래서 advance가 아니라 "이월분을 제외한 사용분"에서 채무를 다시 구한다.
+     * <p>{@code carryOverDebt()}는 리셋 직전 {@code advance_days}와 같은 값이지만,
+     * 채무는 리셋의 개념으로 독립 계산한다. 파생 필드를 그대로 읽어 쓰지 않는 이유는
+     * 채무 식의 의미와 파생값의 저장 시점을 분리하기 위해서다.
      *
      * <pre>
-     * 검산 1 (I-11 시나리오) base=15, use=20, 20일 전부 이월
-     *   oldYearUse 0 → 채무 0 → newBase 15, newUse 20 → advance 5   ← 경제적 초과분과 일치
-     *   (기존 방식은 base 10 · advance 10 으로 5일을 과다 계상했다)
+     * 검산 1 base=15, 현재 사용 10, 다음 회차 예약 3
+     *   채무 0 → newBase 15, newUse 3 → 잔여 12
      *
-     * 검산 2 (다년) Y1 부여15·사용35, 이월 0
-     *   채무 20 → base −5, advance 5
-     *   Y2 무활동 리셋 → 채무 5 → base 10
-     *   Σ부여 45 − Σ사용 35 = 10                                    ← 일치
+     * 검산 2 base=15, 현재 사용 20, 다음 회차 예약 3
+     *   채무 5 → newBase 10, newUse 3 → 잔여 7
      * </pre>
      *
      * {@code base}가 음수(=남은 빚)여도 식이 그대로 성립한다 — 검산 2의 Y2가 그 경우다.
@@ -380,7 +378,9 @@ public class User extends BaseTimeEntity {
      */
     public void resetAnnualLeave(BigDecimal newBaseDays, BigDecimal carriedUse,
                                  BigDecimal carriedBonus, LocalDate resetDate) {
-        this.baseDays = newBaseDays.subtract(carryOverDebt(carriedUse));
+        // useDays를 새 회차 이월분으로 바꾸기 전에 리셋 직전 회차의 채무를 읽는다.
+        BigDecimal debt = carryOverDebt();
+        this.baseDays = newBaseDays.subtract(debt);
         this.useDays = carriedUse;
         this.bonusDays = carriedBonus;
         this.lastResetDate = resetDate;
@@ -389,20 +389,21 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * 이전 연도에 귀속되는 채무 — 리셋이 새 연차에서 깎는 양이자 감사 이력의 {@code advance_settled}다 (I-11).
+     * 이전 회차에 귀속되는 채무 — 리셋이 새 연차에서 깎는 양이자 감사 이력의 {@code advance_settled}다 (설계 §3).
      *
-     * <pre>oldYearDebt = max(0, (use − carriedUse) − base − bonus)</pre>
+     * <pre>oldYearDebt = max(0, use − base − bonus)</pre>
      *
      * <p><b>리셋 직전 상태에서만 의미가 있다.</b> {@link #resetAnnualLeave}와
      * {@code LeaveResetHistory.create}가 <b>같은 식을 두 번 쓰지 않도록</b> 여기로 모았다 —
-     * 이력이 자기 식을 따로 갖고 있었던 것이 실제 결함이었다(이력은 {@code advance_days}를 직접 빼서,
-     * {@code carriedUse > 0}이면 기록과 실제 전이가 갈렸다).
+     * 다음 회차 예약분은 신청 시 {@code use_days}에 들어가지 않으므로 {@code carriedUse}를
+     * 빼지 않는다. 결과적으로 이 값은 리셋 직전 {@code advance_days}와 같지만, 파생 필드를
+     * 그대로 쓰지 않고 리셋의 채무 식을 계산한다.
      *
-     * @param carriedUse 새 연도로 이월되는 선차감분 — 새 연도에서 다시 차감되므로 이전 연도 채무에서 뺀다
+     * @return 리셋 직전 현재 회차 사용분에서 기본·보너스를 초과한 채무
      */
-    public BigDecimal carryOverDebt(BigDecimal carriedUse) {
+    public BigDecimal carryOverDebt() {
         BigDecimal bonus = bonusDays != null ? bonusDays : BigDecimal.ZERO;
-        return this.useDays.subtract(carriedUse).subtract(this.baseDays).subtract(bonus).max(BigDecimal.ZERO);
+        return this.useDays.subtract(this.baseDays).subtract(bonus).max(BigDecimal.ZERO);
     }
 
     /**

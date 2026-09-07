@@ -113,9 +113,9 @@ public class AnnualLeaveResetService {
     private void applyOneRound(User user, LocalDate resetDate, boolean carryOverEnabled) {
         int yearsOfService = (int) ChronoUnit.YEARS.between(user.getHireDate(), resetDate);
         BigDecimal policyDays = leavePolicyService.calculateAnnualLeaveDays(yearsOfService);
-        BigDecimal carriedUse = leaveRequestRepository.sumPreDeductedDaysOnOrAfter(
-                user, resetDate, PRE_DEDUCTED_STATUSES);
-        BigDecimal carriedBonus = carryOverEnabled ? carriedBonus(user, carriedUse) : BigDecimal.ZERO;
+        BigDecimal carriedUse = leaveRequestRepository.sumPreDeductedDaysWithin(
+                user, resetDate, resetDate.plusYears(1), PRE_DEDUCTED_STATUSES);
+        BigDecimal carriedBonus = carryOverEnabled ? carriedBonus(user) : BigDecimal.ZERO;
 
         leaveResetHistoryRepository.save(
                 LeaveResetHistory.create(user, resetDate, policyDays, carriedUse, carriedBonus));
@@ -136,12 +136,13 @@ public class AnnualLeaveResetService {
      * <p>이전 연도 사용분이 {@code base}를 넘은 만큼이 <b>보너스에서 쓴 분량</b>이다. 리셋 때
      * {@code use}가 0이 되므로 이 보정 없이 {@code bonus}를 그대로 넘기면 이미 써버린 보너스가 부활한다.
      *
-     * <p>사용분에서 {@code carriedUse}를 빼는 것이 핵심이다 — 이월되는 날짜는 새 연도에서 다시
-     * 차감되므로 이전 연도가 소비한 것으로 세면 안 된다 (리뷰 I-11과 같은 이유).
+     * <p>새 모델에서는 다음 회차 예약분이 신청 시 {@code use_days}에 들어가지 않으므로
+     * {@code carriedUse}를 빼지 않는다. 리셋 직전 {@code use_days}가 곧 이전 회차의 실제 사용분이다
+     * (설계 §3). 이월분을 다시 빼면 같은 날짜를 두 번 제외하게 된다.
      */
-    private BigDecimal carriedBonus(User user, BigDecimal carriedUse) {
+    private BigDecimal carriedBonus(User user) {
         BigDecimal bonus = user.getBonusDays() != null ? user.getBonusDays() : BigDecimal.ZERO;
-        BigDecimal oldYearUse = user.getUseDays().subtract(carriedUse);
+        BigDecimal oldYearUse = user.getUseDays();
         BigDecimal spentFromBonus = oldYearUse.subtract(user.getBaseDays()).max(BigDecimal.ZERO);
         return bonus.subtract(spentFromBonus).max(BigDecimal.ZERO);
     }

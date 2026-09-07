@@ -77,16 +77,15 @@ public class LeaveResetHistory extends BaseTimeEntity {
     /**
      * 리셋 이력 생성 — {@code user.resetAnnualLeave} 호출 <b>직전</b> 상태를 스냅샷으로 기록한다.
      *
-     * <p><b>실제 전이와 같은 식을 쓴다.</b> 예전에는 이 팩토리가 {@code advance_days}를 직접 빼서
-     * 새 연차를 계산했는데, {@code carriedUse > 0}이면 기록과 실제 엔티티 상태가 갈렸다 —
-     * {@code base=15·use=20·advance=5}인 사원의 20일이 전부 이월되는 경우 실제 새 연차는 15인데
-     * 이력에는 10이 남아 <b>감사 기록이 5일 틀렸다</b>. 채무 계산을 {@link User#carryOverDebt} 하나로
-     * 모아 두 곳이 갈라질 수 없게 했다.
+     * <p><b>실제 전이와 같은 식을 쓴다.</b> 새 모델에서는 다음 회차 예약분이 신청 시
+     * {@code use_days}에 들어가지 않으므로 {@code carriedUse}를 빼지 않는다. 이를 빼면
+     * 다음 회차 예약분을 이전 회차에서 다시 제외해 채무·소멸분을 두 번 줄이게 된다.
+     * 채무 계산은 {@link User#carryOverDebt} 하나로 모아 두 곳이 갈라질 수 없게 했다.
      *
-     * <p>소멸분도 이월을 반영한다 — 이전 연도 실제 사용분은 {@code use − carriedUse}이고,
-     * 이월되는 보너스는 사라지지 않는다.
-     * <pre>expired = max(0, (base + bonus) − (use − carriedUse) − carriedBonus)</pre>
-     * {@code carriedUse}·{@code carriedBonus}가 0이면 종전 식({@code max(0, 잔여)})과 완전히 같다.
+     * <p>소멸분도 이월을 반영한다 — 새 모델에서는 다음 회차 예약분이 {@code use_days}에 들어가지
+     * 않으므로 이전 회차 실제 사용분은 {@code use} 자체다. 따라서 {@code carriedUse}를 빼지 않는다
+     * (설계 §3).
+     * <pre>expired = max(0, (base + bonus) − use − carriedBonus)</pre>
      *
      * @param policyBaseDays 근속년수 정책이 정한 새 연차 (채무를 빼기 <b>전</b> 값)
      * @param carriedUse     기산일 이후 날짜의 선차감 유지분
@@ -95,8 +94,8 @@ public class LeaveResetHistory extends BaseTimeEntity {
     public static LeaveResetHistory create(User user, LocalDate resetDate, BigDecimal policyBaseDays,
                                            BigDecimal carriedUse, BigDecimal carriedBonus) {
         BigDecimal bonus = user.getBonusDays() != null ? user.getBonusDays() : BigDecimal.ZERO;
-        BigDecimal oldYearUse = user.getUseDays().subtract(carriedUse);
-        BigDecimal debt = user.carryOverDebt(carriedUse);
+        BigDecimal oldYearUse = user.getUseDays();
+        BigDecimal debt = user.carryOverDebt();
         BigDecimal expired = user.getBaseDays().add(bonus).subtract(oldYearUse).subtract(carriedBonus)
                 .max(BigDecimal.ZERO);
         return LeaveResetHistory.builder()

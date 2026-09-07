@@ -36,6 +36,8 @@ public enum ErrorCode {
     CANNOT_RETIRE_SELF(400, "본인 계정은 퇴직 처리할 수 없습니다. 다른 관리자에게 요청해주세요."),
     ADVANCE_LIMIT_EXCEEDED(400, "당겨쓸 수 있는 연차 상한을 초과했습니다. 관리자에게 문의해주세요."),
     TOO_MANY_LEAVE_DATES(400, "한 번에 신청할 수 있는 날짜 수를 초과했습니다."),
+    LEAVE_DATE_TOO_FAR(400, "다음 기산일 이후 1회차까지만 신청할 수 있습니다."),
+    NEXT_CYCLE_RESERVATION_EXCEEDED(400, "다음 회차에 예약할 수 있는 연차를 초과했습니다."),
     INVALID_CONFIG_VALUE(400, "설정 값 형식이 올바르지 않습니다."),
     CONFIG_VALUE_OUT_OF_RANGE(400, "설정 값이 허용 범위를 벗어났습니다."),
     REMINDER_LIST_DAYS_TOO_SHORT(400, "자동 발송 주기보다 소진 안내 기준일이 짧습니다."),

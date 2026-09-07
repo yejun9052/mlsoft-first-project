@@ -299,15 +299,15 @@ class UserTest {
     // ---- 미래 승인분 이월 (docs/09 §5, 리뷰 I-11) ----
 
     @Test
-    @DisplayName("리셋 이월 — 이월분은 채무 계산에서 빼야 같은 일수를 두 번 세지 않는다 (I-11)")
+    @DisplayName("리셋 이월 — 다음 회차 예약분은 use_days에 들어가지 않아 채무에서 빼지 않는다")
     void resetAnnualLeave_carriedUse_notDoubleCounted() {
-        // 부여 15 · 사용 20, 그 20일이 전부 기산일 이후 날짜라 새 연도로 이월된다
-        User user = userWithBalance("15.0", "20.0", "0.0", "5.0");
+        // 부여 15 · 현재 회차 사용 0 · 다음 회차 예약 20일
+        User user = userWithBalance("15.0", "0.0", "0.0", "0.0");
 
         user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("20.0"),
                 BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
 
-        // 이전 연도에 실제로 귀속되는 사용분은 0 → 채무 0 → 새 base는 정책 그대로
+        // 이전 회차에 실제로 귀속되는 사용분은 0 → 채무 0 → 새 base는 정책 그대로
         assertEquals(0, new BigDecimal("15.0").compareTo(user.getBaseDays()));
         assertEquals(0, new BigDecimal("20.0").compareTo(user.getUseDays()));
         // 경제적 초과분은 5일. 기존 advance를 그대로 빼던 방식은 10으로 잡아 5일을 과다 계상했다
@@ -317,13 +317,13 @@ class UserTest {
     @Test
     @DisplayName("리셋 이월 — 이전 연도 사용분과 이월분이 섞이면 각각 제 몫만 반영된다")
     void resetAnnualLeave_carriedUse_partial() {
-        // 부여 15 · 사용 20 중 8일이 기산일 이후(이월), 12일은 이전 연도 사용
-        User user = userWithBalance("15.0", "20.0", "0.0", "5.0");
+        // 부여 15 · 현재 회차 사용 12 · 다음 회차 예약 8일
+        User user = userWithBalance("15.0", "12.0", "0.0", "0.0");
 
         user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("8.0"),
                 BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
 
-        // 이전 연도 사용 12 − 부여 15 → 채무 없음
+        // 이전 회차 사용 12 − 부여 15 → 채무 없음
         assertEquals(0, new BigDecimal("15.0").compareTo(user.getBaseDays()));
         assertEquals(0, new BigDecimal("8.0").compareTo(user.getUseDays()));
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));
@@ -332,8 +332,8 @@ class UserTest {
     @Test
     @DisplayName("리셋 이월 — 이전 연도 채무와 이월분이 함께 있으면 둘 다 반영된다")
     void resetAnnualLeave_carriedUse_withDebt() {
-        // 부여 15 · 사용 30 중 5일 이월 → 이전 연도 귀속 25일, 채무 10
-        User user = userWithBalance("15.0", "30.0", "0.0", "15.0");
+        // 부여 15 · 현재 회차 사용 25 · 다음 회차 예약 5일 → 채무 10
+        User user = userWithBalance("15.0", "25.0", "0.0", "10.0");
 
         user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("5.0"),
                 BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
@@ -341,6 +341,32 @@ class UserTest {
         assertEquals(0, new BigDecimal("5.0").compareTo(user.getBaseDays()));  // 15 − 채무 10
         assertEquals(0, new BigDecimal("5.0").compareTo(user.getUseDays()));
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getAdvanceDays()));     // 5 − 5 = 0
+    }
+
+    @Test
+    @DisplayName("설계 검산 ① — 현재 사용 10·다음 회차 예약 3이면 새 base 15·use 3·잔여 12")
+    void resetAnnualLeave_검산1_다음회차예약은현재채무에포함하지않음() {
+        User user = userWithBalance("15.0", "10.0", "0.0", "0.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("3.0"),
+                BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
+
+        assertEquals(0, new BigDecimal("15.0").compareTo(user.getBaseDays()));
+        assertEquals(0, new BigDecimal("3.0").compareTo(user.getUseDays()));
+        assertEquals(0, new BigDecimal("12.0").compareTo(user.getRemainingDays()));
+    }
+
+    @Test
+    @DisplayName("설계 검산 ② — 현재 사용 20·다음 회차 예약 3이면 새 base 10·use 3·잔여 7")
+    void resetAnnualLeave_검산2_현재채무만새연차에서차감() {
+        User user = userWithBalance("15.0", "20.0", "0.0", "5.0");
+
+        user.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("3.0"),
+                BigDecimal.ZERO, LocalDate.of(2026, 8, 6));
+
+        assertEquals(0, new BigDecimal("10.0").compareTo(user.getBaseDays()));
+        assertEquals(0, new BigDecimal("3.0").compareTo(user.getUseDays()));
+        assertEquals(0, new BigDecimal("7.0").compareTo(user.getRemainingDays()));
     }
 
     @Test

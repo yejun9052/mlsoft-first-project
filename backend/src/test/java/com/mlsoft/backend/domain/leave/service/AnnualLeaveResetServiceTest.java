@@ -21,7 +21,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,23 +61,23 @@ class AnnualLeaveResetServiceTest {
     @DisplayName("2년 밀린 리셋 — 회차마다 그 회차 기산일로 이월분을 다시 집계하고 이력을 2건 남긴다")
     void reset_2년밀림_회차별기산일로재집계하고이력2건() {
         // 2022-03-01 입사, 마지막 기산일 2024-03-01, 오늘 2026-03-01 → 2회 밀렸다.
-        // 선차감 5일의 내역: 2024년도분 2일 + [2025-03-01, 2026-03-01) 1일 + 2026-03-01 이후 2일
-        //   → carriedUse(2025-03-01) = 3.0,  carriedUse(2026-03-01) = 2.0
-        //   (2차 기산일 이후 날짜는 1차 이후에도 포함되므로 1차 ≥ 2차여야 한다)
+        // 새 모델의 use_days는 현재 회차([2024-03-01, 2025-03-01))의 2일만 담는다.
+        // 활성 신청의 전체 날짜는 2024년도분 2일 + [2025-03-01, 2026-03-01) 1일
+        // + [2026-03-01, 2027-03-01) 2일이고, 창 집계는 1차 1일·2차 2일을 반환한다.
         LocalDate today = LocalDate.of(2026, 3, 1);
-        User user = user("15.0", "5.0", "0.0", LocalDate.of(2022, 3, 1), LocalDate.of(2024, 3, 1));
+        User user = user("15.0", "2.0", "0.0", LocalDate.of(2022, 3, 1), LocalDate.of(2024, 3, 1));
 
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(policyConfigReader.getBoolean(PolicyConfigKey.BONUS_CARRY_OVER_ENABLED)).willReturn(false);
         given(leavePolicyService.calculateAnnualLeaveDays(3)).willReturn(new BigDecimal("16.0"));
         given(leavePolicyService.calculateAnnualLeaveDays(4)).willReturn(new BigDecimal("16.0"));
-        givenCarriedUse(user, LocalDate.of(2025, 3, 1), "3.0");
+        givenCarriedUse(user, LocalDate.of(2025, 3, 1), "1.0");
         givenCarriedUse(user, LocalDate.of(2026, 3, 1), "2.0");
 
         int rounds = annualLeaveResetService.reset(USER_ID, today);
 
-        // 1차: oldYearUse = 5−3 = 2, 채무 = max(0, 2−15−0) = 0 → base 16, use 3
-        // 2차: oldYearUse = 3−2 = 1, 채무 = max(0, 1−16−0) = 0 → base 16, use 2
+        // 1차: oldYearUse = 2, 채무 = max(0, 2−15−0) = 0 → base 16, use 1
+        // 2차: oldYearUse = 1, 채무 = max(0, 1−16−0) = 0 → base 16, use 2
         assertEquals(2, rounds);
         assertEquals(LocalDate.of(2026, 3, 1), user.getLastResetDate());
         assertBigDecimal("16.0", user.getBaseDays());
@@ -96,11 +95,13 @@ class AnnualLeaveResetServiceTest {
         // 2차 소멸 = base 16 − oldYearUse 1 = 15
         assertBigDecimal("15.0", histories.get(1).getExpiredDays());
 
-        // 회차마다 "그 회차의" 기산일로 집계했는지를 호출 인자로 직접 고정한다
-        verify(leaveRequestRepository).sumPreDeductedDaysOnOrAfter(
-                eq(user), eq(LocalDate.of(2025, 3, 1)), eq(preDeductedStatuses()));
-        verify(leaveRequestRepository).sumPreDeductedDaysOnOrAfter(
-                eq(user), eq(LocalDate.of(2026, 3, 1)), eq(preDeductedStatuses()));
+        // 회차마다 "그 회차의" 창으로 집계했는지를 호출 인자로 직접 고정한다
+        verify(leaveRequestRepository).sumPreDeductedDaysWithin(
+                eq(user), eq(LocalDate.of(2025, 3, 1)), eq(LocalDate.of(2026, 3, 1)),
+                eq(preDeductedStatuses()));
+        verify(leaveRequestRepository).sumPreDeductedDaysWithin(
+                eq(user), eq(LocalDate.of(2026, 3, 1)), eq(LocalDate.of(2027, 3, 1)),
+                eq(preDeductedStatuses()));
     }
 
     @Test
@@ -109,7 +110,7 @@ class AnnualLeaveResetServiceTest {
         // 2/28·3/1·3/2 3일 신청, 기산일 3/1 → 새 use는 3.0이 아니라 2.0이어야 한다.
         // 신청 단위로 세면 이전 연도에 이미 쓴 2/28까지 새 연도에 또 차감돼 사원이 손해를 본다 (§5)
         LocalDate resetDate = LocalDate.of(2026, 3, 1);
-        User user = user("15.0", "3.0", "0.0", LocalDate.of(2025, 3, 1), LocalDate.of(2025, 3, 1));
+        User user = user("15.0", "1.0", "0.0", LocalDate.of(2025, 3, 1), LocalDate.of(2025, 3, 1));
 
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(policyConfigReader.getBoolean(PolicyConfigKey.BONUS_CARRY_OVER_ENABLED)).willReturn(false);
@@ -118,7 +119,7 @@ class AnnualLeaveResetServiceTest {
 
         int rounds = annualLeaveResetService.reset(USER_ID, resetDate);
 
-        // oldYearUse = 3−2 = 1, 채무 = max(0, 1−15−0) = 0 → base 15, use 2, advance 0
+        // oldYearUse = 1, 채무 = max(0, 1−15−0) = 0 → base 15, use 2, advance 0
         assertEquals(1, rounds);
         assertBigDecimal("15.0", user.getBaseDays());
         assertBigDecimal("2.0", user.getUseDays());
@@ -128,12 +129,11 @@ class AnnualLeaveResetServiceTest {
     @Test
     @DisplayName("I-11 — 사용분 전체가 이월되면 이력의 새 연차가 실제 전이와 같다 (예전 식은 5일 어긋났다)")
     void reset_전체이월_이력이실제전이와일치() {
-        // base 15 · use 20 · advance 5인데 20일 전부가 새 연도 날짜인 경우.
-        // advance를 그대로 빼던 예전 이력 식은 newBase 10 · advanceSettled 5를 기록했지만
-        // 실제 엔티티는 base 15가 된다 — 감사 기록이 5일 틀렸다는 뜻이다.
+        // base 15 · 현재 회차 use 0이고 다음 회차 예약 20일인 경우.
+        // 다음 회차 예약분은 use_days에 들어가지 않으므로 채무가 생기지 않는다.
         LocalDate resetDate = LocalDate.of(2026, 3, 1);
-        User user = user("15.0", "20.0", "0.0", LocalDate.of(2025, 3, 1), LocalDate.of(2025, 3, 1));
-        assertBigDecimal("5.0", user.getAdvanceDays()); // 전제 확인
+        User user = user("15.0", "0.0", "0.0", LocalDate.of(2025, 3, 1), LocalDate.of(2025, 3, 1));
+        assertBigDecimal("0.0", user.getAdvanceDays()); // 전제 확인
 
         given(userRepository.findById(USER_ID)).willReturn(Optional.of(user));
         given(policyConfigReader.getBoolean(PolicyConfigKey.BONUS_CARRY_OVER_ENABLED)).willReturn(false);
@@ -146,7 +146,7 @@ class AnnualLeaveResetServiceTest {
         verify(leaveResetHistoryRepository).save(captor.capture());
         LeaveResetHistory history = captor.getValue();
 
-        // oldYearUse = 20−20 = 0 → 채무 0 → newBase = 15 − 0 = 15
+        // oldYearUse = 0 → 채무 0 → newBase = 15 − 0 = 15
         assertBigDecimal("15.0", history.getNewBaseDays());
         assertBigDecimal("0.0", history.getAdvanceSettled());
         // 이전 연도 base 15일을 하나도 쓰지 않았으므로 15일이 통째로 소멸한다
@@ -239,12 +239,12 @@ class AnnualLeaveResetServiceTest {
     }
 
     private void givenCarriedUse(User user, LocalDate resetDate, String days) {
-        given(leaveRequestRepository.sumPreDeductedDaysOnOrAfter(
-                eq(user), eq(resetDate), eq(preDeductedStatuses())))
+        given(leaveRequestRepository.sumPreDeductedDaysWithin(
+                eq(user), eq(resetDate), eq(resetDate.plusYears(1)), eq(preDeductedStatuses())))
                 .willReturn(new BigDecimal(days));
     }
 
-    private Collection<RequestStatus> preDeductedStatuses() {
+    private List<RequestStatus> preDeductedStatuses() {
         return List.of(RequestStatus.APPROVED, RequestStatus.PENDING, RequestStatus.CANCEL_PENDING);
     }
 

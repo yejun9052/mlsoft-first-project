@@ -24,6 +24,7 @@ import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
@@ -90,6 +91,8 @@ public class LeaveService {
     private final UserRepository userRepository;
     /** 정책 설정 읽기 — 키 상수·파싱을 각 서비스에 흩지 않는다 (docs/02 3-11) */
     private final PolicyConfigReader policyConfigReader;
+    /** 연차 정책 계산 — 리셋과 신청의 다음 회차 예상 가용량이 같은 공용 계산을 쓴다 */
+    private final LeavePolicyService leavePolicyService;
     // 공휴일 판정 — 조회 실패해도 예외를 던지지 않는다(빈 집합)
     private final HolidayService holidayService;
     // 승인자 결정 — 연차·복리후생 공용 규칙 (리뷰 I-5)
@@ -104,12 +107,19 @@ public class LeaveService {
 
     /**
      * 연차 신청 (POST /api/leaves).
-     * 승인자 확정 → 날짜 검증(주말·과거) → 중복 검사 → PENDING 저장 + 선차감(당겨쓰기 정책 반영) + 이력.
+     * 승인자 확정 → 날짜 검증(주말·과거·회차 범위) → 중복·다음 회차 한도 검사
+     * → PENDING 저장 + 현재 회차분 선차감(당겨쓰기 정책 반영) + 이력.
      */
     @Transactional
     public LeaveResponse apply(Long userId, LeaveCreateRequest request) {
         User applicant = findUserOrThrow(userId);
         validateDates(request.dates());
+
+        LocalDate lastResetDate = applicant.getLastResetDate();
+        LocalDate nextResetDate = lastResetDate != null ? lastResetDate.plusYears(1) : null;
+        boolean nextCycleReservationEnabled = lastResetDate == null || policyConfigReader.getBoolean(
+                PolicyConfigKey.NEXT_CYCLE_RESERVATION_ENABLED);
+        validateCycleRange(request.dates(), nextResetDate, nextCycleReservationEnabled);
 
         User primaryApprover = approverResolver.resolvePrimary(applicant);
         User subApprover = approverResolver.resolveSub(request.subApproverId(), applicant, primaryApprover);
@@ -118,10 +128,33 @@ public class LeaveService {
 
         LeaveRequest leave = LeaveRequest.create(
                 applicant, request.leaveType(), request.dates(), request.reason(), primaryApprover, subApprover);
+        BigDecimal currentDays = lastResetDate == null
+                ? leave.daysWithin(null, null)
+                : leave.daysWithin(lastResetDate, nextResetDate);
+        BigDecimal nextDays = nextResetDate == null
+                ? BigDecimal.ZERO
+                : leave.daysWithin(nextResetDate, nextResetDate.plusYears(1));
+
+        if (nextDays.signum() > 0) {
+            BigDecimal reserved = leaveRequestRepository.sumPreDeductedDaysWithin(
+                    applicant, nextResetDate, nextResetDate.plusYears(1), ACTIVE_STATUSES);
+            if (reserved == null) {
+                reserved = BigDecimal.ZERO;
+            }
+            int yearsOfService = (int) ChronoUnit.YEARS.between(applicant.getHireDate(), nextResetDate);
+            BigDecimal policyDays = leavePolicyService.calculateAnnualLeaveDays(yearsOfService);
+            BigDecimal advanceDays = applicant.getAdvanceDays() != null
+                    ? applicant.getAdvanceDays() : BigDecimal.ZERO;
+            BigDecimal allowance = policyDays.subtract(advanceDays).max(BigDecimal.ZERO);
+            if (reserved.add(nextDays).compareTo(allowance) > 0) {
+                throw new BusinessException(ErrorCode.NEXT_CYCLE_RESERVATION_EXCEEDED);
+            }
+        }
+
         // 선차감 — 잔여 부족 + 당겨쓰기 off면 INSUFFICIENT_LEAVE_BALANCE,
         // on이면 부족분이 advance_days에 잡히되 상한(advance_max_days)을 넘으면 ADVANCE_LIMIT_EXCEEDED
         BigDecimal advanceUsed = applicant.deductLeave(
-                leave.getDays(),
+                currentDays,
                 policyConfigReader.getBoolean(PolicyConfigKey.ADVANCE_LEAVE_ENABLED),
                 policyConfigReader.getDecimal(PolicyConfigKey.ADVANCE_MAX_DAYS));
         leave.recordAdvanceUsage(advanceUsed);
@@ -129,8 +162,8 @@ public class LeaveService {
 
         saveHistory(leave, applicant, RequestAction.PENDING, request.reason());
         emailNotificationPublisher.publishLeaveApplied(leave);
-        log.info("[연차 신청] userId={}, leaveId={}, days={}, advanceUsed={}",
-                userId, leave.getId(), leave.getDays(), advanceUsed);
+        log.info("[연차 신청] userId={}, leaveId={}, days={}, currentDays={}, nextDays={}, advanceUsed={}",
+                userId, leave.getId(), leave.getDays(), currentDays, nextDays, advanceUsed);
         return LeaveResponse.of(leave);
     }
 
@@ -152,8 +185,34 @@ public class LeaveService {
     @Transactional(readOnly = true)
     public LeaveSummaryResponse getMySummary(Long userId) {
         User user = findUserOrThrow(userId);
-        BigDecimal pendingDays = leaveRequestRepository.sumDaysByUserAndStatus(user, RequestStatus.PENDING);
-        return LeaveSummaryResponse.of(user, pendingDays);
+        LocalDate lastResetDate = user.getLastResetDate();
+        boolean nextCycleReservationEnabled = policyConfigReader.getBoolean(
+                PolicyConfigKey.NEXT_CYCLE_RESERVATION_ENABLED);
+        BigDecimal pendingDays;
+        BigDecimal nextCycleReservedDays = BigDecimal.ZERO;
+        BigDecimal nextCycleAllowanceDays = BigDecimal.ZERO;
+        if (lastResetDate == null) {
+            // 기산일이 없는 방어적 상태에서는 전체를 현재 회차로 본다(설계 §9).
+            pendingDays = leaveRequestRepository.sumDaysByUserAndStatus(user, RequestStatus.PENDING);
+        } else {
+            LocalDate nextResetDate = lastResetDate.plusYears(1);
+            pendingDays = leaveRequestRepository.sumPreDeductedDaysWithin(
+                    user, lastResetDate, nextResetDate, List.of(RequestStatus.PENDING));
+            nextCycleReservedDays = leaveRequestRepository.sumPreDeductedDaysWithin(
+                    user, nextResetDate, nextResetDate.plusYears(1), ACTIVE_STATUSES);
+            if (user.getHireDate() != null) {
+                int yearsOfService = (int) ChronoUnit.YEARS.between(user.getHireDate(), nextResetDate);
+                BigDecimal policyDays = leavePolicyService.calculateAnnualLeaveDays(yearsOfService);
+                BigDecimal advanceDays = user.getAdvanceDays() != null
+                        ? user.getAdvanceDays() : BigDecimal.ZERO;
+                nextCycleAllowanceDays = policyDays.subtract(advanceDays).max(BigDecimal.ZERO);
+            }
+        }
+        return LeaveSummaryResponse.of(user,
+                pendingDays != null ? pendingDays : BigDecimal.ZERO,
+                nextCycleReservedDays != null ? nextCycleReservedDays : BigDecimal.ZERO,
+                nextCycleAllowanceDays,
+                nextCycleReservationEnabled);
     }
 
     /**
@@ -434,16 +493,40 @@ public class LeaveService {
     /**
      * 선차감 복구 — <b>현재 기산연도에 남아 있는 몫만</b> 되돌린다 (리뷰 I-10).
      *
-     * <p>기산일 리셋이 {@code use_days}를 "기산일 이후 날짜"로만 다시 채우므로(docs/09 §5),
+     * <p>기산일 리셋이 {@code use_days}를 해당 회차 창의 날짜로만 다시 채우므로(docs/09 §5),
      * 기산일을 걸친 신청을 전체 복구하면 이전 연도 몫이 되살아나 연차가 공짜로 생긴다 —
      * {@code 2/28~3/2} 신청이 3/1 리셋 뒤 취소되면 {@code use_days}가 −1이 됐다.
+     * {@code daysWithin}으로 현재 회차 창에 상한을 둔다.
+     *
+     * <p>복구 시점에 창을 다시 계산해도 맞다. 리셋 전에 다음 회차였던 날짜는 리셋 후 현재 회차가 되고,
+     * 그 사이 리셋이 {@code use_days}에 넣었으므로 되돌릴 대상이 된다(설계 §9). 반대로 지난 회차 날짜만
+     * 있는 소급 취소는 창 밖이라 복구량이 0이고, 리셋이 이미 그 회차의 {@code use_days}를 지웠으므로 옳다.
      *
      * <p>반려·즉시 취소·소급취소 승인 <b>세 경로가 이 하나를 쓴다.</b> 경로마다 따로 계산하면
      * 어느 하나가 갈라진다 — 같은 종류의 산재가 리뷰 I-1의 원인이었다.
      */
     private void restoreCurrentYearPortion(LeaveRequest leave) {
         User owner = leave.getUser();
-        owner.restoreLeave(leave.daysOnOrAfter(owner.getLastResetDate()));
+        LocalDate lastResetDate = owner.getLastResetDate();
+        LocalDate nextResetDate = lastResetDate != null ? lastResetDate.plusYears(1) : null;
+        owner.restoreLeave(leave.daysWithin(lastResetDate, nextResetDate));
+    }
+
+    /**
+     * 신청 가능한 회차 범위 — 현재 회차와 다음 회차만 허용한다(설계 §5).
+     * 다음 회차 예약 정책이 꺼져 있으면 경계를 다음 기산일로 당겨 현재 회차만 허용한다.
+     */
+    private void validateCycleRange(List<LocalDate> dates, LocalDate nextResetDate,
+                                    boolean nextCycleReservationEnabled) {
+        if (nextResetDate == null) {
+            return;
+        }
+        LocalDate upperExclusive = nextCycleReservationEnabled
+                ? nextResetDate.plusYears(1)
+                : nextResetDate;
+        if (dates.stream().anyMatch(date -> !date.isBefore(upperExclusive))) {
+            throw new BusinessException(ErrorCode.LEAVE_DATE_TOO_FAR);
+        }
     }
 
     /**

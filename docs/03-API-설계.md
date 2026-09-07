@@ -31,6 +31,8 @@
 | INSUFFICIENT_LEAVE_BALANCE | 400 | 잔여 연차가 부족합니다 |
 | ADVANCE_LIMIT_EXCEEDED | 400 | 당겨쓸 수 있는 연차 상한을 초과했습니다 (설정 `advance_max_days`) |
 | TOO_MANY_LEAVE_DATES | 400 | 한 번에 신청할 수 있는 날짜 수를 초과했습니다 (설정 `leave_max_dates_per_request`) |
+| LEAVE_DATE_TOO_FAR | 400 | 다음 기산일 이후 1회차까지만 신청할 수 있습니다 |
+| NEXT_CYCLE_RESERVATION_EXCEEDED | 400 | 다음 회차에 예약할 수 있는 연차를 초과했습니다 |
 | INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
 | CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
 | HOLIDAY_API_KEY_NOT_CONFIGURED | 400 | 공휴일 API 키가 설정되지 않았습니다 |
@@ -115,7 +117,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 |---|---|---|---|
 | POST | `/api/leaves` | 신청 `{leaveType, dates[], reason, subApproverId?}` — 선차감, 중복·잔여·휴일 검증 | 전체 |
 | GET | `/api/leaves/me` | 내 신청 내역 (페이징, status 필터) | 전체 |
-| GET | `/api/leaves/me/summary` | 잔여 현황 (base/bonus/use/잔여/대기/다음 기산일·차감 예정) | 전체 |
+| GET | `/api/leaves/me/summary` | 잔여 현황 (base/bonus/use/잔여/현재 회차 대기/다음 기산일·차감 예정·다음 회차 예약/한도/허용 여부) | 전체 |
 | GET | `/api/leaves/me/annual-usage?year=` | 내 연차 사용 히트맵 — 승인 완료 날짜별 사용 일수 | 전체 |
 | GET | `/api/leaves/calendar?year=&month=&keyword=&departmentId=` | 캘린더용 승인 연차 (타인 사유 마스킹). `keyword`=신청자명 부분일치, `departmentId`=부서 — 둘 다 선택 | 전체 |
 | GET | `/api/leaves/pending` | 내가 승인자인 대기 목록 (취소 대기 포함, 페이징) | TL·SA |

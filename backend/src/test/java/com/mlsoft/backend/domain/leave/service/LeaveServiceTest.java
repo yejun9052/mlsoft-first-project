@@ -15,6 +15,7 @@ import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
@@ -43,6 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.lenient;
@@ -69,6 +71,8 @@ class LeaveServiceTest {
     private UserRepository userRepository;
     @Mock
     private PolicyConfigReader policyConfigReader;
+    @Mock
+    private LeavePolicyService leavePolicyService;
 
     // 공휴일 판정 (리뷰 I-6). 대부분의 테스트는 공휴일이 아닌 날짜를 쓰므로 빈 집합이 기본값이다 —
     // givenMaxDatesPerRequest에서 함께 스텁한다(둘 다 validateDates가 부르는 협력자).
@@ -107,6 +111,152 @@ class LeaveServiceTest {
         assertEquals(9L, response.primaryApproverId()); // 부서 미배정 → SYSTEM_ADMIN fallback
         verify(leaveRequestRepository).save(any(LeaveRequest.class));
         verify(leaveActionHistoryRepository).save(any(LeaveActionHistory.class));
+    }
+
+    @Test
+    @DisplayName("신청 — 다음 회차 날짜만 있으면 use_days는 변하지 않고 신청 전체 일수만 기록한다")
+    void apply_nextCycleOnly_keepsCurrentUseDays() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenNextCycleReservation(true);
+        givenAdvanceEnabled(false);
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("15.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        LeaveResponse response = leaveService.apply(1L,
+                request(List.of(nextResetDate), null));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        assertEquals(0, new BigDecimal("1.0").compareTo(response.days()));
+        ArgumentCaptor<LeaveRequest> captor = ArgumentCaptor.forClass(LeaveRequest.class);
+        verify(leaveRequestRepository).save(captor.capture());
+        assertEquals(0, BigDecimal.ZERO.compareTo(captor.getValue().getAdvanceUsedDays()));
+    }
+
+    @Test
+    @DisplayName("신청 — 기산일을 걸치면 현재 회차분만 use_days에 선차감한다")
+    void apply_crossesResetDate_deductsCurrentPortionOnly() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        LocalDate currentDate = futureWeekdays(1).get(0);
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenNextCycleReservation(true);
+        givenAdvanceEnabled(false);
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("15.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        LeaveResponse response = leaveService.apply(1L,
+                request(List.of(currentDate, nextResetDate), null));
+
+        assertEquals(0, new BigDecimal("1.0").compareTo(applicant.getUseDays()));
+        assertEquals(0, new BigDecimal("2.0").compareTo(response.days()));
+    }
+
+    @Test
+    @DisplayName("신청 — 잔여 0인 사원도 다음 회차 예약은 예상 가용량 안에서 통과한다")
+    void apply_nextCycleOnly_zeroBalance_succeeds() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "0.0", "0.0", nextResetDate.minusYears(1));
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenNextCycleReservation(true);
+        givenAdvanceEnabled(false);
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("15.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        leaveService.apply(1L, request(List.of(nextResetDate), null));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+    }
+
+    @Test
+    @DisplayName("신청 — 다음 회차 예약이 예상 가용량을 넘으면 NEXT_CYCLE_RESERVATION_EXCEEDED")
+    void apply_nextCycleReservationOverAllowance_throws() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenNextCycleReservation(true);
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("3.0"));
+        given(leaveRequestRepository.sumPreDeductedDaysWithin(
+                eq(applicant), eq(nextResetDate), eq(nextResetDate.plusYears(1)), any()))
+                .willReturn(new BigDecimal("2.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+        LocalDate secondNextDate = nextWeekdayOnOrAfter(nextResetDate.plusDays(1));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(List.of(nextResetDate, secondNextDate), null)));
+
+        assertEquals(ErrorCode.NEXT_CYCLE_RESERVATION_EXCEEDED, ex.getErrorCode());
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        verify(leaveRequestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신청 — 다음 회차 창을 넘는 날짜는 LEAVE_DATE_TOO_FAR")
+    void apply_afterNextCycle_throwsDateTooFar() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenNextCycleReservation(true);
+        LocalDate tooFar = nextWeekdayOnOrAfter(nextResetDate.plusYears(1));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(List.of(tooFar), null)));
+
+        assertEquals(ErrorCode.LEAVE_DATE_TOO_FAR, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("신청 — 다음 회차 예약 정책이 false면 다음 기산일 당일부터 거부한다")
+    void apply_nextCycleReservationDisabled_throwsDateTooFar() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        givenNextCycleReservation(false);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> leaveService.apply(1L, request(List.of(nextResetDate), null)));
+
+        assertEquals(ErrorCode.LEAVE_DATE_TOO_FAR, ex.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("신청 후 리셋·취소 — 리셋으로 현재 회차가 된 예약분만 복구한다")
+    void apply_reset_cancel_restoresPortionInCurrentCycle() {
+        LocalDate nextResetDate = nextCycleBoundary();
+        User applicant = userWithResetBalance(1L, "15.0", "0.0", nextResetDate.minusYears(1));
+        User admin = user(9L, Role.SYSTEM_ADMIN, "15.0");
+        given(userRepository.findById(1L)).willReturn(Optional.of(applicant));
+        given(approverResolver.resolvePrimary(applicant)).willReturn(admin);
+        givenNextCycleReservation(true);
+        givenAdvanceEnabled(false);
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("15.0"));
+        given(leaveRequestRepository.findOverlapping(eq(applicant), any(), any())).willReturn(List.of());
+
+        leaveService.apply(1L, request(List.of(nextResetDate), null));
+        ArgumentCaptor<LeaveRequest> captor = ArgumentCaptor.forClass(LeaveRequest.class);
+        verify(leaveRequestRepository).save(captor.capture());
+        LeaveRequest leave = captor.getValue();
+
+        // 신청 당시에는 다음 회차라 use_days에 없었지만, 리셋 뒤에는 현재 회차로 재차감된다.
+        applicant.resetAnnualLeave(new BigDecimal("15.0"), new BigDecimal("1.0"),
+                BigDecimal.ZERO, nextResetDate);
+        given(leaveRequestRepository.findById(100L)).willReturn(Optional.of(leave));
+        given(leaveRequestRepository.updateStatusToCancelIfCurrent(
+                100L, RequestStatus.PENDING, RequestStatus.CANCELLED, "취소")).willReturn(1);
+
+        leaveService.cancel(100L, 1L, new CancelRequest("취소"));
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getUseDays()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(applicant.getAdvanceDays()));
     }
 
     @Test
@@ -804,17 +954,25 @@ class LeaveServiceTest {
     @Test
     @DisplayName("요약 — 대기 합계와 다음 기산일(마지막 기산일 + 1년) 반영")
     void summary_returnsPendingAndNextReset() {
-        User user = userWithBalance(1L, "15.0", "3.0", "0.0");
         LocalDate resetDate = LocalDate.of(2026, 3, 1);
-        user.resetAnnualLeave(new BigDecimal("15.0"), resetDate); // lastResetDate 설정
+        User user = userWithResetBalance(1L, "15.0", "0.0", resetDate);
         given(userRepository.findById(1L)).willReturn(Optional.of(user));
-        given(leaveRequestRepository.sumDaysByUserAndStatus(user, RequestStatus.PENDING))
+        given(policyConfigReader.getBoolean(PolicyConfigKey.NEXT_CYCLE_RESERVATION_ENABLED)).willReturn(true);
+        given(leaveRequestRepository.sumPreDeductedDaysWithin(
+                eq(user), eq(resetDate), eq(resetDate.plusYears(1)), eq(List.of(RequestStatus.PENDING))))
                 .willReturn(new BigDecimal("2.0"));
+        given(leaveRequestRepository.sumPreDeductedDaysWithin(
+                eq(user), eq(resetDate.plusYears(1)), eq(resetDate.plusYears(2)), any()))
+                .willReturn(new BigDecimal("3.0"));
+        given(leavePolicyService.calculateAnnualLeaveDays(anyInt())).willReturn(new BigDecimal("15.0"));
 
         LeaveSummaryResponse response = leaveService.getMySummary(1L);
 
         assertEquals(0, new BigDecimal("2.0").compareTo(response.pendingDays()));
         assertEquals(resetDate.plusYears(1), response.nextResetDate());
+        assertEquals(0, new BigDecimal("3.0").compareTo(response.nextCycleReservedDays()));
+        assertEquals(0, new BigDecimal("15.0").compareTo(response.nextCycleAllowanceDays()));
+        assertTrue(response.nextCycleReservationEnabled());
     }
 
     // ============================ 히트맵 집계 ============================
@@ -954,6 +1112,7 @@ class LeaveServiceTest {
                 .useDays(use)
                 .bonusDays(BigDecimal.ZERO)
                 .advanceDays(use.subtract(base).max(BigDecimal.ZERO))
+                .hireDate(lastResetDate.minusYears(1))
                 .lastResetDate(lastResetDate)
                 .isActive(true)
                 .build();
@@ -991,6 +1150,11 @@ class LeaveServiceTest {
         givenMaxDatesPerRequest(366);
     }
 
+    private void givenNextCycleReservation(boolean enabled) {
+        given(policyConfigReader.getBoolean(PolicyConfigKey.NEXT_CYCLE_RESERVATION_ENABLED)).willReturn(enabled);
+        givenMaxDatesPerRequest(366);
+    }
+
     private void givenMaxDatesPerRequest(int max) {
         given(policyConfigReader.getInt(PolicyConfigKey.LEAVE_MAX_DATES_PER_REQUEST)).willReturn(max);
         // 공휴일 없음이 기본. lenient인 이유 — 개수 상한·주말·과거에서 먼저 걸리는 테스트는
@@ -1021,6 +1185,19 @@ class LeaveServiceTest {
             date = date.plusDays(1);
         }
         return date;
+    }
+
+    /** 테스트 실행일로부터 충분히 뒤의 다음 기산일 경계(평일) */
+    private LocalDate nextCycleBoundary() {
+        return nextWeekdayOnOrAfter(LocalDate.now(KST).plusDays(10));
+    }
+
+    private LocalDate nextWeekdayOnOrAfter(LocalDate date) {
+        LocalDate result = date;
+        while (!isWeekday(result)) {
+            result = result.plusDays(1);
+        }
+        return result;
     }
 
     private LocalDate pastWeekday() {
