@@ -962,6 +962,10 @@ export default function CalendarPage() {
           dates={selectedDates}
           blockedDates={blockedDates}
           remainingDays={summaryQuery.data?.remainingDays ?? 0}
+          nextResetDate={summaryQuery.data?.nextResetDate ?? null}
+          nextCycleReservedDays={summaryQuery.data?.nextCycleReservedDays ?? 0}
+          nextCycleAllowanceDays={summaryQuery.data?.nextCycleAllowanceDays ?? 0}
+          nextCycleReservationEnabled={summaryQuery.data?.nextCycleReservationEnabled ?? true}
           onRemoveDate={(date) =>
             setSelectedDates((previous) => previous.filter((item) => item !== date))
           }

@@ -12,6 +12,7 @@ import Textarea from '../ui/Textarea.jsx';
 import Select from '../ui/Select.jsx';
 import Button from '../ui/Button.jsx';
 import IconButton from '../ui/IconButton.jsx';
+import { NEXT_CYCLE_RESERVATION_LABEL } from '../../utils/leaveSummary.js';
 
 // 연차 계열 — 잔액을 차감하고 결재를 거친다 (WELFARE는 복리후생 페이지에서 별도 신청)
 const LEAVE_TYPES = ['ANNUAL', 'HALF_AM', 'HALF_PM'];
@@ -58,6 +59,10 @@ export default function CalendarEntryPanel({
   dates,
   blockedDates,
   remainingDays,
+  nextResetDate,
+  nextCycleReservedDays = 0,
+  nextCycleAllowanceDays = 0,
+  nextCycleReservationEnabled = true,
   onRemoveDate,
   onClose,
   onSubmitted,
@@ -135,9 +140,25 @@ export default function CalendarEntryPanel({
     dragOffset.current = null;
   }
 
-  // 차감 일수 — 반차는 날짜당 0.5일. 개인 일정은 항상 0이다.
-  const days = isLeave ? dates.length * (leaveType === 'ANNUAL' ? 1 : 0.5) : 0;
-  const afterRemaining = Math.round((remainingDays - days) * 10) / 10;
+  // 선택 날짜를 회차 창(nextResetDate 기준 반열린 구간)으로 쪼갠다 — 경계일 당일은 다음 회차다.
+  // nextResetDate가 없으면(온보딩 미확정 등, 방어적) 전부 현재 회차로 본다 — 설계 §9와 같은 규칙.
+  const unitDays = leaveType === 'ANNUAL' ? 1 : 0.5;
+  const currentCycleDates = !isLeave
+    ? []
+    : nextResetDate
+      ? dates.filter((d) => d < nextResetDate)
+      : dates;
+  const nextCycleDates = !isLeave || !nextResetDate ? [] : dates.filter((d) => d >= nextResetDate);
+  const currentDays = currentCycleDates.length * unitDays;
+  const nextDays = nextCycleDates.length * unitDays;
+  // 차감 일수 — 반차는 날짜당 0.5일. 개인 일정은 항상 0이다. 잔여에서는 현재 회차분만 뺀다.
+  const days = currentDays + nextDays;
+  const afterRemaining = Math.round((remainingDays - currentDays) * 10) / 10;
+
+  // 다음 회차 예약 — 이미 예약된 일수 + 이번 신청분. 정책 키가 꺼져 있으면 제출 자체를 막는다.
+  const hasNextCycleSelection = nextDays > 0;
+  const nextCycleTotalReserved = Number(nextCycleReservedDays) + nextDays;
+  const nextCycleBlocked = hasNextCycleSelection && !nextCycleReservationEnabled;
 
   // 연차는 주말·공휴일을 신청할 수 없다 (서버도 거부). 개인 일정은 허용하므로 모드에 따라 갈린다.
   const blockedSelected = isLeave ? dates.filter((d) => blockedDates.includes(d)) : [];
@@ -162,6 +183,10 @@ export default function CalendarEntryPanel({
     }
     if (isLeave && !reason.trim()) {
       toast.error('신청 사유를 입력해 주세요.');
+      return;
+    }
+    if (isLeave && nextCycleBlocked) {
+      toast.error('다음 회차 예약이 허용되지 않아요. 다음 기산일 이후 날짜를 빼고 다시 시도하세요.');
       return;
     }
 
@@ -343,15 +368,36 @@ export default function CalendarEntryPanel({
 
         {/* 요약 — 연차는 차감 예정, 개인 일정은 차감 없음을 분명히 말한다 */}
         {isLeave ? (
-          <div className="flex items-center justify-between rounded-btn bg-navy-app/50 px-3.5 py-3 text-[13px]">
-            <span className="text-ink-mute">차감 예정</span>
-            <span className="font-semibold text-ink-hi tabular-nums">
-              <span className="text-[16px]">{days}</span>일
-              <span className="ml-2 font-normal text-ink-mute">
-                잔여 {remainingDays} →{' '}
-                <span className={afterRemaining < 0 ? 'text-warn' : ''}>{afterRemaining}일</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-btn bg-navy-app/50 px-3.5 py-3 text-[13px]">
+              <span className="text-ink-mute">차감 예정</span>
+              <span className="font-semibold text-ink-hi tabular-nums">
+                <span className="text-[16px]">{currentDays}</span>일
+                <span className="ml-2 font-normal text-ink-mute">
+                  잔여 {remainingDays} →{' '}
+                  <span className={afterRemaining < 0 ? 'text-warn' : ''}>{afterRemaining}일</span>
+                </span>
               </span>
-            </span>
+            </div>
+
+            {/* 다음 회차분 — 아직 부여되지 않은 배정이라 잔여에서 빼지 않고 예약분으로만 보여준다 */}
+            {hasNextCycleSelection && (
+              <div className="rounded-btn bg-accent-cyan/10 px-3.5 py-3 text-[13px] ring-1 ring-inset ring-accent-cyan/20">
+                <span className="font-semibold text-accent-cyan tabular-nums">
+                  {`${NEXT_CYCLE_RESERVATION_LABEL} +${nextDays}일`}
+                </span>
+                <span className="ml-2 text-ink-mute">
+                  {`(예약 가능 ${Number(nextCycleAllowanceDays)}일 중 ${nextCycleTotalReserved}일 사용)`}
+                </span>
+              </div>
+            )}
+
+            {nextCycleBlocked && (
+              <p className="rounded-btn bg-danger/10 px-3 py-2.5 text-[12px] text-danger ring-1 ring-inset ring-danger/25">
+                다음 기산일({nextResetDate ? dayjs(nextResetDate).format('M/D') : '-'}) 이후 날짜는
+                지금 예약할 수 없어요. 해당 날짜를 빼주세요.
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-between rounded-btn bg-navy-app/50 px-3.5 py-3 text-[13px]">
@@ -360,7 +406,13 @@ export default function CalendarEntryPanel({
           </div>
         )}
 
-        <Button onClick={handleSubmit} loading={pending} size="lg" className="w-full">
+        <Button
+          onClick={handleSubmit}
+          loading={pending}
+          disabled={isLeave && nextCycleBlocked}
+          size="lg"
+          className="w-full"
+        >
           {pending ? (isLeave ? '신청 중…' : '등록 중…') : isLeave ? '신청하기' : '등록하기'}
         </Button>
       </div>
