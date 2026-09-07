@@ -19,6 +19,10 @@ import LeaveHeatmap from '../components/LeaveHeatmap.jsx';
 import { useHolidays } from '../hooks/useHolidays.js';
 import { useLeaveSummary, useMyAnnualUsage } from '../hooks/useLeaves.js';
 import { useUpdateMyProfile } from '../hooks/useUsers.js';
+import {
+  NEXT_CYCLE_RESERVATION_LABEL,
+  hasNextCycleReservation,
+} from '../utils/leaveSummary.js';
 
 // 프로필 정보 행 — 아이콘 + 라벨(ink-mute) + 값(ink-body)
 function InfoRow({ Icon, label, value }) {
@@ -160,6 +164,13 @@ export default function MyInfoPage() {
               <SummaryRow label="사용 (확정)" value={confirmedUsed} />
               <SummaryRow label="대기 중" value={summary.pendingDays} tone="text-ink-mute" />
               <SummaryRow label="잔여 연차" value={summary.remainingDays} hero />
+              {hasNextCycleReservation(summary.nextCycleReservedDays) && (
+                <SummaryRow
+                  label={NEXT_CYCLE_RESERVATION_LABEL}
+                  value={summary.nextCycleReservedDays}
+                  tone="text-ink-mute"
+                />
+              )}
               {/* 미사용 이월 없이 소멸되는 정책이라 소멸 예정 = 잔여와 동일 (백엔드에 별도 필드 없음) */}
               <SummaryRow label="소멸 예정" value={summary.remainingDays} tone="text-warn" />
               <SummaryRow

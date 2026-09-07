@@ -104,6 +104,34 @@ describe('Sidebar 사용자 표시 라벨', () => {
   });
 });
 
+describe('Sidebar 잔여 연차 패널 — 다음 회차 예약 표시', () => {
+  it('다음 회차 예약이 0이면 잔여 패널에 다음 회차 예약 줄이 없다', async () => {
+    me.mockResolvedValue({ name: '사원', role: 'EMPLOYEE', onboarded: true });
+
+    renderSidebar();
+
+    await screen.findByText('잔여 연차');
+    expect(screen.queryByText(/다음 회차 예약/)).not.toBeInTheDocument();
+  });
+
+  it('다음 회차 예약이 있으면 잔여 패널에 일수가 보인다', async () => {
+    me.mockResolvedValue({ name: '사원', role: 'EMPLOYEE', onboarded: true });
+    getMySummary.mockResolvedValue({
+      baseDays: '15.0',
+      bonusDays: '0.0',
+      useDays: '0.0',
+      advanceDays: '0.0',
+      pendingDays: '0.0',
+      remainingDays: '15.0',
+      nextCycleReservedDays: '2.0',
+    });
+
+    renderSidebar();
+
+    expect(await screen.findByText('다음 회차 예약 2일')).toBeInTheDocument();
+  });
+});
+
 describe('Sidebar 결재 배지 — 결재 화면 목록과 같은 기준 (리뷰 F-8)', () => {
   it('관리자 배지는 연차와 복리후생 대기 건수의 합계다', async () => {
     me.mockResolvedValue({

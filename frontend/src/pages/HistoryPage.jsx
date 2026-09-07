@@ -22,6 +22,10 @@ import Pagination from '../components/ui/Pagination.jsx';
 import { paginate } from '../utils/paginate.js';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCancelLeave, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import {
+  NEXT_CYCLE_RESERVATION_LABEL,
+  hasNextCycleReservation,
+} from '../utils/leaveSummary.js';
 
 // 탭 — 연차·복리후생(결재를 거치고 잔액을 차감)과 개인 일정(둘 다 없음)은 성격이 달라
 // 같은 표에 섞지 않는다. 상태·사유·취소 열이 개인 일정에는 아예 없다.
@@ -251,6 +255,14 @@ export default function HistoryPage() {
           }
         />
         <Stat label="잔여" value={summary.remainingDays} unit="일" tone="text-accent-light" />
+        {hasNextCycleReservation(summary.nextCycleReservedDays) && (
+          <Stat
+            label={NEXT_CYCLE_RESERVATION_LABEL}
+            value={summary.nextCycleReservedDays}
+            unit="일"
+            tone="text-ink-mute"
+          />
+        )}
         {/* 미사용 이월 없이 소멸되는 정책이라 소멸 예정 = 잔여와 동일 (백엔드에 별도 필드 없음) */}
         <Stat label="소멸 예정" value={summary.remainingDays} unit="일" tone="text-warn" />
       </StatStrip>

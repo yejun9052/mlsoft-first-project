@@ -35,7 +35,7 @@ function leave(id, requestReason) {
   };
 }
 
-function renderPage(rows) {
+function renderPage(rows, summaryOverrides = {}) {
   useMyLeaves.mockReturnValue({
     data: { content: rows },
     isLoading: false,
@@ -49,6 +49,7 @@ function renderPage(rows) {
       useDays: '2.0',
       pendingDays: '0.0',
       remainingDays: '13.0',
+      ...summaryOverrides,
     },
     isError: false,
     refetch: vi.fn(),
@@ -89,5 +90,23 @@ describe('HistoryPage 신청 사유 상세', () => {
 
     expect(screen.getByText(짧은사유)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /사유 상세 보기/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('HistoryPage 통계 스트립 — 다음 회차 예약 표시', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('다음 회차 예약이 0이면 통계 스트립에 다음 회차 예약 항목이 없다', () => {
+    renderPage([leave(1, 짧은사유)]);
+
+    expect(screen.queryByText(/다음 회차 예약/)).not.toBeInTheDocument();
+  });
+
+  it('다음 회차 예약이 있으면 통계 스트립에 일수가 보인다', () => {
+    renderPage([leave(1, 짧은사유)], { nextCycleReservedDays: '5.0' });
+
+    expect(screen.getByText('다음 회차 예약')).toBeInTheDocument();
   });
 });

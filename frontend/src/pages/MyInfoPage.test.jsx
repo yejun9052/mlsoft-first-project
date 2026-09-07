@@ -248,6 +248,24 @@ describe('MyInfoPage', () => {
     expect(router.state.location.pathname).toBe('/dashboard');
   });
 
+  it('다음 회차 예약이 0이면 연차 요약에 다음 회차 예약 행이 없다', () => {
+    renderPage();
+
+    expect(screen.queryByText('다음 회차 예약')).not.toBeInTheDocument();
+  });
+
+  it('다음 회차 예약이 있으면 연차 요약에 일수가 보인다', () => {
+    useLeaveSummary.mockReturnValue({
+      data: { ...SUMMARY, nextCycleReservedDays: '4.0' },
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('다음 회차 예약').closest('div')).toHaveTextContent('4.0일');
+  });
+
   it('저장돼 서버 값이 따라오면 더 이상 붙잡지 않는다', async () => {
     const { router } = renderPage();
     fireEvent.change(nameInput(), { target: { value: '홍길순' } });

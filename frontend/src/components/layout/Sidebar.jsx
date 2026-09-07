@@ -23,6 +23,7 @@ import { useLeaveSummary, usePendingApprovals } from '../../hooks/useLeaves.js';
 import { usePendingWelfareApprovals } from '../../hooks/useWelfare.js';
 import Avatar from '../ui/Avatar.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
+import { formatNextCycleReservation, hasNextCycleReservation } from '../../utils/leaveSummary.js';
 
 // MENU 섹션 (전 직원 공통 6개)
 const MENU_ITEMS = [
@@ -130,6 +131,12 @@ function LeaveSummaryPanel() {
         <span>사용 {confirmedUsed}일</span>
         {Number(summary.pendingDays) > 0 && <span className="text-warn">대기 {Number(summary.pendingDays)}일</span>}
       </div>
+
+      {hasNextCycleReservation(summary.nextCycleReservedDays) && (
+        <p className="mt-1.5 text-[11px] text-ink-faint">
+          {formatNextCycleReservation(summary.nextCycleReservedDays)}
+        </p>
+      )}
     </div>
   );
 }

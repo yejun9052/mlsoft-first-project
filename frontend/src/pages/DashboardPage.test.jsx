@@ -163,6 +163,24 @@ describe('DashboardPage 다가오는 내 일정', () => {
     ).toBeInTheDocument();
   });
 
+  it('다음 회차 예약이 0이면 잔여 카드에 다음 회차 예약 줄이 없다', () => {
+    renderPage();
+
+    expect(screen.queryByText(/다음 회차 예약/)).not.toBeInTheDocument();
+  });
+
+  it('다음 회차 예약이 있으면 잔여 카드에 일수가 보인다', () => {
+    useLeaveSummary.mockReturnValue({
+      data: { ...SUMMARY, nextCycleReservedDays: '3.0' },
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('다음 회차 예약 3일')).toBeInTheDocument();
+  });
+
   it('메모는 호버 전에는 없고 일정 행에 호버했을 때만 보인다', () => {
     setSchedules([
       {

@@ -16,6 +16,7 @@ import { useMySchedules } from '../hooks/useSchedules.js';
 import { useMyWelfareRequests } from '../hooks/useWelfare.js';
 import { useHolidays } from '../hooks/useHolidays.js';
 import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../constants/status.js';
+import { formatNextCycleReservation, hasNextCycleReservation } from '../utils/leaveSummary.js';
 
 const TODAY_D = dayjs();
 const TODAY = TODAY_D.format('YYYY-MM-DD');
@@ -193,7 +194,17 @@ export default function DashboardPage() {
 
       <div className="mb-5 flex items-end justify-between gap-6 border-b border-white/[0.12] pb-6">
         <StatStrip>
-          <Stat label="잔여 연차" value={summary.remainingDays} unit="일" size="hero" />
+          <Stat
+            label="잔여 연차"
+            value={summary.remainingDays}
+            unit="일"
+            size="hero"
+            caption={
+              hasNextCycleReservation(summary.nextCycleReservedDays)
+                ? formatNextCycleReservation(summary.nextCycleReservedDays)
+                : undefined
+            }
+          />
           <Stat label="소멸 예정" value={expiringDays} unit="일" tone="text-warn" />
           <Stat label="내 결재 대기" value={myPendingCount} unit="건" />
           <Stat
