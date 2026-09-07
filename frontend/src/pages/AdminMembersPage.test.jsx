@@ -275,6 +275,18 @@ describe('AdminMembersPage 표에서 바로 고치기', () => {
     expect(screen.getByText(/관리자 화면에 더 이상 들어올 수 없고/)).toBeInTheDocument();
   });
 
+  it('본인 행의 퇴직 버튼은 비활성이고 남의 행은 활성이다', () => {
+    renderPage();
+
+    const selfRetireButton = screen.getByRole('button', {
+      name: /본인 계정은 퇴직 처리할 수 없습니다/,
+    });
+
+    expect(selfRetireButton).toBeDisabled();
+    expect(selfRetireButton).toHaveAttribute('title', expect.stringContaining('다른 관리자에게 요청'));
+    expect(screen.getByRole('button', { name: '퇴직 처리' })).toBeEnabled();
+  });
+
   it('확인을 누르면 그때 내 역할이 저장된다', () => {
     renderPage();
     fireEvent.change(역할셀렉트('이예준'), { target: { value: 'EMPLOYEE' } });

@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -172,6 +173,22 @@ class UserServiceTest {
                 () -> userService.retire(1L, 1L));
 
         assertEquals(ErrorCode.CANNOT_RETIRE_SELF, ex.getErrorCode());
+        assertTrue(me.isActive(), "거부됐는데 재직 상태가 바뀌었다");
+    }
+
+    @Test
+    @DisplayName("퇴직 — 유일한 시스템 관리자의 본인 퇴직도 LAST_SYSTEM_ADMIN보다 본인 오류가 먼저다")
+    void retire_유일관리자본인_본인검사가먼저() {
+        User me = activeUser(1L, Role.SYSTEM_ADMIN);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        // 본인 가드가 먼저 실행되므로 정상 구현에서는 이 스텁이 사용되지 않아야 한다.
+        lenient().when(userRepository.findActiveByRoleForUpdate(Role.SYSTEM_ADMIN)).thenReturn(List.of(me));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.retire(1L, 1L));
+
+        assertEquals(ErrorCode.CANNOT_RETIRE_SELF, ex.getErrorCode());
+        verify(userRepository, never()).findActiveByRoleForUpdate(any());
         assertTrue(me.isActive(), "거부됐는데 재직 상태가 바뀌었다");
     }
 
