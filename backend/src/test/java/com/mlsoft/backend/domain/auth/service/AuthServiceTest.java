@@ -80,6 +80,40 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("온보딩 확정 — 직급을 저장하고 내 정보 응답에도 싣는다")
+    void completeOnboarding_jobGrade_savedAndReturned() {
+        User user = givenUser(6L);
+        givenAutoApproveWindowOpen();
+        LocalDate hireDate = LocalDate.now().minusMonths(2);
+        given(leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, LocalDate.now()))
+                .willReturn(new BigDecimal("2.0"));
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).willReturn(11);
+
+        UserMeResponse response = authService.completeOnboarding(
+                6L, new OnboardingRequest(BIRTH_DAY, hireDate, "  선임연구원  "));
+
+        assertEquals("선임연구원", user.getJobGrade());
+        assertEquals("선임연구원", response.jobGrade());
+    }
+
+    @Test
+    @DisplayName("온보딩 확정 — 공백 직급은 null로 정규화되고 응답에도 null이다")
+    void completeOnboarding_blankJobGrade_normalizedToNull() {
+        User user = givenUser(8L);
+        givenAutoApproveWindowOpen();
+        LocalDate hireDate = LocalDate.now();
+        given(leavePolicyService.calculateRetroactiveMonthlyDays(hireDate, hireDate))
+                .willReturn(BigDecimal.ZERO);
+        given(policyConfigReader.getInt(PolicyConfigKey.MONTHLY_LEAVE_MAX_DAYS)).willReturn(11);
+
+        UserMeResponse response = authService.completeOnboarding(
+                8L, new OnboardingRequest(BIRTH_DAY, hireDate, "   "));
+
+        assertNull(user.getJobGrade());
+        assertNull(response.jobGrade());
+    }
+
+    @Test
     @DisplayName("온보딩 소급분도 월차 상한 설정을 따른다 — 상한 5면 8개월차도 5일만 받는다")
     void completeOnboarding_소급분도상한적용() {
         // 여기만 법정 11일로 고정돼 있으면 관리자가 상한을 낮춰도 온보딩이 초과 지급하고,
@@ -202,9 +236,11 @@ class AuthServiceTest {
         User user = givenUser(10L);
         given(policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS)).willReturn(90);
 
-        authService.completeOnboarding(10L, new OnboardingRequest(BIRTH_DAY, LocalDate.of(1990, 1, 1)));
+        authService.completeOnboarding(10L,
+                new OnboardingRequest(BIRTH_DAY, LocalDate.of(1990, 1, 1), "연구원"));
 
         assertEquals(OnboardingStatus.PENDING_APPROVAL, user.getOnboardingStatus());
+        assertEquals("연구원", user.getJobGrade());
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getBaseDays()));
         assertFalse(user.isOnboardingCompleted()); // 인터셉터가 계속 막는다
         assertNull(user.getLastResetDate());       // 기산일도 세우지 않는다 — 스케줄러 대상 밖
@@ -318,7 +354,7 @@ class AuthServiceTest {
     @DisplayName("자동 승인 범위 밖으로 수정하면 새 입사일로 승인 대기를 유지한다")
     void reviseOnboarding_자동승인범위밖_승인대기유지() {
         User user = givenUser(24L);
-        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY);
+        user.requestOnboardingApproval(LocalDate.of(1990, 1, 1), BIRTH_DAY, "기존 직급");
         LocalDate revisedHireDate = LocalDate.of(2000, 1, 1);
         given(policyConfigReader.getBoolean(PolicyConfigKey.ONBOARDING_REVISION_ENABLED))
                 .willReturn(true);
@@ -327,13 +363,15 @@ class AuthServiceTest {
 
         authService.reviseOnboarding(
                 24L,
-                new OnboardingRequest(BIRTH_DAY, revisedHireDate));
+                new OnboardingRequest(BIRTH_DAY, revisedHireDate, "새 직급"));
 
         // 공유 판정의 requestOnboardingApproval 호출 줄을 지우면 새 입사일 단정이 깨진다.
         assertEquals(OnboardingStatus.PENDING_APPROVAL, user.getOnboardingStatus());
         assertEquals(0, BigDecimal.ZERO.compareTo(user.getBaseDays()));
         assertTrue(user.isOnboardingRevised());
         assertEquals(revisedHireDate, user.getHireDate());
+        // 직급은 온보딩 수정권과 무관하므로 request의 값으로 바뀌지 않는다.
+        assertEquals("기존 직급", user.getJobGrade());
         assertNull(user.getLastResetDate());
         org.mockito.Mockito.verify(emailNotificationPublisher).publishOnboardingRevised(user);
     }

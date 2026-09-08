@@ -42,7 +42,7 @@ public class AuthController {
     }
 
     /**
-     * 최초 온보딩 — 생일·입사일 입력, base_days는 정책 자동 계산.
+     * 최초 온보딩 — 생일·입사일 입력과 선택 직급, base_days는 정책 자동 계산.
      */
     @PostMapping("/onboarding")
     public ResponseEntity<CommonResponse<UserMeResponse>> completeOnboarding(

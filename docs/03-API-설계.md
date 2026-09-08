@@ -54,8 +54,8 @@
 | Method | URL | 설명 | 권한 |
 |---|---|---|---|
 | — | `/oauth2/authorization/google` | Google 로그인 진입 (Spring 제공) | 공개 |
-| GET | `/api/auth/me` | 내 정보 조회 (id, name, email, role, department, 일수, hireDate, birthDay, 온보딩 여부) | 전체 |
-| POST | `/api/auth/onboarding` | 최초 온보딩 — `{birthDay, hireDate}` → base_days 정책 자동 계산 | 전체(미온보딩) |
+| GET | `/api/auth/me` | 내 정보 조회 (id, name, email, role, position, jobGrade, department, 일수, hireDate, birthDay, 온보딩 여부) | 전체 |
+| POST | `/api/auth/onboarding` | 최초 온보딩 — `{birthDay, hireDate, jobGrade?}` → base_days 정책 자동 계산 | 전체(미온보딩) |
 | PATCH | `/api/auth/onboarding` | 승인 대기 중 입사일·생일 **1회** 수정 — `{birthDay, hireDate}` | 전체(승인 대기) |
 | POST | `/api/auth/logout` | 쿠키 만료 | 전체 |
 
@@ -92,7 +92,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | GET | `/api/users/approvers` | 서브 승인자 후보 (재직 TL+SA) | 전체 |
 | GET | `/api/users/leader-candidates` | 팀장 후보 (재직 TL+SA — 승인자 후보와 달리 본인 포함) | SA |
 | GET | `/api/users/retired` | 퇴직자 목록 (페이징) — 경과 기간·파기 가능 여부·보류 사유·`purgedAt` 포함. `AUTO` 모드에서는 보존 기간 경과자만 조회 | SA |
-| PATCH | `/api/users/me` | 내 정보 수정 (이름·생일) | 전체 |
+| PATCH | `/api/users/me` | 내 정보 수정 `{name, birthDay, position?, jobGrade?}` (직책·직급은 선택 입력) | 전체 |
 | PATCH | `/api/users/{id}/role` | 권한 변경 | SA |
 | PATCH | `/api/users/{id}/department` | 부서 변경 | SA |
 | PATCH | `/api/users/{id}/role-and-department` | 역할·부서 동시 변경 `{role, departmentId}` — 팀장 승격의 부분 성공 방지 | SA |
@@ -114,6 +114,10 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 0으로 초기화한다. `PENDING`·`CANCEL_PENDING` 연차·복리후생 신청은 `CANCELLED`로 종결하고
 `APPROVED` 기록은 보존한다. `departmentId`가 없으면 부서를 미배정으로 비우며, 파기된 사원은
 `ALREADY_PURGED`로 거부한다.
+
+**사용자 응답의 직급 필드명**은 세 응답 DTO에서 모두 `jobGrade`다 —
+`UserMeResponse.jobGrade`, `UserResponse.jobGrade`, `UserSummaryResponse.jobGrade`.
+온보딩 승인 대기 중 1회 수정 API는 직급을 수정하지 않으며, 직급 변경은 `/api/users/me`에서 한다.
 
 ## 부서 (departments)
 

@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 /**
  * 내 정보 수정 요청 (PATCH /api/users/me — docs/03).
- * 이름·생일만 수정 가능 — 연차·부서·권한 등은 관리자 전용 API로 분리한다.
+ * 이름·생일·직책·직급만 수정 가능 — 연차·부서·권한 등은 관리자 전용 API로 분리한다.
  */
 public record UserProfileUpdateRequest(
         @NotBlank(message = "이름을 입력해주세요.")
@@ -18,6 +18,14 @@ public record UserProfileUpdateRequest(
         LocalDate birthDay,
 
         @Size(max = 50, message = "직책은 50자 이내로 입력해주세요.")
-        String position
+        String position,
+
+        @Size(max = 50, message = "직급은 50자 이내로 입력해주세요.")
+        String jobGrade
 ) {
+
+    /** 기존 호출부와 테스트의 3개 필드 생성 시그니처를 유지한다. */
+    public UserProfileUpdateRequest(String name, LocalDate birthDay, String position) {
+        this(name, birthDay, position, null);
+    }
 }

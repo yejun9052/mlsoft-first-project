@@ -107,7 +107,7 @@ class UserRehireServiceTest {
     private UserService userService;
 
     @Test
-    @DisplayName("재입사 — 입사일·기산일·잔액·역할·직책을 새 근속 기준으로 초기화한다")
+    @DisplayName("재입사 — 입사일·기산일·잔액·역할·직책·직급을 새 근속 기준으로 초기화한다")
     void rehire_resetsEmploymentBalanceAndRole() {
         User target = retiredUser();
         Department department = Department.create("개발팀", "설명", null);
@@ -132,6 +132,7 @@ class UserRehireServiceTest {
         assertNull(target.getRetiredAt());
         assertEquals(Role.EMPLOYEE, target.getRole());
         assertNull(target.getPosition());
+        assertNull(target.getJobGrade());
         assertEquals(LocalDate.of(1990, 5, 20), target.getBirthDay());
         assertEquals(OnboardingStatus.COMPLETED, target.getOnboardingStatus());
         assertEquals(department, target.getDepartment());
@@ -344,6 +345,7 @@ class UserRehireServiceTest {
                 .email("old-user@mlsoft.com")
                 .role(Role.TEAM_LEADER)
                 .position("선임")
+                .jobGrade("수석연구원")
                 .birthDay(LocalDate.of(1990, 5, 20))
                 .onboardingStatus(OnboardingStatus.COMPLETED)
                 .hireDate(OLD_HIRE_DATE)

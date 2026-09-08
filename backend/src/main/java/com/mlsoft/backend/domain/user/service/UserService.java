@@ -186,14 +186,17 @@ public class UserService {
     // 수정
     // ---------------------------------------------------------------------
 
-    /** 내 정보 수정 (PATCH /api/users/me) — 이름·생일·직책 */
+    /** 내 정보 수정 (PATCH /api/users/me) — 이름·생일·직책·직급 */
     @Transactional
     public UserResponse updateMyProfile(Long userId, UserProfileUpdateRequest request) {
         User user = findUserOrThrow(userId);
         String position = request.position() == null || request.position().isBlank()
                 ? null
                 : request.position().trim();
-        user.updateProfile(request.name().trim(), request.birthDay(), position);
+        String jobGrade = request.jobGrade() == null || request.jobGrade().isBlank()
+                ? null
+                : request.jobGrade().trim();
+        user.updateProfile(request.name().trim(), request.birthDay(), position, jobGrade);
         return UserResponse.of(user);
     }
 

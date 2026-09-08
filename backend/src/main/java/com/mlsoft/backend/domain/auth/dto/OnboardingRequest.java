@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.auth.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
@@ -23,6 +24,15 @@ public record OnboardingRequest(
          * 경계 판정은 {@code AuthService}가 KST로 한다 ({@code FUTURE_HIRE_DATE}).
          */
         @NotNull(message = "입사일을 입력해주세요.")
-        LocalDate hireDate
+        LocalDate hireDate,
+
+        /** 직급은 회사별 체계가 달라 자유 입력하며 선택 항목이다. */
+        @Size(max = 50, message = "직급은 50자 이내로 입력해주세요.")
+        String jobGrade
 ) {
+
+    /** 기존 호출부와 테스트의 2개 필드 생성 시그니처를 유지한다. */
+    public OnboardingRequest(LocalDate birthDay, LocalDate hireDate) {
+        this(birthDay, hireDate, null);
+    }
 }

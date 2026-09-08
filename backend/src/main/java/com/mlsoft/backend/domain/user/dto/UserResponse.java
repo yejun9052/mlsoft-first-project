@@ -17,6 +17,7 @@ public record UserResponse(
         String email,
         String role,
         String position,
+        String jobGrade,
         Long departmentId,
         String departmentName,
         BigDecimal baseDays,
@@ -43,7 +44,7 @@ public record UserResponse(
                         BigDecimal useDays, BigDecimal bonusDays, BigDecimal advanceDays,
                         BigDecimal remainingDays, LocalDate hireDate, LocalDate birthDay,
                         boolean isActive, LocalDate retiredAt, LocalDateTime createdAt) {
-        this(id, name, email, role, position, departmentId, departmentName, baseDays, useDays,
+        this(id, name, email, role, position, null, departmentId, departmentName, baseDays, useDays,
                 bonusDays, advanceDays, remainingDays, hireDate, birthDay, isActive, retiredAt,
                 createdAt, null, null, 0L, 0, 0, false);
     }
@@ -56,6 +57,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getRole().name(),
                 user.getPosition(),
+                user.getJobGrade(),
                 department != null ? department.getId() : null,
                 department != null ? department.getName() : null,
                 user.getBaseDays(),
@@ -87,6 +89,7 @@ public record UserResponse(
                 user.getEmail(),
                 user.getRole().name(),
                 user.getPosition(),
+                user.getJobGrade(),
                 department != null ? department.getId() : null,
                 department != null ? department.getName() : null,
                 user.getBaseDays(),

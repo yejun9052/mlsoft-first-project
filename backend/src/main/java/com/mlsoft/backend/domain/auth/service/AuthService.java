@@ -50,7 +50,7 @@ public class AuthService {
     }
 
     /**
-     * 최초 온보딩 — 생일·입사일 입력 (갭분석 C-1, 리뷰 S-1).
+     * 최초 온보딩 — 생일·입사일 입력과 선택 직급 (갭분석 C-1, 리뷰 S-1).
      *
      * <p><b>입사일은 자가 신고라 그대로 믿지 않는다.</b> 예전에는 {@code @PastOrPresent}만 걸려 있어
      * 신입이 {@code 1990-01-01}을 넣으면 그 자리에서 25일이 부여됐고, 완료로 판정된 뒤에는
@@ -132,20 +132,32 @@ public class AuthService {
         }
 
         if (revision) {
+            // 직급은 내 정보에서 언제든 수정할 수 있으므로 온보딩 1회 수정권의 대상이 아니다.
+            // 따라서 이 경로에서는 request.jobGrade()를 저장하지 않고 기존 값을 유지한다.
             user.markOnboardingRevised();
         }
+
+        String jobGrade = normalizeOptionalText(request.jobGrade());
 
         int autoApproveDays =
                 policyConfigReader.getInt(PolicyConfigKey.ONBOARDING_AUTO_APPROVE_DAYS);
         if (hireDate.isBefore(today.minusDays(autoApproveDays))) {
-            user.requestOnboardingApproval(hireDate, request.birthDay());
+            if (revision) {
+                user.requestOnboardingApproval(hireDate, request.birthDay());
+            } else {
+                user.requestOnboardingApproval(hireDate, request.birthDay(), jobGrade);
+            }
             emailNotificationPublisher.publishOnboardingPending(user);
             log.info("[온보딩] 자동 승인 범위({}일) 밖 — 승인 대기: userId={}, hireDate={}",
                     autoApproveDays, user.getId(), hireDate);
             return;
         }
 
-        grantInitialLeave(user, hireDate, request.birthDay(), today);
+        if (revision) {
+            grantInitialLeave(user, hireDate, request.birthDay(), today);
+        } else {
+            grantInitialLeave(user, hireDate, request.birthDay(), today, jobGrade);
+        }
     }
 
     /**
@@ -160,7 +172,13 @@ public class AuthService {
      * (만 1~2년 15일, 만 3년 16일, 만 20년 24일, 만 21년 이상 25일).
      */
     void grantInitialLeave(User user, LocalDate hireDate, LocalDate birthDay, LocalDate today) {
-        user.completeOnboarding(hireDate, birthDay);
+        grantInitialLeave(user, hireDate, birthDay, today, user.getJobGrade());
+    }
+
+    /** 최초 온보딩 확정에서만 새로 입력한 직급을 저장한다. */
+    private void grantInitialLeave(User user, LocalDate hireDate, LocalDate birthDay,
+                                   LocalDate today, String jobGrade) {
+        user.completeOnboarding(hireDate, birthDay, jobGrade);
 
         long elapsedYears = ChronoUnit.YEARS.between(hireDate, today);
         if (elapsedYears < 1) {
@@ -191,5 +209,10 @@ public class AuthService {
     private User findUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** 선택 입력 자유 텍스트는 공백만 입력하면 null로 저장한다. */
+    private String normalizeOptionalText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

@@ -4,6 +4,8 @@ import com.mlsoft.backend.domain.leave.dto.ApprovalRequest;
 import com.mlsoft.backend.domain.leave.dto.CancelRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.entity.LeaveType;
+import com.mlsoft.backend.domain.auth.dto.OnboardingRequest;
+import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareApprovalRequest;
 import com.mlsoft.backend.domain.welfare.dto.WelfareCreateRequest;
 import jakarta.validation.Validation;
@@ -86,6 +88,32 @@ class FreeTextLengthValidationTest {
         assertTrue(validator.validate(new WelfareApprovalRequest(false, text(COLUMN_LENGTH))).isEmpty());
         assertEquals(1,
                 validator.validate(new WelfareApprovalRequest(false, text(COLUMN_LENGTH + 1))).size());
+    }
+
+    @Test
+    @DisplayName("온보딩 직급 — 50자는 통과, 51자는 위반")
+    void onboardingJobGrade_boundary() {
+        int length = 50;
+        OnboardingRequest valid = new OnboardingRequest(
+                LocalDate.of(1995, 4, 1), LocalDate.now().minusDays(1), text(length));
+        OnboardingRequest invalid = new OnboardingRequest(
+                LocalDate.of(1995, 4, 1), LocalDate.now().minusDays(1), text(length + 1));
+
+        assertTrue(validator.validate(valid).isEmpty());
+        assertEquals(1, validator.validate(invalid).size());
+    }
+
+    @Test
+    @DisplayName("프로필 직급 — 50자는 통과, 51자는 위반")
+    void profileJobGrade_boundary() {
+        int length = 50;
+        UserProfileUpdateRequest valid = new UserProfileUpdateRequest(
+                "사원", LocalDate.of(1995, 4, 1), null, text(length));
+        UserProfileUpdateRequest invalid = new UserProfileUpdateRequest(
+                "사원", LocalDate.of(1995, 4, 1), null, text(length + 1));
+
+        assertTrue(validator.validate(valid).isEmpty());
+        assertEquals(1, validator.validate(invalid).size());
     }
 
     private LeaveCreateRequest leaveRequest(String reason) {

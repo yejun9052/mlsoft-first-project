@@ -327,6 +327,7 @@ CREATE TABLE `users` (
   `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `hire_date` date DEFAULT NULL,
   `is_active` bit(1) NOT NULL,
+  `job_grade` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `last_birthday_grant_year` int DEFAULT NULL,
   `last_reset_date` date DEFAULT NULL,
   `monthly_granted_count` int NOT NULL DEFAULT '0',

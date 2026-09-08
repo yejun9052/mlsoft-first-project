@@ -95,6 +95,7 @@ class UserPurgeIntegrationTest {
         assertNull(reloaded.getBirthDay());
         assertNull(reloaded.getHireDate());
         assertNull(reloaded.getPosition());
+        assertNull(reloaded.getJobGrade());
         assertTrue(reloaded.getPurgedAt() != null);
         assertEquals(Role.EMPLOYEE, reloaded.getRole());
         assertEquals(new BigDecimal("10.0"), reloaded.getBaseDays());
@@ -122,6 +123,7 @@ class UserPurgeIntegrationTest {
                 .birthDay(LocalDate.of(1990, 1, 1))
                 .hireDate(LocalDate.of(2018, 1, 1))
                 .position("선임")
+                .jobGrade("수석연구원")
                 .role(Role.EMPLOYEE)
                 .baseDays(new BigDecimal("10.0"))
                 .useDays(new BigDecimal("2.0"))

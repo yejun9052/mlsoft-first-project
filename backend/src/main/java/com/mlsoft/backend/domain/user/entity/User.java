@@ -83,6 +83,10 @@ public class User extends BaseTimeEntity {
     /** 직책 (사원, 대리 등) */
     private String position;
 
+    /** 직급 (과장, 연구원, 선임연구원 등 회사별 자유 입력) */
+    @Column(length = 50)
+    private String jobGrade;
+
     /** 총 연차 */
     @Column(nullable = false, precision = 4, scale = 1)
     private BigDecimal baseDays;
@@ -193,8 +197,17 @@ public class User extends BaseTimeEntity {
      * <p>자동 승인 범위 안이면 신청 즉시, 밖이면 관리자 승인 시점에 호출된다 (리뷰 S-1).
      */
     public void completeOnboarding(LocalDate hireDate, LocalDate birthDay) {
+        completeOnboarding(hireDate, birthDay, this.jobGrade);
+    }
+
+    /**
+     * 온보딩 확정: 직급까지 최초 입력한다.
+     * 직급은 선택 입력이며 공백 정규화는 서비스에서 담당한다.
+     */
+    public void completeOnboarding(LocalDate hireDate, LocalDate birthDay, String jobGrade) {
         this.hireDate = hireDate;
         this.birthDay = birthDay;
+        this.jobGrade = jobGrade;
         this.lastResetDate = hireDate;
         this.onboardingStatus = OnboardingStatus.COMPLETED;
     }
@@ -207,8 +220,14 @@ public class User extends BaseTimeEntity {
      * 어디에도 걸리지 않는다.
      */
     public void requestOnboardingApproval(LocalDate hireDate, LocalDate birthDay) {
+        requestOnboardingApproval(hireDate, birthDay, this.jobGrade);
+    }
+
+    /** 승인 대기 요청: 최초 온보딩에서 입력한 직급을 함께 보관한다. */
+    public void requestOnboardingApproval(LocalDate hireDate, LocalDate birthDay, String jobGrade) {
         this.hireDate = hireDate;
         this.birthDay = birthDay;
+        this.jobGrade = jobGrade;
         this.onboardingStatus = OnboardingStatus.PENDING_APPROVAL;
     }
 
@@ -455,7 +474,8 @@ public class User extends BaseTimeEntity {
     /**
      * 퇴직자 개인정보 파기 — users 행은 유지하고 식별정보만 익명화한다.
      *
-     * <p>부서·권한·연차 잔액은 통계와 과거 정산 검증에 필요하므로 건드리지 않는다.
+     * <p>직급·직책을 포함한 개인 식별에 가까운 인사 정보는 비우고, 부서·권한·연차 잔액은
+     * 통계와 과거 정산 검증에 필요하므로 건드리지 않는다.
      * 이 메서드가 users의 파기 상태 전이를 담당하는 유일한 경로다.
      */
     public void purge(LocalDateTime at) {
@@ -464,6 +484,7 @@ public class User extends BaseTimeEntity {
         this.birthDay = null;
         this.hireDate = null;
         this.position = null;
+        this.jobGrade = null;
         this.purgedAt = at;
     }
 
@@ -509,8 +530,9 @@ public class User extends BaseTimeEntity {
      * 공백 기간을 catch-up으로 소급 처리해 재입사자에게 과거 근속 연차를 잘못 부여한다. 재입사일부터
      * 새 회차를 시작해야 하므로 이 메서드에서 {@code hireDate}와 함께 반드시 갱신한다.
      *
-     * <p>생일과 온보딩 상태는 이미 확인된 개인 정보·확정 절차이므로 유지한다. 부서는 조직 정책에 따라
-     * 서비스가 별도로 지정하며, 이 도메인 메서드에는 섞지 않는다.
+     * <p>생일과 온보딩 상태는 이미 확인된 개인 정보·확정 절차이므로 유지한다. 직책·직급은 퇴직
+     * 인사 정보이므로 새 근속에서 다시 입력하도록 비우며, 부서는 조직 정책에 따라 서비스가
+     * 별도로 지정하고 이 도메인 메서드에는 섞지 않는다.
      */
     public void rehire(LocalDate hireDate) {
         this.hireDate = hireDate;
@@ -527,6 +549,7 @@ public class User extends BaseTimeEntity {
         this.purgeNoticeSentAt = null;
         this.role = Role.EMPLOYEE;
         this.position = null;
+        this.jobGrade = null;
         // advance_days는 파생값이므로 직접 대입하지 않고 단일 동기화 경계를 호출한다.
         syncAdvanceDays();
     }
@@ -541,11 +564,17 @@ public class User extends BaseTimeEntity {
         this.department = department;
     }
 
-    /** 내 정보 수정 — 본인이 관리하도록 허용된 이름·생일·직책만 한 경로에서 바꾼다 */
+    /** 내 정보 수정 — 본인이 관리하도록 허용된 이름·생일·직책·직급만 한 경로에서 바꾼다 */
     public void updateProfile(String name, LocalDate birthDay, String position) {
+        updateProfile(name, birthDay, position, this.jobGrade);
+    }
+
+    /** 내 정보 수정 — 직책과 직급은 서로 다른 인사 정보로 각각 관리한다. */
+    public void updateProfile(String name, LocalDate birthDay, String position, String jobGrade) {
         this.name = name;
         this.birthDay = birthDay;
         this.position = position;
+        this.jobGrade = jobGrade;
     }
 
     /**

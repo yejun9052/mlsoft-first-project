@@ -11,6 +11,8 @@ import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
+import com.mlsoft.backend.domain.user.dto.UserResponse;
+import com.mlsoft.backend.domain.user.dto.UserSummaryResponse;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
@@ -80,17 +82,19 @@ class UserServiceTest {
     // (Codex가 있지도 않은 기존 테스트를 고치려 해서 드러났다).
 
     @Test
-    @DisplayName("내 정보 수정 — 이름·생일·직책이 함께 반영된다")
+    @DisplayName("내 정보 수정 — 이름·생일·직책·직급이 함께 반영되고 응답에도 싣는다")
     void updateMyProfile_직책까지반영() {
         User target = activeUser(1L, Role.EMPLOYEE);
         given(userRepository.findById(1L)).willReturn(Optional.of(target));
 
-        userService.updateMyProfile(1L,
-                new UserProfileUpdateRequest("새 이름", LocalDate.of(1995, 3, 14), "선임연구원"));
+        UserResponse response = userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("새 이름", LocalDate.of(1995, 3, 14), "선임연구원", "과장"));
 
         assertEquals("새 이름", target.getName());
         assertEquals(LocalDate.of(1995, 3, 14), target.getBirthDay());
         assertEquals("선임연구원", target.getPosition());
+        assertEquals("과장", target.getJobGrade());
+        assertEquals("과장", response.jobGrade());
     }
 
     // 직책은 선택 항목이다. 빈 문자열을 그대로 넣으면 "값이 있는데 비어 있는" 상태가 되어
@@ -108,6 +112,32 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("내 정보 수정 — 공백뿐인 직급은 null로 정규화된다")
+    void updateMyProfile_공백직급은null() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("새 이름", LocalDate.of(1995, 3, 14), null, "   "));
+
+        assertNull(target.getJobGrade());
+    }
+
+    @Test
+    @DisplayName("내 정보 수정 — 직급만 바꿔도 기존 직책은 유지된다")
+    void updateMyProfile_jobGradeOnly_keepsPosition() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.updateProfile("기존 이름", LocalDate.of(1990, 1, 1), "선임", "연구원");
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+
+        userService.updateMyProfile(1L,
+                new UserProfileUpdateRequest("기존 이름", LocalDate.of(1990, 1, 1), "선임", "과장"));
+
+        assertEquals("선임", target.getPosition());
+        assertEquals("과장", target.getJobGrade());
+    }
+
+    @Test
     @DisplayName("내 정보 수정 — 이름과 직책의 앞뒤 공백은 잘라 낸다")
     void updateMyProfile_공백제거() {
         User target = activeUser(1L, Role.EMPLOYEE);
@@ -118,6 +148,17 @@ class UserServiceTest {
 
         assertEquals("새 이름", target.getName());
         assertEquals("책임", target.getPosition());
+    }
+
+    @Test
+    @DisplayName("사용자 요약 응답 — 직급 필드명이 jobGrade로 내려간다")
+    void userSummaryResponse_includesJobGrade() {
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.updateProfile("사원", LocalDate.of(1995, 3, 14), "선임", "과장");
+
+        UserSummaryResponse response = UserSummaryResponse.of(target);
+
+        assertEquals("과장", response.jobGrade());
     }
 
     @Test

@@ -13,6 +13,7 @@ public record UserSummaryResponse(
         String email,
         String role,
         String position,
+        String jobGrade,
         Long departmentId,
         String departmentName
 ) {
@@ -25,6 +26,7 @@ public record UserSummaryResponse(
                 user.getEmail(),
                 user.getRole().name(),
                 user.getPosition(),
+                user.getJobGrade(),
                 department != null ? department.getId() : null,
                 department != null ? department.getName() : null
         );

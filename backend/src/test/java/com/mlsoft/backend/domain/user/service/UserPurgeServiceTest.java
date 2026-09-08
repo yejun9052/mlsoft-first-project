@@ -134,6 +134,7 @@ class UserPurgeServiceTest {
         assertNull(target.getBirthDay());
         assertNull(target.getHireDate());
         assertNull(target.getPosition());
+        assertNull(target.getJobGrade());
         assertTrue(target.getPurgedAt() != null);
         assertEquals(new BigDecimal("10.0"), target.getBaseDays());
         assertEquals(new BigDecimal("2.0"), target.getUseDays());
@@ -200,6 +201,7 @@ class UserPurgeServiceTest {
                 .birthDay(LocalDate.of(1990, 1, 1))
                 .hireDate(LocalDate.of(2018, 1, 1))
                 .position("선임")
+                .jobGrade("수석연구원")
                 .role(Role.EMPLOYEE)
                 .baseDays(new BigDecimal("10.0"))
                 .useDays(new BigDecimal("2.0"))
