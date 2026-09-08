@@ -54,8 +54,8 @@ public class LeaveActionHistory extends BaseTimeEntity {
     @JoinColumn(name = "actor_id", nullable = false)
     private User actor;
 
-    /** 처리 코멘트 */
-    @Column(nullable = false)
+    /** 처리 코멘트. 파기 시 사유·코멘트 성격의 자유 텍스트를 NULL로 익명화할 수 있다. */
+    @Column
     private String comment;
 
     /** 액션 (7종) */

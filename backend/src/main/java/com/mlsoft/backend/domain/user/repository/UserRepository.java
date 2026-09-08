@@ -68,6 +68,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @EntityGraph(attributePaths = {"department"})
     Page<User> findByIsActiveFalse(Pageable pageable);
 
+    /** AUTO 모드 퇴직자 목록 — 보존 연수가 지난 행만 노출한다. */
+    @EntityGraph(attributePaths = {"department"})
+    Page<User> findByIsActiveFalseAndRetiredAtLessThanEqual(LocalDate retiredAt, Pageable pageable);
+
     /**
      * 서브 승인자 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (GET /api/users/approvers).
      * 온보딩이 확정되지 않은 사원은 지정돼도 결재를 못 하므로 후보에서 뺀다 (리뷰 I-5b·S-1).

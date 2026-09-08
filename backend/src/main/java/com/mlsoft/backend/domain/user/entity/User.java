@@ -137,11 +137,11 @@ public class User extends BaseTimeEntity {
     /** 퇴사일 */
     private LocalDate retiredAt;
 
-    /** 실제 데이터 파기 시각 — 재파기 방지와 파기 증적. 파기 상태 전이는 P2에서 추가한다. */
+    /** 실제 데이터 파기 시각 — 재파기 방지와 파기 증적. */
     @Column(name = "purged_at")
     private LocalDateTime purgedAt;
 
-    /** 파기 보류 사유 — null이면 보류 아님. 보류 상태 전이는 P2에서 추가한다. */
+    /** 파기 보류 사유 — null이면 보류 아님. */
     @Column(name = "purge_hold_reason", length = 255)
     private String purgeHoldReason;
 
@@ -445,6 +445,31 @@ public class User extends BaseTimeEntity {
     public void retire(LocalDate retiredAt) {
         this.isActive = false;
         this.retiredAt = retiredAt;
+    }
+
+    /**
+     * 퇴직자 개인정보 파기 — users 행은 유지하고 식별정보만 익명화한다.
+     *
+     * <p>부서·권한·연차 잔액은 통계와 과거 정산 검증에 필요하므로 건드리지 않는다.
+     * 이 메서드가 users의 파기 상태 전이를 담당하는 유일한 경로다.
+     */
+    public void purge(LocalDateTime at) {
+        this.name = "퇴직사원#" + this.id;
+        this.email = "deleted-" + this.id + "@invalid";
+        this.birthDay = null;
+        this.hireDate = null;
+        this.position = null;
+        this.purgedAt = at;
+    }
+
+    /** 파기 보류 설정 — 사유의 공백·필수 검증은 서비스와 요청 DTO가 담당한다. */
+    public void placePurgeHold(String reason) {
+        this.purgeHoldReason = reason;
+    }
+
+    /** 파기 보류 해제. */
+    public void releasePurgeHold() {
+        this.purgeHoldReason = null;
     }
 
     /**

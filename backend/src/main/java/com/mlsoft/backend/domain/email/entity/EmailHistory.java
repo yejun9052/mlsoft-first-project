@@ -53,12 +53,12 @@ public class EmailHistory extends BaseTimeEntity {
     @Column(nullable = false)
     private EmailType emailType;
 
-    /** 제목 */
-    @Column(nullable = false)
+    /** 제목. 수신자 파기 시 NULL로 익명화할 수 있다. */
+    @Column
     private String title;
 
-    /** 본문 — length 미지정 @Lob은 MySQL에서 TINYTEXT(255B)로 생성되므로 TEXT 명시 (검증 B1) */
-    @Column(nullable = false, columnDefinition = "TEXT")
+    /** 본문 — 수신자 파기 시 NULL로 익명화하며 TEXT 명시 (검증 B1). */
+    @Column(columnDefinition = "TEXT")
     private String content;
 
     /** 발송 상태 */

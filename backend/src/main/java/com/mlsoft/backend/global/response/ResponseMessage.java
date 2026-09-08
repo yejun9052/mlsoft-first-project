@@ -54,6 +54,9 @@ public final class ResponseMessage {
     public static final String USER_BASE_DAYS_UPDATED = "연차 일수가 설정되었습니다.";
     public static final String USER_RETIRED = "퇴직 처리가 완료되었습니다.";
     public static final String USER_RESTORED = "퇴직을 복구했습니다.";
+    public static final String USER_PURGED = "퇴직자 데이터 파기가 완료되었습니다.";
+    public static final String USER_PURGE_HOLD_PLACED = "퇴직자 데이터 파기 보류가 설정되었습니다.";
+    public static final String USER_PURGE_HOLD_RELEASED = "퇴직자 데이터 파기 보류가 해제되었습니다.";
 
     // 부서 관리
     public static final String DEPARTMENT_FETCHED = "부서 정보를 조회했습니다.";

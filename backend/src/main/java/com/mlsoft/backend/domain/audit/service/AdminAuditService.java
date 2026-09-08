@@ -50,6 +50,18 @@ public class AdminAuditService {
                 AdminAuditLog.create(actor, action, target, target.getName(), beforeValue, afterValue));
     }
 
+    /**
+     * 퇴직자 파기 감사 기록 — 파기 전 이름을 어떤 값에도 남기지 않는다.
+     * 대상은 target_user_id와 숫자 식별자만으로 확인한다.
+     */
+    @Transactional
+    public void recordUserPurged(Long actorId, User target) {
+        User actor = userRepository.getReferenceById(actorId);
+        String targetLabel = "user_id=" + target.getId();
+        adminAuditLogRepository.save(
+                AdminAuditLog.create(actor, AdminAction.USER_PURGED, target, targetLabel, null, "파기 완료"));
+    }
+
     /** 시스템 설정 변경 기록 — 대상 사원이 없고 설정 키가 대상 표시명이 된다 */
     @Transactional
     public void recordConfigChange(Long actorId, String configKey, String beforeValue, String afterValue) {

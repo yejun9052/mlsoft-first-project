@@ -81,8 +81,8 @@ public class LeaveRequest extends BaseTimeEntity {
     @Builder.Default
     private BigDecimal advanceUsedDays = BigDecimal.ZERO;
 
-    /** 신청 사유 (필수) */
-    @Column(nullable = false)
+    /** 신청 시 필수인 사유. 파기 시 개인정보 보호를 위해 NULL로 익명화할 수 있다. */
+    @Column
     private String requestReason;
 
     /** 취소 사유 */

@@ -27,6 +27,11 @@ import java.util.List;
  */
 public interface WelfareRequestRepository extends JpaRepository<WelfareRequest, Long> {
 
+    /** 퇴직자 파기 — 복리후생 신청 사유만 벌크 익명화하고 신청 행은 유지한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("update WelfareRequest w set w.reason = null where w.user.id = :userId")
+    int anonymizeReasonsByUserId(@Param("userId") Long userId);
+
     /** 전체 신청 목록 (GET /api/welfare-requests, SA) */
     @Override
     @EntityGraph(attributePaths = {"user", "user.department", "policy"})

@@ -62,8 +62,8 @@ public class WelfareActionHistory extends BaseTimeEntity {
     @Column(nullable = false)
     private RequestAction action;
 
-    /** 처리자 코멘트 */
-    @Column(nullable = false)
+    /** 처리자 코멘트. 파기 시 사유·코멘트 성격의 자유 텍스트를 NULL로 익명화할 수 있다. */
+    @Column
     private String comment;
 
     /** 처리 이력 생성 */

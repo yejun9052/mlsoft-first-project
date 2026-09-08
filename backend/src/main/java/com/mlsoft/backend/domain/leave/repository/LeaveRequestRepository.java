@@ -33,6 +33,11 @@ import java.util.List;
  */
 public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long> {
 
+    /** 퇴직자 파기 — 신청 사유만 벌크 익명화하고 신청 행·연차 통계는 유지한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("update LeaveRequest l set l.requestReason = null where l.user.id = :userId")
+    int anonymizeRequestReasonsByUserId(@Param("userId") Long userId);
+
     /** 내 신청 내역 (GET /api/leaves/me) */
     @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     Page<LeaveRequest> findByUser(User user, Pageable pageable);

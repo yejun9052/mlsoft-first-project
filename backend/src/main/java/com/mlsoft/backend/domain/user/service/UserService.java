@@ -6,6 +6,7 @@ import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
+import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
@@ -16,7 +17,11 @@ import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.welfare.entity.WelfareRequest;
+import com.mlsoft.backend.domain.welfare.repository.WelfareActionHistoryRepository;
 import com.mlsoft.backend.domain.welfare.repository.WelfareRequestRepository;
+import com.mlsoft.backend.domain.email.repository.EmailHistoryRepository;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
+import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
 import com.mlsoft.backend.global.exception.BusinessException;
 import com.mlsoft.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.ZoneId;
 import java.util.List;
 
@@ -49,6 +56,9 @@ public class UserService {
     // 퇴직 처리 기준일은 한국 시간 고정 — LeaveService·AuthService와 동일 정책
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    /** 근로기준법상 파기 전에 지켜야 할 최소 보존 기간 — 정책으로 낮출 수 없다. */
+    private static final int MIN_PURGE_RETENTION_YEARS = 3;
+
     // 연차 이관 대상 상태 — 선차감이 걸려 있어 승인자가 반드시 존재해야 하는 상태
     private static final List<RequestStatus> LEAVE_REASSIGN_STATUSES =
             List.of(RequestStatus.PENDING, RequestStatus.CANCEL_PENDING);
@@ -56,7 +66,11 @@ public class UserService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final LeaveRequestRepository leaveRequestRepository;
+    private final LeaveActionHistoryRepository leaveActionHistoryRepository;
     private final WelfareRequestRepository welfareRequestRepository;
+    private final WelfareActionHistoryRepository welfareActionHistoryRepository;
+    private final EmailHistoryRepository emailHistoryRepository;
+    private final PolicyConfigReader policyConfigReader;
     private final AdminAuditService adminAuditService;
 
     // ---------------------------------------------------------------------
@@ -114,10 +128,45 @@ public class UserService {
                 .toList();
     }
 
-    /** 퇴직자 목록 (GET /api/users/retired, SA) */
+    /**
+     * 퇴직자 목록 (GET /api/users/retired, SA).
+     *
+     * <p>MANUAL은 모든 퇴직자를 보여주고, AUTO는 설정된 보존 기간이 지난 퇴직자만 보여준다.
+     * 보류·기파기 행은 관리자가 상태를 확인할 수 있도록 목록에 남기되 파기 가능 여부를 false로
+     * 내려 실제 파기 공통 가드와 화면 표시를 분리한다.
+     */
     @Transactional(readOnly = true)
     public Page<UserResponse> getRetiredUsers(Pageable pageable) {
-        return userRepository.findByIsActiveFalse(pageable).map(UserResponse::of);
+        String mode = policyConfigReader.getString(PolicyConfigKey.RETIREE_PURGE_MODE);
+        boolean autoMode = "AUTO".equals(mode);
+        int retentionYears = autoMode
+                ? policyConfigReader.getInt(PolicyConfigKey.RETIREE_PURGE_YEARS)
+                : MIN_PURGE_RETENTION_YEARS;
+        LocalDate today = LocalDate.now(KST);
+        Page<User> users = autoMode
+                ? userRepository.findByIsActiveFalseAndRetiredAtLessThanEqual(
+                        today.minusYears(retentionYears), pageable)
+                : userRepository.findByIsActiveFalse(pageable);
+        return users.map(user -> toRetiredResponse(user, today, autoMode, retentionYears));
+    }
+
+    /** 퇴직자 목록 응답의 경과 기간·파기 가능 여부를 계산한다. */
+    private UserResponse toRetiredResponse(User user, LocalDate today,
+                                           boolean autoMode, int retentionYears) {
+        LocalDate retiredAt = user.getRetiredAt();
+        if (retiredAt == null || retiredAt.isAfter(today)) {
+            return UserResponse.ofRetired(user, 0L, 0, 0, false);
+        }
+        long elapsedDays = java.time.temporal.ChronoUnit.DAYS.between(retiredAt, today);
+        Period elapsed = Period.between(retiredAt, today);
+        boolean retentionMet = !retiredAt.plusYears(MIN_PURGE_RETENTION_YEARS).isAfter(today);
+        boolean modeThresholdMet = !retiredAt.plusYears(retentionYears).isAfter(today);
+        boolean purgeEligible = !user.isActive()
+                && user.getPurgedAt() == null
+                && user.getPurgeHoldReason() == null
+                && retentionMet
+                && (!autoMode || modeThresholdMet);
+        return UserResponse.ofRetired(user, elapsedDays, elapsed.getYears(), elapsed.getMonths(), purgeEligible);
     }
 
     // ---------------------------------------------------------------------
@@ -352,6 +401,73 @@ public class UserService {
     }
 
     /**
+     * 수동 퇴직자 파기 (POST /api/users/{id}/purge, SA).
+     * users 익명화와 자유 텍스트 벌크 UPDATE, 감사 기록을 하나의 트랜잭션으로 묶는다.
+     */
+    @Transactional
+    public void purge(Long targetId, Long actorId) {
+        User target = findUserOrThrow(targetId);
+        if (targetId.equals(actorId)) {
+            throw new BusinessException(ErrorCode.CANNOT_RETIRE_SELF);
+        }
+        if (target.getPurgedAt() != null) {
+            throw new BusinessException(ErrorCode.ALREADY_PURGED);
+        }
+        if (target.getPurgeHoldReason() != null) {
+            throw new BusinessException(ErrorCode.PURGE_ON_HOLD);
+        }
+        if (target.isActive()) {
+            throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+        LocalDate retiredAt = target.getRetiredAt();
+        LocalDate today = LocalDate.now(KST);
+        if (retiredAt == null || retiredAt.plusYears(MIN_PURGE_RETENTION_YEARS).isAfter(today)) {
+            throw new BusinessException(ErrorCode.PURGE_RETENTION_NOT_MET);
+        }
+
+        target.purge(LocalDateTime.now(KST));
+        leaveRequestRepository.anonymizeRequestReasonsByUserId(targetId);
+        welfareRequestRepository.anonymizeReasonsByUserId(targetId);
+        leaveActionHistoryRepository.anonymizeCommentsByUserId(targetId);
+        welfareActionHistoryRepository.anonymizeCommentsByUserId(targetId);
+        emailHistoryRepository.anonymizeContentByRecipientId(targetId);
+        adminAuditService.recordUserPurged(actorId, target);
+        log.info("[퇴직자 파기] userId={}, purgedAt={}, actorId={}",
+                targetId, target.getPurgedAt(), actorId);
+    }
+
+    /** 수동 파기 보류 설정 — 사유가 없는 보류는 허용하지 않는다. */
+    @Transactional
+    public void placePurgeHold(Long targetId, String reason, Long actorId) {
+        User target = findUserOrThrow(targetId);
+        validatePurgeHoldTarget(targetId, actorId, target);
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT_VALUE);
+        }
+        target.placePurgeHold(reason.trim());
+    }
+
+    /** 수동 파기 보류 해제. */
+    @Transactional
+    public void releasePurgeHold(Long targetId, Long actorId) {
+        User target = findUserOrThrow(targetId);
+        validatePurgeHoldTarget(targetId, actorId, target);
+        target.releasePurgeHold();
+    }
+
+    private void validatePurgeHoldTarget(Long targetId, Long actorId, User target) {
+        if (targetId.equals(actorId)) {
+            throw new BusinessException(ErrorCode.CANNOT_RETIRE_SELF);
+        }
+        if (target.getPurgedAt() != null) {
+            throw new BusinessException(ErrorCode.ALREADY_PURGED);
+        }
+        if (target.isActive()) {
+            throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+    }
+
+    /**
      * 퇴직 복구 (POST /api/users/{id}/restore, SA) — 잘못 처리한 퇴직을 되돌린다.
      *
      * <p><b>퇴직의 완전한 역연산이 아니다.</b> {@code is_active}·{@code retired_at} 두 플래그만
@@ -377,6 +493,9 @@ public class UserService {
         User target = findUserOrThrow(targetId);
         if (target.isActive()) {
             throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+        if (target.getPurgedAt() != null) {
+            throw new BusinessException(ErrorCode.ALREADY_PURGED);
         }
         // 복구하면 retired_at이 지워지므로 언제 퇴직했던 계정인지가 감사 이력 말고는 남지 않는다
         LocalDate retiredAt = target.getRetiredAt();

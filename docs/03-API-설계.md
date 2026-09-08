@@ -33,6 +33,9 @@
 | TOO_MANY_LEAVE_DATES | 400 | 한 번에 신청할 수 있는 날짜 수를 초과했습니다 (설정 `leave_max_dates_per_request`) |
 | LEAVE_DATE_TOO_FAR | 400 | 다음 기산일 이후 1회차까지만 신청할 수 있습니다 |
 | NEXT_CYCLE_RESERVATION_EXCEEDED | 400 | 다음 회차에 예약할 수 있는 연차를 초과했습니다 |
+| PURGE_RETENTION_NOT_MET | 400 | 퇴직 후 3년이 지나야 파기할 수 있습니다. 보존 기간이 지난 뒤 다시 시도해주세요 |
+| PURGE_ON_HOLD | 400 | 파기 보류 상태입니다. 보류를 해제한 뒤 다시 시도해주세요 |
+| ALREADY_PURGED | 400 | 이미 파기된 사원입니다. 원본은 복구할 수 없으므로 다시 파기하지 마세요 |
 | INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
 | CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
 | HOLIDAY_API_KEY_NOT_CONFIGURED | 400 | 공휴일 API 키가 설정되지 않았습니다 |
@@ -87,7 +90,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | GET | `/api/users/team-members` | 내 부서 팀원 목록 | 전체 |
 | GET | `/api/users/approvers` | 서브 승인자 후보 (재직 TL+SA) | 전체 |
 | GET | `/api/users/leader-candidates` | 팀장 후보 (재직 TL+SA — 승인자 후보와 달리 본인 포함) | SA |
-| GET | `/api/users/retired` | 퇴직자 목록 (페이징) | SA |
+| GET | `/api/users/retired` | 퇴직자 목록 (페이징) — 경과 기간·파기 가능 여부·보류 사유·`purgedAt` 포함. `AUTO` 모드에서는 보존 기간 경과자만 조회 | SA |
 | PATCH | `/api/users/me` | 내 정보 수정 (이름·생일) | 전체 |
 | PATCH | `/api/users/{id}/role` | 권한 변경 | SA |
 | PATCH | `/api/users/{id}/department` | 부서 변경 | SA |
@@ -95,6 +98,9 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | PATCH | `/api/users/{id}/base-days` | 연차 직접 설정 `{baseDays}` | SA |
 | POST | `/api/users/{id}/retire` | 퇴직 처리 (leader 해제·결재 이관 포함) | SA |
 | POST | `/api/users/{id}/restore` | 퇴직 복구 — 재직 상태로 되돌린다 | SA |
+| POST | `/api/users/{id}/purge` | 수동 파기 — 사용자 식별정보와 자유 텍스트 본문을 익명화하고 감사 로그를 남긴다 | SA |
+| POST | `/api/users/{id}/purge-hold` | 파기 보류 설정 `{reason}` (사유 필수) | SA |
+| DELETE | `/api/users/{id}/purge-hold` | 파기 보류 해제 | SA |
 
 **복구는 퇴직의 완전한 역연산이 아니다.** `is_active`·`retired_at` 두 플래그만 되돌리고,
 퇴직이 함께 수행한 **팀장직 해제와 대기 결재 이관은 그대로 둔다** — 그사이 다른 사람이 팀장이

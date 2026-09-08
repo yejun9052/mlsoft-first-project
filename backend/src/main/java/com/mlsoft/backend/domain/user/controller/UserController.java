@@ -2,6 +2,7 @@ package com.mlsoft.backend.domain.user.controller;
 
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.DepartmentAssignRequest;
+import com.mlsoft.backend.domain.user.dto.PurgeHoldRequest;
 import com.mlsoft.backend.domain.user.dto.RoleDepartmentUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.RoleUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
@@ -20,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -160,6 +162,40 @@ public class UserController {
     ) {
         userService.retire(id, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_RETIRED));
+    }
+
+    /** 퇴직자 개인정보 수동 파기 — users 익명화와 본문 파기를 같은 트랜잭션으로 처리한다. */
+    @PostMapping("/{id}/purge")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<Void>> purge(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        userService.purge(id, authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_PURGED));
+    }
+
+    /** 퇴직자 개인정보 파기 보류 설정 — 사유는 필수다. */
+    @PostMapping("/{id}/purge-hold")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<Void>> placePurgeHold(
+            @PathVariable Long id,
+            @Valid @RequestBody PurgeHoldRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        userService.placePurgeHold(id, request.reason(), authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_PURGE_HOLD_PLACED));
+    }
+
+    /** 퇴직자 개인정보 파기 보류 해제. */
+    @DeleteMapping("/{id}/purge-hold")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<Void>> releasePurgeHold(
+            @PathVariable Long id,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        userService.releasePurgeHold(id, authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_PURGE_HOLD_RELEASED));
     }
 
     /**

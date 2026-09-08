@@ -104,8 +104,8 @@ public class WelfareRequest extends BaseTimeEntity {
     @Column(name = "add_days", nullable = false, precision = 4, scale = 1)
     private BigDecimal addDays;
 
-    /** 자세한 사유 */
-    @Column(nullable = false)
+    /** 자세한 사유. 파기 시 개인정보 보호를 위해 NULL로 익명화할 수 있다. */
+    @Column
     private String reason;
 
     /** 신청 상태 */

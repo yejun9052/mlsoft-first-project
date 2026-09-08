@@ -55,6 +55,85 @@ PREPARE stmt FROM @ddl;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
+-- 파기 대상 자유 텍스트는 익명화 시 NULL이 된다. 기존 운영 DB의 NOT NULL을 함께 완화한다.
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'leave_requests'
+        AND COLUMN_NAME = 'request_reason'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `leave_requests` MODIFY COLUMN `request_reason` varchar(255) COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'welfare_requests'
+        AND COLUMN_NAME = 'reason'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `welfare_requests` MODIFY COLUMN `reason` varchar(255) COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'leave_action_history'
+        AND COLUMN_NAME = 'comment'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `leave_action_history` MODIFY COLUMN `comment` varchar(255) COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'welfare_action_history'
+        AND COLUMN_NAME = 'comment'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `welfare_action_history` MODIFY COLUMN `comment` varchar(255) COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'email_history'
+        AND COLUMN_NAME = 'title'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `email_history` MODIFY COLUMN `title` varchar(255) COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'email_history'
+        AND COLUMN_NAME = 'content'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `email_history` MODIFY COLUMN `content` text COLLATE utf8mb4_unicode_ci NULL',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 -- 확인 쿼리 (실행 후 눈으로 확인할 것)
 -- SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
 --   FROM information_schema.COLUMNS

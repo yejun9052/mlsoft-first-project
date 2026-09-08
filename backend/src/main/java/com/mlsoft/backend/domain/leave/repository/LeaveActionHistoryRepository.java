@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +21,11 @@ import java.util.List;
  * {@code @EntityGraph}로 필요한 연관을 함께 적재한다 (리뷰 D-2 N+1).
  */
 public interface LeaveActionHistoryRepository extends JpaRepository<LeaveActionHistory, Long> {
+
+    /** 퇴직자 파기 — 신청자 기준 처리 코멘트를 벌크 익명화한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("update LeaveActionHistory h set h.comment = null where h.user.id = :userId")
+    int anonymizeCommentsByUserId(@Param("userId") Long userId);
 
     /**
      * 해당 신청의 처리 이력 — 발생 순서(오름차순) (GET /api/leaves/{id}/histories).

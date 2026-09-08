@@ -19,6 +19,11 @@ import java.util.List;
  */
 public interface EmailHistoryRepository extends JpaRepository<EmailHistory, Long> {
 
+    /** 퇴직자 파기 — 수신자 기준 이메일 제목·본문을 벌크 익명화한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("update EmailHistory e set e.title = null, e.content = null where e.user.id = :userId")
+    int anonymizeContentByRecipientId(@Param("userId") Long userId);
+
     /** 관리자 이력 목록에서 수신자 정보를 함께 읽는다. */
     @EntityGraph(attributePaths = "user")
     @Query("""

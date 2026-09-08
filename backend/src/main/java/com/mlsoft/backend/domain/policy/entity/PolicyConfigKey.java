@@ -116,14 +116,14 @@ public enum PolicyConfigKey {
             List.of("MANUAL", "AUTO"),
             "퇴직자 데이터 파기 모드",
             "퇴직자 데이터 파기 방식을 정한다. MANUAL은 관리자가 직접 실행하고 AUTO는 보존 기간이 지난 대상을 자동 파기한다.",
-            PolicyConfigStatus.PENDING_FEATURE),
+            PolicyConfigStatus.ACTIVE),
 
     RETIREE_PURGE_YEARS(
             "retiree_purge_years", ConfigValueType.INTEGER, "3",
             BigDecimal.valueOf(3), BigDecimal.TEN, "년",
             "퇴직자 데이터 보존 기간",
             "AUTO 모드에서 퇴직자 데이터를 파기하기 전 보존할 기간이다. 자동 모드에서만 쓰인다. 하한 3년은 근로기준법상 보존기간을 지키기 위한 값이므로 3년 미만으로 낮출 수 없다.",
-            PolicyConfigStatus.PENDING_FEATURE,
+            PolicyConfigStatus.ACTIVE,
             new VisibilityCondition("retiree_purge_mode", "AUTO"));
 
     /** DB `leave_policy_config.name`에 저장되는 키 */
