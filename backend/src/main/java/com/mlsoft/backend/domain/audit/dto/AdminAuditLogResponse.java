@@ -22,14 +22,17 @@ public record AdminAuditLogResponse(
         LocalDateTime createdAt
 ) {
 
+    private static final String SYSTEM_ACTOR_LABEL = "시스템";
+
     public static AdminAuditLogResponse of(AdminAuditLog log) {
+        User actor = log.getActor();
         User targetUser = log.getTargetUser();
         return new AdminAuditLogResponse(
                 log.getId(),
                 log.getAction().name(),
                 log.getAction().getLabel(),
-                log.getActor().getId(),
-                log.getActor().getName(),
+                actor == null ? null : actor.getId(),
+                actor == null ? SYSTEM_ACTOR_LABEL : actor.getName(),
                 targetUser == null ? null : targetUser.getId(),
                 log.getTargetLabel(),
                 log.getBeforeValue(),

@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -425,15 +426,60 @@ public class UserService {
             throw new BusinessException(ErrorCode.PURGE_RETENTION_NOT_MET);
         }
 
-        target.purge(LocalDateTime.now(KST));
-        leaveRequestRepository.anonymizeRequestReasonsByUserId(targetId);
-        welfareRequestRepository.anonymizeReasonsByUserId(targetId);
-        leaveActionHistoryRepository.anonymizeCommentsByUserId(targetId);
-        welfareActionHistoryRepository.anonymizeCommentsByUserId(targetId);
-        emailHistoryRepository.anonymizeContentByRecipientId(targetId);
-        adminAuditService.recordUserPurged(actorId, target);
+        purgeTarget(target, actorId, LocalDateTime.now(KST), false);
         log.info("[퇴직자 파기] userId={}, purgedAt={}, actorId={}",
                 targetId, target.getPurgedAt(), actorId);
+    }
+
+    /**
+     * 자동 모드 퇴직자 파기 — 사원 1명당 새 트랜잭션에서 실행한다.
+     * 대상이 아니게 된 사원은 예고 시각도 함께 초기화해 다음 대상 판정이 새로 시작되게 한다.
+     *
+     * @return 파기했으면 1, 대상이 아니면 0
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int purgeAutomatically(Long targetId, LocalDate today) {
+        if (!"AUTO".equals(policyConfigReader.getString(PolicyConfigKey.RETIREE_PURGE_MODE))) {
+            return 0;
+        }
+        User target = findUserOrThrow(targetId);
+        if (target.getPurgedAt() != null) {
+            return 0;
+        }
+        if (target.isActive() || target.getPurgeHoldReason() != null || target.getRetiredAt() == null) {
+            target.clearPurgeNoticeSent();
+            return 0;
+        }
+
+        int retentionYears = policyConfigReader.getInt(PolicyConfigKey.RETIREE_PURGE_YEARS);
+        if (target.getRetiredAt().plusYears(retentionYears).isAfter(today)) {
+            target.clearPurgeNoticeSent();
+            return 0;
+        }
+        LocalDateTime noticeSentAt = target.getPurgeNoticeSentAt();
+        if (noticeSentAt == null
+                || noticeSentAt.toLocalDate().isAfter(today.minusDays(RetireePurgeService.NOTICE_LEAD_DAYS))) {
+            return 0;
+        }
+
+        purgeTarget(target, null, today.atStartOfDay(), true);
+        log.info("[퇴직자 자동 파기] userId={}, purgedAt={}", targetId, target.getPurgedAt());
+        return 1;
+    }
+
+    /** 수동·자동 파기가 공유하는 익명화·본문 파기·감사 기록 경계. */
+    private void purgeTarget(User target, Long actorId, LocalDateTime purgedAt, boolean systemActor) {
+        target.purge(purgedAt);
+        leaveRequestRepository.anonymizeRequestReasonsByUserId(target.getId());
+        welfareRequestRepository.anonymizeReasonsByUserId(target.getId());
+        leaveActionHistoryRepository.anonymizeCommentsByUserId(target.getId());
+        welfareActionHistoryRepository.anonymizeCommentsByUserId(target.getId());
+        emailHistoryRepository.anonymizeContentByRecipientId(target.getId());
+        if (systemActor) {
+            adminAuditService.recordSystemUserPurged(target);
+        } else {
+            adminAuditService.recordUserPurged(actorId, target);
+        }
     }
 
     /** 수동 파기 보류 설정 — 사유가 없는 보류는 허용하지 않는다. */

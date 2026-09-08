@@ -184,6 +184,37 @@ class EmailNotificationPublisherTest {
         assertTrue(captureSaved().getFirst().getContent().contains("승인 대기 상태로 다시"));
     }
 
+    @Test
+    @DisplayName("퇴직자 파기 예고는 재직 SYSTEM_ADMIN에게 NOTICE로 대상과 보류 방법을 보낸다")
+    void publishRetireePurgeNotice_관리자수신_NOTICE() {
+        User admin = user(2L, "관리자", Role.SYSTEM_ADMIN, true);
+        given(userRepository.findByRoleAndIsActiveTrue(Role.SYSTEM_ADMIN)).willReturn(List.of(admin));
+        givenSavedHistoriesGetIds();
+
+        publisher().publishRetireePurgeNotice(List.of("퇴직자 7"), LocalDate.of(2026, 4, 1));
+
+        EmailHistory history = captureSaved().getFirst();
+        assertEquals(com.mlsoft.backend.domain.email.entity.EmailType.NOTICE, history.getEmailType());
+        assertTrue(history.getTitle().contains("30일 뒤 파기됩니다"));
+        assertTrue(history.getContent().contains("퇴직자 7"));
+        assertTrue(history.getContent().contains("보류"));
+    }
+
+    @Test
+    @DisplayName("퇴직자 파기 결과는 실제 파기 건수를 NOTICE로 보낸다")
+    void publishRetireePurgeResult_건수포함() {
+        User admin = user(2L, "관리자", Role.SYSTEM_ADMIN, true);
+        given(userRepository.findByRoleAndIsActiveTrue(Role.SYSTEM_ADMIN)).willReturn(List.of(admin));
+        givenSavedHistoriesGetIds();
+
+        publisher().publishRetireePurgeResult(3, LocalDate.of(2026, 3, 1));
+
+        EmailHistory history = captureSaved().getFirst();
+        assertEquals(com.mlsoft.backend.domain.email.entity.EmailType.NOTICE, history.getEmailType());
+        assertTrue(history.getTitle().contains("3명 파기 완료"));
+        assertTrue(history.getContent().contains("3명"));
+    }
+
     // 2026-08-17: 신청자에게도 "결재하러 가기" 버튼이 갔다. 본문은 원래 수신자별로 만들고
     // 있었는데(사유 마스킹) 버튼만 그 갈래를 안 타서, 신청자가 자기 신청을 결재하러 가는
     // 링크를 받았다. 팩토리 단위 테스트와 별개로 **발행부가 신청자를 실제로 구분해 넘기는지**를

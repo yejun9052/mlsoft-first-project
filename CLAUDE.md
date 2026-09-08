@@ -42,7 +42,7 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 2. DB role ≠ 토큰 role → SecurityContext 권한을 DB 기준으로 재구성 (승격·강등 즉시 반영)
 3. 온보딩 미확정 → `/api/auth/*` 외 403
 
-**온보딩 완료 판별은 `hire_date != null`이 아니라 `onboarding_status == COMPLETED`다** (리뷰 S-1). 입사일이 자가 신고라 자동 승인 기간(`onboarding_auto_approve_days`, 기본 90일) 밖의 값은 **연차 0으로 승인 대기**에 들어가고, 그 상태에서도 `hire_date`는 채워져 있다. 그래서 옛 기준을 쓰면 미확정 입사일이 스케줄러 4잡·승인자 후보의 입력이 된다. 새 코드에서 `getHireDate() != null`로 온보딩을 판별하지 말 것 — `isOnboardingCompleted()`를 쓴다.
+**온보딩 완료 판별은 `hire_date != null`이 아니라 `onboarding_status == COMPLETED`다** (리뷰 S-1). 입사일이 자가 신고라 자동 승인 기간(`onboarding_auto_approve_days`, 기본 90일) 밖의 값은 **연차 0으로 승인 대기**에 들어가고, 그 상태에서도 `hire_date`는 채워져 있다. 그래서 옛 기준을 쓰면 미확정 입사일이 스케줄러 5잡·승인자 후보의 입력이 된다. 새 코드에서 `getHireDate() != null`로 온보딩을 판별하지 말 것 — `isOnboardingCompleted()`를 쓴다.
 
 따라서 컨트롤러의 `@PreAuthorize`는 **역할 게이트 전용**이고, 소유권·승인자 식별 검증은 서비스 계층 책임이다.
 
@@ -67,10 +67,11 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 
 ### 스케줄러 (`domain/leave/scheduler`, `domain/leave/service/*GrantService`·`*ResetService`)
 
-`LeaveScheduler`가 매일 00:10 KST에 **① 기산일 리셋 → ② 월차 적립 → ③ 생일 반차 → ④ 연차 소진 안내** 순으로 돈다. 설계·검산은 docs/09.
+`LeaveScheduler`가 매일 00:10 KST에 **① 기산일 리셋 → ② 월차 적립 → ③ 생일 반차 → ④ 연차 소진 안내 → ⑤ 퇴직자 파기** 순으로 돈다. 설계·검산은 docs/09.
 
 - **순서를 바꾸지 말 것** — 취향이 아니라 데이터 의존성이다. 리셋이 `bonus_days`를 갈아 끼우므로 생일 반차가 먼저면 그날 증발하고(생일==기산일인 사원), 월차가 먼저면 1주년에 하루짜리 유령 적립이 남는다
 - **④ 연차 소진 안내가 맨 뒤인 것도 같은 이유다** — 앞 세 잡이 잔액을 바꾸므로 먼저 돌면 안내 메일이 그날 갱신 전 잔여일을 적어 보낸다. 대상·중복 판정은 `LeaveReminderService`가 하고 `leave_reminder_dispatch`의 UNIQUE(user_id, cycle, period_key)가 같은 주기 재발송을 막는다
+- **⑤ 퇴직자 파기도 맨 뒤다** — 앞 네 잡이 다룬 재직자 잔액·안내를 모두 확정한 뒤 퇴직자 입력을 익명화해야 같은 날 로그를 해석하기 쉽다. `AUTO`가 아니면 즉시 종료하고, 자동 모드에서는 30일 예고(`users.purge_notice_sent_at`) 후 파기·결과 NOTICE를 보낸다
 - **사원 1명 = 1트랜잭션**(`REQUIRES_NEW`). `User`에 낙관적 락이 있어 전체를 한 트랜잭션으로 묶으면 1명의 충돌로 전원이 롤백된다. **그래서 사원별 루프가 진입점에 있다** — 서비스가 자기 메서드를 루프로 부르면 Spring 프록시를 안 타 이 경계가 생기지 않는다
 - **리셋의 `carriedUse`는 회차마다 그 회차 기산일로 다시 집계**한다. 최종 기산일 기준으로 한 번에 계산하면 1차 연도 귀속분이 한 회차 일찍 빠져 그 해 이력이 틀린다
 - **채무 계산은 `User.carryOverDebt` 하나뿐이다** — `resetAnnualLeave`와 `LeaveResetHistory.create`가 공유한다. 이력이 자기 식(`advance_days` 직접 차감)을 갖고 있던 것이 실제 결함이었다(기록이 5일 어긋남)
@@ -175,7 +176,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | `docs/05-디자인-가이드.md` | 디자인 토큰·화면 구조 |
 | `docs/07-기능-갭분석.md` | 이전 버전 대비 누락·모순 (코드 주석의 `갭분석 A-1` 등 참조처) |
 | `docs/08-운영-검증-리포트.md` | 실사용 검증 이슈 (코드 주석의 `검증 R-5`, `Y-2` 등 참조처) |
-| `docs/09-스케줄러-설계.md` | 스케줄러 4개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감 |
+| `docs/09-스케줄러-설계.md` | 스케줄러 5개 잡 설계 — 실행 순서·catch-up·미래 승인분 재차감·퇴직자 예고 파기 |
 | `docs/10-코드리뷰-리포트.md` | 코드 리뷰 결과 (코드 주석의 `리뷰 I-1`, `F-3` 등 참조처) |
 | `docs/11-프로젝트-흐름.md` | **전체 흐름 지도** — 요청 경로·연차 잔액 상태 전이·구조. 처음 볼 문서 |
 | `docs/12-남은-작업.md` | **현재 상태와 열려 있는 작업의 단일 원본** — 완료·부분·미구현·우선순위 |

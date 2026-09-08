@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,6 +72,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** AUTO 모드 퇴직자 목록 — 보존 연수가 지난 행만 노출한다. */
     @EntityGraph(attributePaths = {"department"})
     Page<User> findByIsActiveFalseAndRetiredAtLessThanEqual(LocalDate retiredAt, Pageable pageable);
+
+    /** 자동 파기 예고 대상 — 보존기간 만료일이 30일 이내이고 아직 예고하지 않은 퇴직자. */
+    @Query("select u.id from User u where u.isActive = false and u.retiredAt is not null "
+            + "and u.purgedAt is null and u.purgeHoldReason is null "
+            + "and u.purgeNoticeSentAt is null and u.retiredAt <= :retiredAtOnOrBefore order by u.id")
+    List<Long> findIdsForRetireePurgeNotice(
+            @Param("retiredAtOnOrBefore") LocalDate retiredAtOnOrBefore);
+
+    /** 자동 파기 대상 — 보존기간 경과 및 예고 후 30일이 지난 퇴직자. */
+    @Query("select u.id from User u where u.isActive = false and u.retiredAt is not null "
+            + "and u.purgedAt is null and u.purgeHoldReason is null "
+            + "and u.purgeNoticeSentAt is not null and u.purgeNoticeSentAt <= :noticeSentOnOrBefore "
+            + "and u.retiredAt <= :retiredAtOnOrBefore order by u.id")
+    List<Long> findIdsForRetireePurge(
+            @Param("retiredAtOnOrBefore") LocalDate retiredAtOnOrBefore,
+            @Param("noticeSentOnOrBefore") LocalDateTime noticeSentOnOrBefore);
 
     /**
      * 서브 승인자 후보 — 재직 중 TEAM_LEADER·SYSTEM_ADMIN, 본인 제외 (GET /api/users/approvers).

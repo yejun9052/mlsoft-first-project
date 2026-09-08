@@ -224,6 +224,20 @@ public class EmailNotificationPublisher {
                         : "수정한 온보딩이 승인 대기 상태로 다시 접수되었습니다.");
     }
 
+    /** 퇴직자 자동 파기 30일 예고 — 재직 SYSTEM_ADMIN 전원에게 NOTICE로 보낸다. */
+    public void publishRetireePurgeNotice(List<String> targetNames, LocalDate purgeDate) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addSystemAdmins(recipients);
+        publishNoticeMessage(recipients, emailTemplateFactory.createRetireePurgeNotice(targetNames, purgeDate));
+    }
+
+    /** 퇴직자 자동 파기 결과 — 이번 실행에서 파기된 건수를 SYSTEM_ADMIN 전원에게 NOTICE로 보낸다. */
+    public void publishRetireePurgeResult(int purgedCount, LocalDate purgeDate) {
+        Map<Long, Recipient> recipients = new LinkedHashMap<>();
+        addSystemAdmins(recipients);
+        publishNoticeMessage(recipients, emailTemplateFactory.createRetireePurgeResult(purgedCount, purgeDate));
+    }
+
     /**
      * 연차 소진 안내 한 건을 기존 아웃박스에 넣고, 생성된 이력을 호출자에게 돌려준다.
      * 업무 이력(leave_reminder_dispatch)이 같은 트랜잭션에서 이 id를 연결할 수 있도록
@@ -337,6 +351,21 @@ public class EmailNotificationPublisher {
             historyIds.add(history.getId());
         }
 
+        eventPublisher.publishEvent(new EmailDispatchEvent(historyIds));
+    }
+
+    /** 수신자별 차이가 없는 관리자 공지 메일을 아웃박스에 넣는다. */
+    private void publishNoticeMessage(Map<Long, Recipient> recipients, EmailMessage message) {
+        if (recipients.isEmpty()) {
+            return;
+        }
+
+        List<Long> historyIds = new ArrayList<>(recipients.size());
+        for (Recipient recipient : recipients.values()) {
+            EmailHistory history = emailHistoryRepository.save(EmailHistory.create(
+                    recipient.user(), null, EmailType.NOTICE, message.title(), message.content()));
+            historyIds.add(history.getId());
+        }
         eventPublisher.publishEvent(new EmailDispatchEvent(historyIds));
     }
 

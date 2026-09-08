@@ -54,9 +54,9 @@ public class AdminAuditLog extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 조작한 관리자 */
+    /** 조작한 관리자. 자동 파기는 사람이 누른 조작이 아니므로 null이며 API가 시스템으로 표시한다. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "actor_id", nullable = false)
+    @JoinColumn(name = "actor_id")
     private User actor;
 
     /** 조작 종류 — MySQL에서는 네이티브 enum 컬럼으로 생성된다 (다른 이력 테이블과 같다) */

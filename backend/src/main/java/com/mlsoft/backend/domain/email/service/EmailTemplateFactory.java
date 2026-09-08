@@ -9,6 +9,7 @@ import com.mlsoft.backend.domain.email.repository.EmailTemplateRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -132,6 +133,36 @@ public class EmailTemplateFactory {
             case LEAVE_BALANCE_REMINDER -> createReminder(new ReminderTemplateData(
                     data.applicantName(), data.days(), data.dates(), data.reason(), appProperties.frontendUrl()));
         };
+    }
+
+    /** 퇴직자 자동 파기 30일 예고 메일 — EmailType.NOTICE에서 사용한다. */
+    public EmailMessage createRetireePurgeNotice(List<String> targetNames, LocalDate purgeDate) {
+        int count = targetNames.size();
+        String subject = "[퇴직자 파기 예고] " + count + "명이 30일 뒤 파기됩니다";
+        List<Row> rows = List.of(
+                new Row("파기 예정일", purgeDate.toString()),
+                new Row("대상 사원", String.join(", ", targetNames)),
+                new Row("보류 방법", "관리자 화면에서 대상 사원의 파기 보류와 사유를 설정하세요."));
+        return new EmailMessage(
+                subject,
+                administrativeDocument(
+                        "퇴직자 파기 예고",
+                        count + "명이 30일 뒤 파기됩니다.",
+                        rows));
+    }
+
+    /** 퇴직자 자동 파기 결과 메일 — EmailType.NOTICE에서 사용한다. */
+    public EmailMessage createRetireePurgeResult(int purgedCount, LocalDate purgeDate) {
+        String subject = "[퇴직자 파기 결과] " + purgedCount + "명 파기 완료";
+        List<Row> rows = List.of(
+                new Row("파기 건수", purgedCount + "명"),
+                new Row("처리 기준일", purgeDate.toString()));
+        return new EmailMessage(
+                subject,
+                administrativeDocument(
+                        "퇴직자 파기 결과",
+                        purgedCount + "명의 퇴직자 데이터 파기가 완료되었습니다.",
+                        rows));
     }
 
     /**
@@ -408,6 +439,31 @@ public class EmailTemplateFactory {
                 .append("</td></tr>");
 
         return html.append("</table></div>").toString();
+    }
+
+    /** 관리자 정책 알림 카드 — 업무 화면 바로가기 없이 공지 내용을 전달한다. */
+    private String administrativeDocument(String heading, String summary, List<Row> rows) {
+        StringBuilder html = new StringBuilder(1024);
+        html.append("<div style=\"margin:0;padding:24px 12px;background:").append(COLOR_PAGE_BG)
+                .append(";font-family:").append(FONT_STACK).append("\">")
+                .append("<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\" ")
+                .append("style=\"max-width:520px;margin:0 auto;background:").append(COLOR_CARD_BG)
+                .append(";border:1px solid ").append(COLOR_BORDER)
+                .append(";border-radius:12px;border-collapse:separate;overflow:hidden\">")
+                .append("<tr><td style=\"background:").append(COLOR_HEADER_BG)
+                .append(";padding:16px 24px;color:#eaf3ff;font-size:15px;font-weight:700;letter-spacing:-0.2px\">")
+                .append(escape(heading)).append("</td></tr>")
+                .append("<tr><td style=\"padding:24px\">")
+                .append("<p style=\"margin:0 0 18px;font-size:15px;font-weight:700;color:").append(COLOR_TEXT)
+                .append("\">").append(escape(summary)).append("</p>")
+                .append(table(rows))
+                .append("</td></tr>")
+                .append("<tr><td style=\"padding:14px 24px;background:").append(COLOR_FOOTER_BG)
+                .append(";border-top:1px solid ").append(COLOR_BORDER)
+                .append(";color:").append(COLOR_LABEL).append(";font-size:11px\">")
+                .append(escape(FOOTER_NOTE))
+                .append("</td></tr></table></div>");
+        return html.toString();
     }
 
     /** 항목 표 — 라벨/값 2열. 마지막 행만 아래 테두리를 지워 표가 카드 안에서 닫히게 한다 */

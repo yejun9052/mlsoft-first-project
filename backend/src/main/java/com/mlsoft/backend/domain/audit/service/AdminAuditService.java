@@ -62,6 +62,14 @@ public class AdminAuditService {
                 AdminAuditLog.create(actor, AdminAction.USER_PURGED, target, targetLabel, null, "파기 완료"));
     }
 
+    /** 자동 파기 감사 기록 — 사람이 누른 조작이 아니므로 actor_id를 비우고 시스템으로 표시한다. */
+    @Transactional
+    public void recordSystemUserPurged(User target) {
+        String targetLabel = "user_id=" + target.getId();
+        adminAuditLogRepository.save(
+                AdminAuditLog.create(null, AdminAction.USER_PURGED, target, targetLabel, null, "파기 완료"));
+    }
+
     /** 시스템 설정 변경 기록 — 대상 사원이 없고 설정 키가 대상 표시명이 된다 */
     @Transactional
     public void recordConfigChange(Long actorId, String configKey, String beforeValue, String afterValue) {

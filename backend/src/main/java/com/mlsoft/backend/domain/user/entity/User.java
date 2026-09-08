@@ -145,6 +145,10 @@ public class User extends BaseTimeEntity {
     @Column(name = "purge_hold_reason", length = 255)
     private String purgeHoldReason;
 
+    /** 자동 파기 예고 메일을 보낸 시각 — 중복 예고를 막는다. */
+    @Column(name = "purge_notice_sent_at")
+    private LocalDateTime purgeNoticeSentAt;
+
     /** 정보 업데이트 시점 */
     @LastModifiedDate
     @Column(name = "update_at")
@@ -445,6 +449,7 @@ public class User extends BaseTimeEntity {
     public void retire(LocalDate retiredAt) {
         this.isActive = false;
         this.retiredAt = retiredAt;
+        this.purgeNoticeSentAt = null;
     }
 
     /**
@@ -465,11 +470,22 @@ public class User extends BaseTimeEntity {
     /** 파기 보류 설정 — 사유의 공백·필수 검증은 서비스와 요청 DTO가 담당한다. */
     public void placePurgeHold(String reason) {
         this.purgeHoldReason = reason;
+        this.purgeNoticeSentAt = null;
     }
 
     /** 파기 보류 해제. */
     public void releasePurgeHold() {
         this.purgeHoldReason = null;
+    }
+
+    /** 자동 파기 예고 발송 시각을 기록한다. */
+    public void markPurgeNoticeSent(LocalDateTime at) {
+        this.purgeNoticeSentAt = at;
+    }
+
+    /** 대상에서 벗어나면 예고 상태를 초기화한다. */
+    public void clearPurgeNoticeSent() {
+        this.purgeNoticeSentAt = null;
     }
 
     /**
@@ -483,6 +499,7 @@ public class User extends BaseTimeEntity {
     public void restore() {
         this.isActive = true;
         this.retiredAt = null;
+        this.purgeNoticeSentAt = null;
     }
 
     /** 권한 변경 (SYSTEM_ADMIN 전용) */

@@ -1,15 +1,16 @@
 -- ============================================================================
--- 퇴직자 데이터 파기 P1 스키마 보강 (2026-09-08)
+-- 퇴직자 데이터 파기 P1/P4 스키마 보강 (2026-09-08)
 --
 -- 안 돌리면 무엇이 깨지는가:
 --   1) 기존 운영 DB에는 users.purged_at / users.purge_hold_reason이 없어
 --      P2 파기 기능이 해당 컬럼을 읽거나 기록할 때 실패한다.
 --   2) admin_audit_log.action에 USER_PURGED가 없어 첫 파기 감사 로그 INSERT가
 --      MySQL에서 `Data truncated for column 'action'`으로 실패한다.
---   3) ddl-auto: validate는 MySQL ENUM의 값 목록까지 검사하지 않으므로,
+--   3) 자동 파기 예고 중복 방지 컬럼과 시스템 actor 표현이 없어 자동 잡을 실행할 수 없다.
+--   4) ddl-auto: validate는 MySQL ENUM의 값 목록까지 검사하지 않으므로,
 --      애플리케이션 기동만으로는 2번 누락을 발견하지 못한다.
 --
--- 기본 파기 모드는 MANUAL이며 P1에서는 파기 로직을 실행하지 않는다.
+-- 기본 파기 모드는 MANUAL이며 이 파일은 파기 로직을 실행하지 않는다.
 -- 운영 프로필은 ddl-auto: validate이므로 schema.sql은 신규 DB용, 이 파일은
 -- 이미 데이터가 있는 DB용이다. 실행 전 백업: mysqldump mlsoft_leave users admin_audit_log > backup.sql
 --
@@ -36,6 +37,32 @@ SET @ddl := IF(
         AND TABLE_NAME = 'users'
         AND COLUMN_NAME = 'purge_hold_reason') = 0,
     'ALTER TABLE `users` ADD COLUMN `purge_hold_reason` VARCHAR(255) NULL AFTER `purged_at`',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = 'purge_notice_sent_at') = 0,
+    'ALTER TABLE `users` ADD COLUMN `purge_notice_sent_at` DATETIME(6) NULL AFTER `purge_hold_reason`',
+    'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 자동 파기 감사는 사람이 수행한 조작이 아니므로 actor_id를 NULL로 두고 API에서 시스템으로 표시한다.
+SET @ddl := IF(
+    (SELECT COUNT(*)
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'admin_audit_log'
+        AND COLUMN_NAME = 'actor_id'
+        AND IS_NULLABLE = 'NO') > 0,
+    'ALTER TABLE `admin_audit_log` MODIFY COLUMN `actor_id` BIGINT NULL',
     'DO 0');
 PREPARE stmt FROM @ddl;
 EXECUTE stmt;
@@ -138,6 +165,6 @@ DEALLOCATE PREPARE stmt;
 -- SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
 --   FROM information_schema.COLUMNS
 --  WHERE TABLE_SCHEMA = DATABASE()
---    AND ((TABLE_NAME = 'users' AND COLUMN_NAME IN ('purged_at', 'purge_hold_reason'))
---      OR (TABLE_NAME = 'admin_audit_log' AND COLUMN_NAME = 'action'));
+--    AND ((TABLE_NAME = 'users' AND COLUMN_NAME IN ('purged_at', 'purge_hold_reason', 'purge_notice_sent_at'))
+--      OR (TABLE_NAME = 'admin_audit_log' AND COLUMN_NAME IN ('action', 'actor_id')));
 -- admin_audit_log.action COLUMN_TYPE에 USER_PURGED가 있어야 한다.
