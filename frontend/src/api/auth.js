@@ -14,8 +14,9 @@ export async function logout() {
 
 // 최초 온보딩 제출 — 생일·입사일 등록, base_days는 서버가 정책으로 자동 계산 (POST /api/auth/onboarding).
 // 응답의 onboardingStatus가 PENDING_APPROVAL이면 자동 승인 범위를 벗어난 입사일이라 연차가 아직 없다 (리뷰 S-1).
-export async function submitOnboarding({ birthDay, hireDate }) {
-  const res = await api.post('/auth/onboarding', { birthDay, hireDate });
+// jobGrade는 선택 입력 — 직급은 내 정보에서 언제든 다시 바꿀 수 있어 1회 수정권(reviseOnboarding)의 대상이 아니다.
+export async function submitOnboarding({ birthDay, hireDate, jobGrade }) {
+  const res = await api.post('/auth/onboarding', { birthDay, hireDate, jobGrade });
   return res.data.data;
 }
 

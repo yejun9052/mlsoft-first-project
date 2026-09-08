@@ -27,6 +27,7 @@ const ME = {
   email: 'hong@mlsoft.example',
   role: 'EMPLOYEE',
   position: '선임',
+  jobGrade: '선임연구원',
   departmentName: '개발팀',
   hireDate: '2020-01-02',
 };
@@ -198,6 +199,26 @@ describe('MyInfoPage', () => {
     expect(router.state.location.pathname).toBe('/myinfo');
   });
 
+  it('직급이 조회 영역에 보인다', () => {
+    renderPage();
+    expect(screen.getByText('선임연구원')).toBeInTheDocument();
+  });
+
+  it('직급 값이 없으면 미설정으로 표시한다', () => {
+    renderPage({ ...ME, jobGrade: null });
+    expect(screen.getAllByText('미설정')).toHaveLength(1);
+  });
+
+  it('직급만 바꾸고 나가려 해도 붙잡는다', () => {
+    const { router } = renderPage();
+
+    fireEvent.change(screen.getByDisplayValue('선임연구원'), { target: { value: '책임연구원' } });
+    goToDashboard();
+
+    expect(dialogTitle()).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/myinfo');
+  });
+
   it('직책을 이름·생년월일과 함께 저장한다', () => {
     const mutate = vi.fn();
     useUpdateMyProfile.mockReturnValue({ mutate, isPending: false });
@@ -211,9 +232,34 @@ describe('MyInfoPage', () => {
         name: '홍길동',
         birthDay: '1995-03-14',
         position: '책임 연구원',
+        jobGrade: '선임연구원',
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it('직급만 바꿔도 저장 버튼을 누르면 mutation body에 실린다', () => {
+    const mutate = vi.fn();
+    useUpdateMyProfile.mockReturnValue({ mutate, isPending: false });
+    renderPage();
+
+    fireEvent.change(screen.getByDisplayValue('선임연구원'), { target: { value: ' 책임연구원 ' } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        name: '홍길동',
+        birthDay: '1995-03-14',
+        position: '선임',
+        jobGrade: '책임연구원',
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+  });
+
+  it('직급 입력은 50자로 제한된다', () => {
+    renderPage();
+    expect(screen.getByDisplayValue('선임연구원')).toHaveAttribute('maxlength', '50');
   });
 
   it('연도 선택을 바꾸면 개인 기록과 공휴일을 같은 연도로 조회한다', () => {

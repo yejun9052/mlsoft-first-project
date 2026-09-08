@@ -54,6 +54,24 @@ function pendingUser(overrides = {}) {
   };
 }
 
+const 신입사용자 = {
+  id: 2,
+  name: '박신입',
+  role: 'EMPLOYEE',
+  birthDay: null,
+  hireDate: null,
+  onboardingStatus: 'NOT_STARTED',
+  onboardingRevisable: false,
+  onboardingRevised: false,
+};
+
+function notStartedUser(overrides = {}) {
+  return {
+    ...신입사용자,
+    ...overrides,
+  };
+}
+
 /**
  * 실제 useCurrentUser가 사용하는 캐시 키를 채운다.
  * 훅을 고정값으로 모킹하면 수정 응답의 setQueryData가 화면을 바꾸는 계약을 검증할 수 없다.
@@ -241,5 +259,75 @@ describe('OnboardingPage 승인 대기 중 입사일 수정', () => {
     expect(screen.getByText('2019-02-01')).toBeInTheDocument();
     expect(screen.getByText('1995-05-13')).toBeInTheDocument();
     expect(screen.getByText(/이미 사용/)).toBeInTheDocument();
+  });
+});
+
+describe('OnboardingPage 최초 온보딩 제출 — 직급 선택 입력', () => {
+  function fillRequiredFields() {
+    fireEvent.change(screen.getByLabelText('생년월일'), {
+      target: { value: '1995-04-12' },
+    });
+    fireEvent.change(screen.getByLabelText('입사일'), {
+      target: { value: '2026-08-01' },
+    });
+  }
+
+  it('직급을 비워도 제출된다', async () => {
+    submitOnboarding.mockResolvedValue(
+      notStartedUser({
+        birthDay: '1995-04-12',
+        hireDate: '2026-08-01',
+        onboardingStatus: 'COMPLETED',
+      }),
+    );
+
+    renderPage(notStartedUser());
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: '시작하기' }));
+
+    await waitFor(() => {
+      expect(submitOnboarding).toHaveBeenCalledWith({
+        birthDay: '1995-04-12',
+        hireDate: '2026-08-01',
+        jobGrade: null,
+      });
+    });
+  });
+
+  it('직급을 입력하면 제출 body에 실린다', async () => {
+    submitOnboarding.mockResolvedValue(
+      notStartedUser({
+        birthDay: '1995-04-12',
+        hireDate: '2026-08-01',
+        onboardingStatus: 'COMPLETED',
+      }),
+    );
+
+    renderPage(notStartedUser());
+    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText('직급'), {
+      target: { value: ' 선임연구원 ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '시작하기' }));
+
+    await waitFor(() => {
+      expect(submitOnboarding).toHaveBeenCalledWith({
+        birthDay: '1995-04-12',
+        hireDate: '2026-08-01',
+        jobGrade: '선임연구원',
+      });
+    });
+  });
+
+  it('직급 입력은 50자로 제한된다', () => {
+    renderPage(notStartedUser());
+    expect(screen.getByLabelText('직급')).toHaveAttribute('maxlength', '50');
+  });
+
+  it('입사일 수정 화면에는 직급 입력을 표시하지 않는다', () => {
+    renderPage();
+    openRevisionForm();
+
+    expect(screen.queryByLabelText('직급')).not.toBeInTheDocument();
   });
 });

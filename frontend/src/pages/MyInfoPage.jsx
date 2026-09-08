@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { Mail, Building2, CalendarDays, Cake } from 'lucide-react';
+import { Mail, Building2, CalendarDays, Cake, IdCard } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Card from '../components/ui/Card.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -57,7 +57,7 @@ function SummaryRow({ label, value, unit = '일', tone, hero }) {
 }
 
 // 내 정보 — 프로필 / 연차 요약 / 정보 수정 (2컬럼, docs/05 §④)
-// UserMeResponse(GET /api/auth/me)에는 직책·전화번호 필드가 없어(관리자용 UserResponse와 달리 경량 응답)
+// UserMeResponse(GET /api/auth/me)에는 전화번호 필드가 없어(관리자용 UserResponse와 달리 경량 응답)
 // 해당 항목은 화면에서 노출하지 않는다 — 없는 데이터를 다른 API로 우회 보강하지 않는다.
 export default function MyInfoPage() {
   const meQuery = useCurrentUser();
@@ -70,6 +70,7 @@ export default function MyInfoPage() {
   const [name, setName] = useState(me?.name ?? '');
   const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
   const [position, setPosition] = useState(me?.position ?? '');
+  const [jobGrade, setJobGrade] = useState(me?.jobGrade ?? '');
   const [heatmapYear, setHeatmapYear] = useState(dayjs().year());
   const annualUsageQuery = useMyAnnualUsage(heatmapYear);
   const holidaysQuery = useHolidays(heatmapYear);
@@ -78,6 +79,7 @@ export default function MyInfoPage() {
   const savedName = me?.name ?? '';
   const savedBirthDay = me?.birthDay ?? '';
   const savedPosition = me?.position ?? '';
+  const savedJobGrade = me?.jobGrade ?? '';
 
   // 서버 값이 바뀌면 폼을 다시 맞춘다. useState 초기값은 **첫 렌더에 한 번**만 쓰이는데,
   // 위 initialData는 localStorage라 낡아 있을 수 있고(initialDataUpdatedAt: 0이라 매번 재검증한다)
@@ -88,13 +90,17 @@ export default function MyInfoPage() {
     setName(savedName);
     setBirthDay(savedBirthDay);
     setPosition(savedPosition);
-  }, [savedName, savedBirthDay, savedPosition]);
+    setJobGrade(savedJobGrade);
+  }, [savedName, savedBirthDay, savedPosition, savedJobGrade]);
 
   // 저장하지 않고 나가려 할 때 붙잡는다 (연차 정책 화면과 같은 장치).
   // 저장 버튼이 입력칸 바로 아래라 그쪽 같은 "미저장 배지"는 두지 않았다 —
   // 배지는 멀리 있는 버튼을 찾게 하려는 것이고, 여기서는 눈에 이미 들어와 있다.
   const unsavedGuard = useUnsavedGuard(
-    name !== savedName || birthDay !== savedBirthDay || position !== savedPosition,
+    name !== savedName ||
+      birthDay !== savedBirthDay ||
+      position !== savedPosition ||
+      jobGrade !== savedJobGrade,
   );
 
   // 실패를 로딩과 구분한다 — !summary 가드만 있으면 실패 시 스피너가 영원히 돈다 (리뷰 F-6)
@@ -124,7 +130,12 @@ export default function MyInfoPage() {
       return;
     }
     updateProfileMutation.mutate(
-      { name: name.trim(), birthDay, position: position.trim() || null },
+      {
+        name: name.trim(),
+        birthDay,
+        position: position.trim() || null,
+        jobGrade: jobGrade.trim() || null,
+      },
       { onSuccess: () => toast.success('저장되었습니다.') },
     );
   }
@@ -149,6 +160,7 @@ export default function MyInfoPage() {
             <InfoRow Icon={Mail} label="이메일" value={me.email} />
             <InfoRow Icon={Building2} label="부서" value={me.departmentName ?? '미배정'} />
             <InfoRow Icon={Building2} label="직책" value={me.position ?? '미설정'} />
+            <InfoRow Icon={IdCard} label="직급" value={me.jobGrade ?? '미설정'} />
             <InfoRow Icon={CalendarDays} label="입사일" value={me.hireDate} />
             <InfoRow Icon={Cake} label="생년월일" value={me.birthDay} />
           </div>
@@ -207,6 +219,15 @@ export default function MyInfoPage() {
                   onChange={(e) => setPosition(e.target.value)}
                 />
               </Field>
+              <Field label="직급" hint="50자 이내로 입력할 수 있습니다.">
+                <TextInput
+                  type="text"
+                  value={jobGrade}
+                  maxLength={50}
+                  placeholder="예: 과장"
+                  onChange={(e) => setJobGrade(e.target.value)}
+                />
+              </Field>
               <Button type="submit" className="mt-1 self-start" loading={updateProfileMutation.isPending}>
                 저장
               </Button>
@@ -244,7 +265,7 @@ export default function MyInfoPage() {
       <ConfirmDialog
         open={unsavedGuard.blocked}
         title="저장하지 않고 나가시겠습니까?"
-        message="이름·생년월일·직책을 바꿨지만 아직 저장하지 않았습니다. '정보 수정' 카드의 '저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다."
+        message="이름·생년월일·직책·직급을 바꿨지만 아직 저장하지 않았습니다. '정보 수정' 카드의 '저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다."
         tone="danger"
         confirmLabel="그냥 나가기"
         cancelLabel="취소"

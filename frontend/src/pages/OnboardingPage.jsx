@@ -18,8 +18,8 @@ const TODAY = (() => {
   return `${now.getFullYear()}-${month}-${day}`;
 })();
 
-// date input 공통 스타일 (다크 테마 캘린더 아이콘 반전 포함)
-const DATE_INPUT_CLASS =
+// date/text input 공통 스타일 (다크 테마 캘린더 아이콘 반전 포함)
+const INPUT_CLASS =
   'w-full rounded-btn border border-white/[0.15] bg-white/[0.04] px-3.5 py-2.5 text-[14px] text-ink-hi outline-none transition-all placeholder:text-ink-faint focus:border-accent-cyan/60 focus:bg-white/[0.06] focus:ring-2 focus:ring-accent-cyan/15 [color-scheme:dark]';
 
 // 온보딩 — 최초 로그인 시 생일·입사일만 입력, 연차는 서버가 자동 계산 (docs/01 §2-1)
@@ -29,6 +29,7 @@ export default function OnboardingPage() {
   const { data: currentUser } = useCurrentUser();
   const [birthDay, setBirthDay] = useState('');
   const [hireDate, setHireDate] = useState('');
+  const [jobGrade, setJobGrade] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [revising, setRevising] = useState(false);
 
@@ -66,7 +67,7 @@ export default function OnboardingPage() {
     try {
       const data = revising
         ? await reviseOnboarding({ birthDay, hireDate })
-        : await submitOnboarding({ birthDay, hireDate });
+        : await submitOnboarding({ birthDay, hireDate, jobGrade: jobGrade.trim() || null });
 
       storeCurrentUser(data);
 
@@ -221,7 +222,7 @@ export default function OnboardingPage() {
               max={TODAY}
               onChange={(event) => setBirthDay(event.target.value)}
               required
-              className={DATE_INPUT_CLASS}
+              className={INPUT_CLASS}
             />
           </div>
 
@@ -239,12 +240,35 @@ export default function OnboardingPage() {
               max={TODAY}
               onChange={(event) => setHireDate(event.target.value)}
               required
-              className={DATE_INPUT_CLASS}
+              className={INPUT_CLASS}
             />
             <p className="mt-1.5 text-[11px] text-ink-faint">
               연차는 입사일 기준으로 자동 계산됩니다.
             </p>
           </div>
+
+          {!revising && (
+            <div>
+              <label
+                htmlFor="jobGrade"
+                className="mb-1.5 block text-[13px] font-medium text-ink-body"
+              >
+                직급
+              </label>
+              <input
+                id="jobGrade"
+                type="text"
+                value={jobGrade}
+                maxLength={50}
+                placeholder="예: 선임 연구원"
+                onChange={(event) => setJobGrade(event.target.value)}
+                className={INPUT_CLASS}
+              />
+              <p className="mt-1.5 text-[11px] text-ink-faint">
+                선택 입력입니다. 나중에 내 정보에서 바꿀 수 있습니다.
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"
