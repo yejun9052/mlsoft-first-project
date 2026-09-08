@@ -5,6 +5,7 @@ import AdminMembersPage from './AdminMembersPage.jsx';
 import {
   usePlacePurgeHold,
   usePurgeUser,
+  useRehireUser,
   useReleasePurgeHold,
   useRestoreUser,
   useRetiredUsers,
@@ -29,6 +30,7 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 vi.mock('../hooks/useUsers.js', () => ({
   usePlacePurgeHold: vi.fn(),
   usePurgeUser: vi.fn(),
+  useRehireUser: vi.fn(),
   useReleasePurgeHold: vi.fn(),
   useRestoreUser: vi.fn(),
   useRetiredUsers: vi.fn(),
@@ -52,6 +54,7 @@ const roleMutate = vi.fn();
 const deptMutate = vi.fn();
 const roleAndDepartmentMutate = vi.fn();
 const restoreMutate = vi.fn();
+const rehireMutate = vi.fn();
 const purgeMutate = vi.fn();
 const placeHoldMutate = vi.fn();
 const releaseHoldMutate = vi.fn();
@@ -80,6 +83,7 @@ function renderPage(rows = [나, 남], departments = [개발팀, 디자인팀], 
   useUsers.mockReturnValue({ data: { content: rows, page: { totalElements: rows.length } }, isLoading: false, isError: false, refetch: vi.fn() });
   useRetiredUsers.mockReturnValue({ data: { content: retired, page: { totalElements: retired.length } }, isLoading: false, isError: false, refetch: vi.fn() });
   useRestoreUser.mockReturnValue({ mutate: restoreMutate, isPending: false });
+  useRehireUser.mockReturnValue({ mutate: rehireMutate, isPending: false });
   useDepartments.mockReturnValue({ data: departments, isLoading: false });
   usePendingOnboardings.mockReturnValue({ data: { content: [], page: { totalElements: 0 } }, isLoading: false, isError: false, refetch: vi.fn() });
   useApproveOnboarding.mockReturnValue({ mutate: vi.fn(), isPending: false });
@@ -391,6 +395,115 @@ describe('AdminMembersPage 퇴직 복구', () => {
     renderPage();
 
     expect(screen.queryByRole('button', { name: '퇴직 복구' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminMembersPage 재입사 처리', () => {
+  const 퇴직자 = { ...남, name: '최민서', retiredAt: '2026-05-01' };
+  const 파기된자 = {
+    ...남,
+    name: '퇴직사원#999',
+    retiredAt: '2018-01-01',
+    purgedAt: '2026-01-01T00:00:00',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function 퇴직탭(retired = [퇴직자]) {
+    renderPage([나], [개발팀], retired);
+    fireEvent.click(screen.getByRole('button', { name: /^퇴직\d*$/ }));
+  }
+
+  // 이름만으로는 두 버튼이 구분되지 않는다 — 화면이 언제 어느 것을 쓰는지 함께 말해야 한다
+  // (설계-초안 §3, §6, 지시서).
+  it('퇴직 탭에 복구·재입사 두 버튼이 있고 설명이 서로 다르다', () => {
+    퇴직탭();
+
+    expect(screen.getByRole('button', { name: '퇴직 복구' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '재입사 처리' })).toBeInTheDocument();
+    expect(screen.getByText(/착오 처리를 되돌리거나 계속근로로\s*인정할 때 씁니다/)).toBeInTheDocument();
+    expect(screen.getByText(/그만뒀다 다시 입사했을 때 씁니다/)).toBeInTheDocument();
+  });
+
+  it('파기된 행에는 재입사 버튼이 없다', () => {
+    퇴직탭([파기된자]);
+
+    expect(screen.queryByRole('button', { name: '재입사 처리' })).not.toBeInTheDocument();
+    // 복구 버튼은 파기와 무관하게 그대로 남는다 (기존 규칙)
+    expect(screen.getByRole('button', { name: '퇴직 복구' })).toBeInTheDocument();
+  });
+
+  it('재입사일을 비우면 실행 버튼이 잠긴다', () => {
+    퇴직탭();
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    expect(within(dialog).getByRole('button', { name: '재입사 처리' })).toBeDisabled();
+    expect(rehireMutate).not.toHaveBeenCalled();
+  });
+
+  it('퇴직일보다 앞선 재입사일이면 실행이 막히고 이유가 보인다', () => {
+    퇴직탭();
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-04-30' },
+    });
+
+    expect(within(dialog).getByRole('button', { name: '재입사 처리' })).toBeDisabled();
+    expect(within(dialog).getByText(/퇴직일\(2026-05-01\)보다 앞설 수 없습니다/)).toBeInTheDocument();
+    expect(rehireMutate).not.toHaveBeenCalled();
+  });
+
+  it('퇴직일과 재입사일이 같으면 공백 경고가 뜨지만 실행은 막지 않는다', () => {
+    퇴직탭();
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-05-01' },
+    });
+
+    expect(within(dialog).getByText(/공백이 없습니다. 계속근로로 인정해야 하는지 확인하세요/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: '재입사 처리' })).toBeEnabled();
+  });
+
+  it('정상 입력 시 mutation이 올바른 body로 호출된다', () => {
+    퇴직탭();
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-09-08' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사 부서`), {
+      target: { value: '1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '재입사 처리' }));
+
+    expect(rehireMutate).toHaveBeenCalledWith(
+      { id: 퇴직자.id, hireDate: '2026-09-08', departmentId: 1 },
+      expect.anything(),
+    );
+  });
+
+  it('부서를 고르지 않으면 미배정(null)으로 호출된다', () => {
+    퇴직탭();
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-09-08' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '재입사 처리' }));
+
+    expect(rehireMutate).toHaveBeenCalledWith(
+      { id: 퇴직자.id, hireDate: '2026-09-08', departmentId: null },
+      expect.anything(),
+    );
   });
 });
 

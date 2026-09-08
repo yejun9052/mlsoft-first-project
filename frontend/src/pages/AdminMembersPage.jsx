@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Search, UserMinus, UserCheck, Check, X, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
+import {
+  Search,
+  UserMinus,
+  UserCheck,
+  UserPlus,
+  Check,
+  X,
+  Trash2,
+  PauseCircle,
+  PlayCircle,
+} from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
@@ -21,6 +31,7 @@ import Pagination from '../components/ui/Pagination.jsx';
 import {
   usePlacePurgeHold,
   usePurgeUser,
+  useRehireUser,
   useReleasePurgeHold,
   useRestoreUser,
   useRetiredUsers,
@@ -190,6 +201,7 @@ export default function AdminMembersPage() {
   const updateRoleAndDepartmentMutation = useUpdateUserRoleAndDepartment();
   const retireMutation = useRetireUser();
   const restoreMutation = useRestoreUser();
+  const rehireMutation = useRehireUser();
   const purgeMutation = usePurgeUser();
   const placeHoldMutation = usePlacePurgeHold();
   const releaseHoldMutation = useReleasePurgeHold();
@@ -204,6 +216,9 @@ export default function AdminMembersPage() {
   const [retireTarget, setRetireTarget] = useState(null);
   // 퇴직 복구 확인 — 되살아나지 않는 것이 있어 그대로 실행하지 않는다 (아래 다이얼로그 문구)
   const [restoreTarget, setRestoreTarget] = useState(null);
+  // 재입사 처리 — 퇴직 복구와 달리 근속을 새로 시작한다. 재입사일(필수)·부서를 폼에서 받는다
+  // (설계-초안/재입사자-처리-설계-2026-09-07 §6). { user, hireDate, departmentId }
+  const [rehireTarget, setRehireTarget] = useState(null);
   // 파기 확인 — 되돌릴 수 없으므로 이름을 직접 입력해야 실행 버튼이 열린다 (설계 §7)
   const [purgeTarget, setPurgeTarget] = useState(null);
   const [purgeNameInput, setPurgeNameInput] = useState('');
@@ -329,6 +344,31 @@ export default function AdminMembersPage() {
       onSuccess: () => toast.success(`${restoreTarget.name}님을 재직 상태로 복구했습니다.`),
     });
     setRestoreTarget(null);
+  }
+
+  function openRehire(user) {
+    setRehireTarget({ user, hireDate: '', departmentId: '' });
+  }
+  function closeRehireConfirm() {
+    setRehireTarget(null);
+  }
+  // 재입사일이 퇴직일보다 앞서면 서버도 REHIRE_DATE_BEFORE_RETIREMENT로 막지만, 제출 후에야
+  // 알게 하지 않으려고 모달에서 먼저 막는다 (지시서). 문자열 비교로 충분하다 — 둘 다 'YYYY-MM-DD'.
+  const rehireDateBeforeRetirement =
+    Boolean(rehireTarget?.hireDate) && rehireTarget.hireDate < rehireTarget.user.retiredAt;
+  // 퇴직일과 재입사일이 같으면 공백이 없다 — 계속근로 인정 대상일 수 있어 경고만 하고 막지는
+  // 않는다 (설계 §8). 판단은 회사가 한다.
+  const rehireNoGap =
+    Boolean(rehireTarget?.hireDate) && rehireTarget.hireDate === rehireTarget.user.retiredAt;
+
+  function handleRehireConfirm() {
+    if (!rehireTarget || !rehireTarget.hireDate || rehireDateBeforeRetirement) return;
+    const { user, hireDate, departmentId } = rehireTarget;
+    rehireMutation.mutate(
+      { id: user.id, hireDate, departmentId: departmentId ? Number(departmentId) : null },
+      { onSuccess: () => toast.success(`${user.name}님을 재입사 처리했습니다.`) },
+    );
+    setRehireTarget(null);
   }
 
   function closeRetireConfirm() {
@@ -525,6 +565,16 @@ export default function AdminMembersPage() {
         </div>
       )}
 
+      {/* 퇴직 탭의 두 처리 버튼 안내 — 이름만으로는 구분이 안 된다 (설계-초안 §3, §6) */}
+      {tab === TAB_RETIRED && (
+        <p className="mb-4 text-[13px] leading-relaxed text-ink-mute">
+          <strong className="text-ink-body">퇴직 복구</strong>는 착오 처리를 되돌리거나 계속근로로
+          인정할 때 씁니다 — 연차·기산일이 그대로 이어집니다.{' '}
+          <strong className="text-ink-body">재입사 처리</strong>는 그만뒀다 다시 입사했을 때 씁니다 —
+          연차가 0부터 다시 시작합니다.
+        </p>
+      )}
+
       {/* 테이블 카드 (재직·퇴직) — 온보딩 승인 탭은 위에서 자체 표를 렌더한다 */}
       {tab !== TAB_ONBOARDING && (
       <TableCard
@@ -658,6 +708,17 @@ export default function AdminMembersPage() {
                           tone="accent"
                           onClick={() => setRestoreTarget(m)}
                         />
+                        {/* 파기된 사원은 이메일이 바뀌어 신규 가입으로 들어오므로 재입사 대상이
+                            아니다 — 서버도 ALREADY_PURGED로 막지만, 애초에 버튼을 보여주지 않는다
+                            (지시서, 설계 §7) */}
+                        {!m.purgedAt && (
+                          <IconButton
+                            Icon={UserPlus}
+                            label="재입사 처리"
+                            tone="muted"
+                            onClick={() => openRehire(m)}
+                          />
+                        )}
                         {/* 파기된 행은 파기·보류 버튼이 완전히 사라진다 — 더 이상 조작할 개인정보가
                             없다. 보류된 행은 파기 버튼이 없어지는 게 아니라 잠긴다 — 보류 사유가
                             남아 있다는 것 자체가 "지금은 안 된다"는 신호이기 때문이다 */}
@@ -782,6 +843,76 @@ export default function AdminMembersPage() {
         onConfirm={handleRestoreConfirm}
         onCancel={() => setRestoreTarget(null)}
       />
+
+      {/* 재입사 처리 확인 — 퇴직 복구와 달리 근속을 새로 시작한다. 재입사일(필수)·부서를 받고
+          적용 결과를 그대로 보여준다 (설계-초안 §6). 역할·직책은 승계하지 않으므로 그 사실도 밝힌다 */}
+      <ConfirmDialog
+        open={Boolean(rehireTarget)}
+        title="재입사 처리"
+        message={
+          rehireTarget &&
+          `${rehireTarget.user.name}님을 재입사 처리합니다. 이전 근속의 진행 중인 신청은 취소되고, 승인된 신청은 이력으로 남습니다.`
+        }
+        confirmLabel="재입사 처리"
+        confirmDisabled={
+          !rehireTarget || !rehireTarget.hireDate || rehireDateBeforeRetirement
+        }
+        loading={rehireMutation.isPending}
+        onConfirm={handleRehireConfirm}
+        onCancel={closeRehireConfirm}
+      >
+        {rehireTarget && (
+          <div className="mt-4 space-y-4">
+            <Field label="재입사일" required error={rehireDateBeforeRetirement ? `퇴직일(${rehireTarget.user.retiredAt})보다 앞설 수 없습니다.` : null}>
+              <TextInput
+                type="date"
+                aria-label={`${rehireTarget.user.name}님의 재입사일`}
+                value={rehireTarget.hireDate}
+                invalid={rehireDateBeforeRetirement}
+                onChange={(e) =>
+                  setRehireTarget((target) => ({ ...target, hireDate: e.target.value }))
+                }
+              />
+            </Field>
+            {rehireNoGap && (
+              <p className="text-[12px] leading-relaxed text-warn">
+                공백이 없습니다. 계속근로로 인정해야 하는지 확인하세요.
+              </p>
+            )}
+            <Field label="부서" hint="지정하지 않으면 미배정으로 등록됩니다.">
+              <Select
+                aria-label={`${rehireTarget.user.name}님의 재입사 부서`}
+                value={rehireTarget.departmentId}
+                onChange={(e) =>
+                  setRehireTarget((target) => ({ ...target, departmentId: e.target.value }))
+                }
+              >
+                <option value="">미배정</option>
+                {orderByHierarchy(activeDepartments).map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {departmentOptionLabel(department)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {rehireTarget.hireDate && !rehireDateBeforeRetirement && (
+              <div className="rounded-btn border border-white/[0.12] bg-white/[0.03] p-3 text-[12px] leading-relaxed text-ink-body">
+                <p>
+                  역할 {ROLE_LABEL[rehireTarget.user.role]} → {ROLE_LABEL[ROLE.EMPLOYEE]}
+                  <span className="text-ink-faint"> (관리자가 다시 지정해야 합니다)</span>
+                </p>
+                <p className="mt-1">
+                  직책 {rehireTarget.user.position ?? '-'} → <span className="text-ink-faint">(비움)</span>
+                </p>
+                <p className="mt-1">
+                  연차 {Number(rehireTarget.user.remainingDays)}/{Number(rehireTarget.user.baseDays)} → 0/0, 기산일{' '}
+                  {rehireTarget.hireDate}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </ConfirmDialog>
 
       {/* 퇴직 처리 확인 — 되돌릴 수 없는 작업이라 ConfirmDialog로 한 번 더 확인 */}
       <ConfirmDialog

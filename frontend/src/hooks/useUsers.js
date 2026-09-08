@@ -7,6 +7,7 @@ import {
   getUsers,
   placePurgeHold,
   purgeUser,
+  rehireUser,
   releasePurgeHold,
   restoreUser,
   retireUser,
@@ -163,6 +164,22 @@ export function useRestoreUser() {
     mutationFn: restoreUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+}
+
+// 재입사 처리 뮤테이션 — 퇴직 복구와 달리 근속을 새로 시작한다 (POST /api/users/{id}/rehire).
+// 서버가 이전 근속의 살아 있는 신청을 취소하고 부서·결재선도 새로 배정하므로 무효화 범위가
+// 퇴직 처리와 같다(F-5) — 재직·퇴직 목록, 결재함, 부서 목록이 함께 낡는다.
+export function useRehireUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hireDate, departmentId }) => rehireUser(id, { hireDate, departmentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['welfare'] });
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
     },
   });
 }

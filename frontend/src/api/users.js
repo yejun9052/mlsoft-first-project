@@ -77,6 +77,14 @@ export async function restoreUser(id) {
   return res.data.data;
 }
 
+// 재입사 처리 — 퇴직 복구와 달리 이전 근속을 종료하고 재입사일부터 연차를 0으로 다시 시작한다
+// (POST /api/users/{id}/rehire, SYSTEM_ADMIN 전용). 역할·직책은 승계하지 않는다(설계-초안 §4).
+// departmentId를 비우면 미배정으로 등록된다.
+export async function rehireUser(id, { hireDate, departmentId }) {
+  const res = await api.post(`/users/${id}/rehire`, { hireDate, departmentId: departmentId || null });
+  return res.data.data;
+}
+
 // 퇴직자 개인정보 수동 파기 — 되돌릴 수 없다 (POST /api/users/{id}/purge, SYSTEM_ADMIN 전용).
 // 3년 미만이면 PURGE_RETENTION_NOT_MET, 보류 중이면 PURGE_ON_HOLD, 이미 파기됐으면 ALREADY_PURGED.
 export async function purgeUser(id) {
