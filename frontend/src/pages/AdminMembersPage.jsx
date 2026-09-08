@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { Search, UserMinus, UserCheck, Check, X } from 'lucide-react';
+import { Search, UserMinus, UserCheck, Check, X, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { ROLE, ROLE_LABEL } from '../constants/roles.js';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import Tabs from '../components/ui/Tabs.jsx';
 import FilterGroup from '../components/ui/FilterGroup.jsx';
 import Chip from '../components/ui/Chip.jsx';
 import TextInput from '../components/ui/TextInput.jsx';
+import Textarea from '../components/ui/Textarea.jsx';
 import TableCard from '../components/ui/TableCard.jsx';
 import Table, { THead, Th, TR, Td } from '../components/ui/Table.jsx';
 import Avatar from '../components/ui/Avatar.jsx';
@@ -19,6 +19,9 @@ import Field from '../components/ui/Field.jsx';
 import Select from '../components/ui/Select.jsx';
 import Pagination from '../components/ui/Pagination.jsx';
 import {
+  usePlacePurgeHold,
+  usePurgeUser,
+  useReleasePurgeHold,
   useRestoreUser,
   useRetiredUsers,
   useRetireUser,
@@ -61,11 +64,20 @@ function roleTone(role) {
   return role === ROLE.EMPLOYEE ? 'muted' : 'accent';
 }
 
-// 퇴직일 원문은 유지하고 경과일만 덧붙인다 — 날짜 자체를 상대 표현으로 바꾸면 감사 시점을 잃는다.
-function formatRetiredAt(retiredAt) {
+// 퇴직일 원문은 유지하고 경과 기간만 덧붙인다 — 날짜 자체를 상대 표현으로 바꾸면 감사 시점을 잃는다.
+// 경과 연·월은 서버가 계산해 내려준다 (UserResponse.elapsedYears/elapsedMonths) — 파기 가능 여부
+// 판정과 같은 기준을 써야 하므로 클라이언트에서 dayjs로 다시 세지 않는다.
+function formatRetiredAt(retiredAt, elapsedYears, elapsedMonths) {
   if (!retiredAt) return '-';
-  const elapsedDays = Math.max(0, dayjs().startOf('day').diff(dayjs(retiredAt), 'day'));
-  return `${retiredAt} (${elapsedDays}일 전)`;
+  return `${retiredAt} (${formatElapsedPeriod(elapsedYears, elapsedMonths)})`;
+}
+
+// "2년 4개월" 형태 — 연차가 0이면 개월만, 둘 다 0이면 퇴직 당일이므로 "0개월"
+function formatElapsedPeriod(years, months) {
+  const y = years || 0;
+  const m = months || 0;
+  if (y === 0 && m === 0) return '0개월';
+  return [y > 0 ? `${y}년` : null, m > 0 ? `${m}개월` : null].filter(Boolean).join(' ');
 }
 
 /**
@@ -155,6 +167,11 @@ export default function AdminMembersPage() {
     size: PAGE_SIZE,
   });
   const retiredQuery = useRetiredUsers({ page: retiredPage, size: PAGE_SIZE });
+  // 파기 대상 배지는 표시 중인 페이지가 아니라 퇴직자 전체를 기준으로 세야 한다 — 목록이
+  // PAGE_SIZE(10)씩 페이징되므로 현재 페이지만 세면 뒤 페이지의 대상자를 놓친다. 그래서 표시용
+  // retiredQuery와 별도로, 배지 계산 전용으로 넓게 한 번 더 받는다(leaderCandidates와 같은 이유로
+  // 상한 100까지만 정확하다).
+  const purgeTargetCountQuery = useRetiredUsers({ page: 0, size: 100 });
   const departmentsQuery = useDepartments();
   // 온보딩 승인 대기 — 배지에 항상 건수를 띄워야 관리자가 잠긴 계정을 놓치지 않는다 (리뷰 S-1)
   const onboardingQuery = usePendingOnboardings({ page: onboardingPage, size: PAGE_SIZE });
@@ -173,6 +190,9 @@ export default function AdminMembersPage() {
   const updateRoleAndDepartmentMutation = useUpdateUserRoleAndDepartment();
   const retireMutation = useRetireUser();
   const restoreMutation = useRestoreUser();
+  const purgeMutation = usePurgeUser();
+  const placeHoldMutation = usePlacePurgeHold();
+  const releaseHoldMutation = useReleasePurgeHold();
 
   // 표에서 고치는 중인 셀 하나 — { id, field, value }.
   // 이걸 두는 이유는 낙관적 갱신이 아니라 **저장 중 표시**다. 서버가 거부하면(마지막 관리자 강등 등)
@@ -184,6 +204,12 @@ export default function AdminMembersPage() {
   const [retireTarget, setRetireTarget] = useState(null);
   // 퇴직 복구 확인 — 되살아나지 않는 것이 있어 그대로 실행하지 않는다 (아래 다이얼로그 문구)
   const [restoreTarget, setRestoreTarget] = useState(null);
+  // 파기 확인 — 되돌릴 수 없으므로 이름을 직접 입력해야 실행 버튼이 열린다 (설계 §7)
+  const [purgeTarget, setPurgeTarget] = useState(null);
+  const [purgeNameInput, setPurgeNameInput] = useState('');
+  // 파기 보류 — 사유 입력을 받는다 (설계 §3, 사유 없는 보류는 잊혀진 데이터가 된다)
+  const [holdTarget, setHoldTarget] = useState(null);
+  const [holdReasonInput, setHoldReasonInput] = useState('');
 
   const { data: currentUser } = useCurrentUser();
 
@@ -316,6 +342,40 @@ export default function AdminMembersPage() {
     closeRetireConfirm();
   }
 
+  function closePurgeConfirm() {
+    setPurgeTarget(null);
+    setPurgeNameInput('');
+  }
+  // 이름을 정확히 입력해야만 실행된다 — 파기는 되돌릴 수 없어 확인만으로는 부족하다 (설계 §7)
+  function handlePurgeConfirm() {
+    if (!purgeTarget || purgeNameInput !== purgeTarget.name) return;
+    const target = purgeTarget;
+    purgeMutation.mutate(target.id, {
+      onSuccess: () => toast.success(`${target.name}님의 개인정보를 파기했습니다.`),
+    });
+    closePurgeConfirm();
+  }
+
+  function closeHoldConfirm() {
+    setHoldTarget(null);
+    setHoldReasonInput('');
+  }
+  function handleHoldConfirm() {
+    if (!holdTarget || !holdReasonInput.trim()) return;
+    const target = holdTarget;
+    placeHoldMutation.mutate(
+      { id: target.id, reason: holdReasonInput.trim() },
+      { onSuccess: () => toast.success(`${target.name}님의 파기를 보류했습니다.`) },
+    );
+    closeHoldConfirm();
+  }
+
+  function handleReleaseHold(user) {
+    releaseHoldMutation.mutate(user.id, {
+      onSuccess: () => toast.success(`${user.name}님의 파기 보류를 해제했습니다.`),
+    });
+  }
+
   // 온보딩 승인/반려 — 승인은 그 시점에 연차를 부여하므로 되돌리기 어렵다. 확인 다이얼로그를 거친다
   const [onboardingTarget, setOnboardingTarget] = useState(null);
 
@@ -335,9 +395,15 @@ export default function AdminMembersPage() {
   }
 
   const onboardingRows = onboardingQuery.data?.content ?? [];
+  // 파기 대상 건수 — 수동 모드에서는 스케줄러가 없어 관리자가 직접 알아채야 한다.
+  // 유일한 알림 수단이 이 배지이므로 탭 라벨에 붙인다 (설계 §5, §7).
+  const purgeTargetCount = (purgeTargetCountQuery.data?.content ?? []).filter(
+    (u) => u.purgeEligible,
+  ).length;
+  const retiredTabLabel = purgeTargetCount > 0 ? `퇴직 · 파기대상 ${purgeTargetCount}` : '퇴직';
   const tabItems = [
     { value: TAB_ACTIVE, label: '재직', count: activeQuery.data?.page?.totalElements },
-    { value: TAB_RETIRED, label: '퇴직', count: retiredQuery.data?.page?.totalElements },
+    { value: TAB_RETIRED, label: retiredTabLabel, count: retiredQuery.data?.page?.totalElements },
     {
       value: TAB_ONBOARDING,
       label: '온보딩 승인',
@@ -491,6 +557,8 @@ export default function AdminMembersPage() {
             {rows.map((m) => (
               <TR key={m.id}>
                 <Td>
+                  {/* 파기된 행의 이름은 서버가 이미 "퇴직사원#id"로 익명화해 내려준다 (설계 §4,
+                      User.purge()) — 화면은 값을 그대로 보여줄 뿐 따로 가공하지 않는다 */}
                   <div className="flex items-center gap-3">
                     <Avatar name={m.name} />
                     <span className="font-medium text-ink-hi">{m.name}</span>
@@ -521,7 +589,7 @@ export default function AdminMembersPage() {
                     (m.departmentName ?? '미배정')
                   )}
                 </Td>
-                <Td className="text-ink-body">{m.position}</Td>
+                <Td className="text-ink-body">{m.position ?? '-'}</Td>
                 <Td>
                   {tab === TAB_ACTIVE ? (
                     <InlineSelect
@@ -538,14 +606,18 @@ export default function AdminMembersPage() {
                       ))}
                     </InlineSelect>
                   ) : (
-                    <StatusBadge label="퇴직" tone="muted" />
+                    // 파기·보류 상태를 배지로 한 번 더 드러낸다 — 사유는 퇴직일 칸에 따로 적는다
+                    <StatusBadge
+                      label={m.purgedAt ? '파기완료' : m.purgeHoldReason ? '보류' : '퇴직'}
+                      tone={m.purgedAt ? 'muted' : m.purgeHoldReason ? 'warn' : 'muted'}
+                    />
                   )}
                 </Td>
                 <Td right>
                   <span className="font-semibold text-ink-hi">{Number(m.remainingDays)}</span>
                   <span className="text-ink-faint"> / {Number(m.baseDays)}일</span>
                 </Td>
-                <Td className="text-ink-mute">{m.hireDate}</Td>
+                <Td className="text-ink-mute">{m.hireDate ?? '-'}</Td>
                 {tab === TAB_ACTIVE ? (
                   <Td right>
                     <div className="flex items-center justify-end gap-1">
@@ -569,9 +641,15 @@ export default function AdminMembersPage() {
                   </Td>
                 ) : (
                   <>
-                    <Td className="text-ink-mute">{formatRetiredAt(m.retiredAt)}</Td>
+                    <Td className="text-ink-mute">
+                      {formatRetiredAt(m.retiredAt, m.elapsedYears, m.elapsedMonths)}
+                      {/* 보류된 행은 사유를 함께 보여준다 — 사유 없는 보류는 잊혀진 데이터가 된다 (설계 §3) */}
+                      {m.purgeHoldReason && (
+                        <div className="mt-1 text-[11px] text-warn">보류: {m.purgeHoldReason}</div>
+                      )}
+                    </Td>
                     <Td right>
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-end gap-1">
                         {/* 복구는 되살리는 조작이라 accent(시안)다 — 퇴직 처리의 danger와 방향이 반대인 것이
                             색으로 보여야 옆자리를 잘못 누르지 않는다 */}
                         <IconButton
@@ -580,6 +658,42 @@ export default function AdminMembersPage() {
                           tone="accent"
                           onClick={() => setRestoreTarget(m)}
                         />
+                        {/* 파기된 행은 파기·보류 버튼이 완전히 사라진다 — 더 이상 조작할 개인정보가
+                            없다. 보류된 행은 파기 버튼이 없어지는 게 아니라 잠긴다 — 보류 사유가
+                            남아 있다는 것 자체가 "지금은 안 된다"는 신호이기 때문이다 */}
+                        {!m.purgedAt && (
+                          <>
+                            {m.purgeHoldReason ? (
+                              <IconButton
+                                Icon={PlayCircle}
+                                label="파기 보류 해제"
+                                tone="accent"
+                                disabled={releaseHoldMutation.isPending}
+                                onClick={() => handleReleaseHold(m)}
+                              />
+                            ) : (
+                              <IconButton
+                                Icon={PauseCircle}
+                                label="파기 보류"
+                                tone="muted"
+                                onClick={() => setHoldTarget(m)}
+                              />
+                            )}
+                            <IconButton
+                              Icon={Trash2}
+                              label={
+                                m.purgeEligible
+                                  ? '파기'
+                                  : m.purgeHoldReason
+                                    ? '파기 보류 상태입니다. 보류를 해제한 뒤 다시 시도해주세요.'
+                                    : '퇴직 후 3년이 지나야 파기할 수 있습니다.'
+                              }
+                              tone="danger"
+                              disabled={!m.purgeEligible}
+                              onClick={() => setPurgeTarget(m)}
+                            />
+                          </>
+                        )}
                       </div>
                     </Td>
                   </>
@@ -683,6 +797,68 @@ export default function AdminMembersPage() {
         onCancel={closeRetireConfirm}
         loading={retireMutation.isPending}
       />
+
+      {/* 파기 확인 — 되돌릴 수 없으므로 확인만으로는 실행하지 않는다. 이름을 정확히 입력해야
+          실행 버튼이 열린다 (설계 §7). 무엇이 사라지고 무엇이 남는지도 그대로 적는다 (설계 §4) */}
+      <ConfirmDialog
+        open={Boolean(purgeTarget)}
+        title="퇴직자 개인정보 파기"
+        message={purgeTarget && `${purgeTarget.name}님의 개인정보를 파기합니다.`}
+        tone="danger"
+        confirmLabel="파기"
+        confirmDisabled={!purgeTarget || purgeNameInput !== purgeTarget.name}
+        loading={purgeMutation.isPending}
+        onConfirm={handlePurgeConfirm}
+        onCancel={closePurgeConfirm}
+      >
+        {purgeTarget && (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-btn border border-danger/30 bg-danger/[0.06] p-3 text-[12px] leading-relaxed text-ink-body">
+              <p>
+                <span className="font-semibold text-danger">사라집니다</span> — 이름·이메일·생일·입사일,
+                연차/복리후생 사유, 발송된 메일 본문
+              </p>
+              <p className="mt-1.5">
+                <span className="font-semibold text-ink-hi">남습니다</span> — 연차 사용 통계, 결재 이력,
+                관리자 처리 기록
+              </p>
+              <p className="mt-1.5 font-semibold text-danger">되돌릴 수 없습니다.</p>
+            </div>
+            <Field label={`확인을 위해 "${purgeTarget.name}"을(를) 입력해 주세요`} required>
+              <TextInput
+                aria-label={`${purgeTarget.name}님 이름 확인`}
+                value={purgeNameInput}
+                onChange={(e) => setPurgeNameInput(e.target.value)}
+                placeholder={purgeTarget.name}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+        )}
+      </ConfirmDialog>
+
+      {/* 파기 보류 — 사유를 반드시 받는다. 사유 없는 보류는 잊혀진 데이터가 된다 (설계 §3) */}
+      <ConfirmDialog
+        open={Boolean(holdTarget)}
+        title="파기 보류"
+        message={holdTarget && `${holdTarget.name}님의 개인정보 파기를 보류합니다.`}
+        confirmLabel="보류"
+        confirmDisabled={!holdReasonInput.trim()}
+        loading={placeHoldMutation.isPending}
+        onConfirm={handleHoldConfirm}
+        onCancel={closeHoldConfirm}
+      >
+        {holdTarget && (
+          <Field className="mt-4" label="보류 사유" required>
+            <Textarea
+              aria-label={`${holdTarget.name}님의 파기 보류 사유`}
+              value={holdReasonInput}
+              onChange={(e) => setHoldReasonInput(e.target.value)}
+              placeholder="예: 재입사 예정, 분쟁 진행 중"
+            />
+          </Field>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

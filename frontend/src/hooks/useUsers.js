@@ -5,6 +5,9 @@ import {
   getRetiredUsers,
   getTeamMembers,
   getUsers,
+  placePurgeHold,
+  purgeUser,
+  releasePurgeHold,
   restoreUser,
   retireUser,
   updateMyProfile,
@@ -161,5 +164,33 @@ export function useRestoreUser() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
+  });
+}
+
+// 퇴직자 개인정보 수동 파기 뮤테이션 (POST /api/users/{id}/purge). 퇴직 목록의 파기 상태·배지가
+// 함께 바뀌므로 'users' 접두사로 무효화하면 충분하다 — 재직 목록은 대상이 아니라 영향이 없다.
+export function usePurgeUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: purgeUser,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+// 퇴직자 개인정보 파기 보류 설정 뮤테이션 (POST /api/users/{id}/purge-hold, 사유 필수)
+export function usePlacePurgeHold() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }) => placePurgeHold(id, { reason }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  });
+}
+
+// 퇴직자 개인정보 파기 보류 해제 뮤테이션 (DELETE /api/users/{id}/purge-hold)
+export function useReleasePurgeHold() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: releasePurgeHold,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
 }

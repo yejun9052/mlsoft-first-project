@@ -3,6 +3,9 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import AdminMembersPage from './AdminMembersPage.jsx';
 import {
+  usePlacePurgeHold,
+  usePurgeUser,
+  useReleasePurgeHold,
   useRestoreUser,
   useRetiredUsers,
   useRetireUser,
@@ -24,6 +27,9 @@ import {
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 vi.mock('../hooks/useUsers.js', () => ({
+  usePlacePurgeHold: vi.fn(),
+  usePurgeUser: vi.fn(),
+  useReleasePurgeHold: vi.fn(),
   useRestoreUser: vi.fn(),
   useRetiredUsers: vi.fn(),
   useRetireUser: vi.fn(),
@@ -46,6 +52,9 @@ const roleMutate = vi.fn();
 const deptMutate = vi.fn();
 const roleAndDepartmentMutate = vi.fn();
 const restoreMutate = vi.fn();
+const purgeMutate = vi.fn();
+const placeHoldMutate = vi.fn();
+const releaseHoldMutate = vi.fn();
 
 const 개발팀 = { id: 1, name: '개발팀', parentId: null, active: true, unassigned: false };
 const 디자인팀 = { id: 2, name: '디자인팀', parentId: null, active: true, unassigned: false };
@@ -82,6 +91,9 @@ function renderPage(rows = [나, 남], departments = [개발팀, 디자인팀], 
     isPending: false,
   });
   useRetireUser.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  usePurgeUser.mockReturnValue({ mutate: purgeMutate, isPending: false });
+  usePlacePurgeHold.mockReturnValue({ mutate: placeHoldMutate, isPending: false });
+  useReleasePurgeHold.mockReturnValue({ mutate: releaseHoldMutate, isPending: false });
   useCurrentUser.mockReturnValue({ data: { id: 나.id } });
 
   // 앱이 데이터 라우터를 사용하므로 실제 라우팅 컨텍스트와 같은 방식으로 렌더한다.
@@ -347,18 +359,12 @@ describe('AdminMembersPage 퇴직 복구', () => {
     expect(screen.getByRole('button', { name: '퇴직 복구' })).toBeInTheDocument();
   });
 
-  // 경과일수는 "오늘"에 의존한다. 고정하지 않으면 **내일 이 검증이 깨진다** —
-  // Codex 초안이 109일을 그대로 박아 뒀다(2026-08-20 기준).
-  it('퇴직일과 오늘 사이의 경과일수를 함께 보여준다', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-20T09:00:00+09:00'));
-    try {
-      퇴직탭([{ ...퇴직자, retiredAt: '2026-05-03' }]);
+  // 경과 기간은 서버가 계산해 내려준다(UserResponse.elapsedYears/elapsedMonths) — 파기 가능
+  // 여부 판정과 같은 기준을 써야 하므로 화면이 dayjs로 다시 세지 않는다.
+  it('퇴직일과 오늘 사이의 경과 기간을 "N년 N개월" 형태로 함께 보여준다', () => {
+    퇴직탭([{ ...퇴직자, retiredAt: '2026-05-03', elapsedYears: 0, elapsedMonths: 3 }]);
 
-      expect(screen.getByText('2026-05-03 (109일 전)')).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(screen.getByText('2026-05-03 (3개월)')).toBeInTheDocument();
   });
 
   // 복구는 퇴직의 완전한 역연산이 아니다. "퇴직을 취소한다"고만 읽으면 관리자는 팀장직과
@@ -385,5 +391,171 @@ describe('AdminMembersPage 퇴직 복구', () => {
     renderPage();
 
     expect(screen.queryByRole('button', { name: '퇴직 복구' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminMembersPage 퇴직자 파기', () => {
+  // 3년 이상 지나 파기할 수 있는 사람 — purgeEligible은 서버가 보존 기간·보류·파기 여부를
+  // 모두 반영해 계산해 내려주므로(UserService.toRetiredResponse) 화면은 이 값 하나만 본다.
+  const 파기가능자 = {
+    ...남,
+    id: 301,
+    name: '김파기',
+    retiredAt: '2020-01-01',
+    elapsedYears: 6,
+    elapsedMonths: 8,
+    purgedAt: null,
+    purgeHoldReason: null,
+    purgeEligible: true,
+  };
+  const 파기미달자 = {
+    ...남,
+    id: 302,
+    name: '이미달',
+    retiredAt: '2026-01-01',
+    elapsedYears: 0,
+    elapsedMonths: 8,
+    purgedAt: null,
+    purgeHoldReason: null,
+    purgeEligible: false,
+  };
+  const 보류자 = {
+    ...남,
+    id: 303,
+    name: '박보류',
+    retiredAt: '2019-01-01',
+    elapsedYears: 7,
+    elapsedMonths: 8,
+    purgedAt: null,
+    purgeHoldReason: '재입사 예정',
+    purgeEligible: false,
+  };
+  const 파기된자 = {
+    ...남,
+    id: 304,
+    name: '퇴직사원#304',
+    email: 'deleted-304@invalid',
+    position: null,
+    hireDate: null,
+    retiredAt: '2018-01-01',
+    elapsedYears: 8,
+    elapsedMonths: 8,
+    purgedAt: '2026-01-01T00:00:00',
+    purgeHoldReason: null,
+    purgeEligible: false,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // 라벨에 파기 대상 배지가 붙으면 접근성 이름이 "퇴직 · 파기대상 N..."으로 늘어나므로
+  // 다른 describe의 `/^퇴직\d*$/`처럼 끝까지 고정하지 않고 시작만 맞춘다.
+  function 퇴직탭(retired) {
+    renderPage([나], [개발팀], retired);
+    fireEvent.click(screen.getByRole('button', { name: /^퇴직/ }));
+  }
+
+  it('3년 미만 행의 파기 버튼이 비활성이고 사유가 보인다', () => {
+    퇴직탭([파기미달자]);
+
+    const button = screen.getByRole('button', {
+      name: '퇴직 후 3년이 지나야 파기할 수 있습니다.',
+    });
+    expect(button).toBeDisabled();
+  });
+
+  it('3년 이상 지난 행은 파기 버튼이 활성이다', () => {
+    퇴직탭([파기가능자]);
+
+    expect(screen.getByRole('button', { name: '파기' })).toBeEnabled();
+  });
+
+  it('파기 모달에서 이름을 틀리게 입력하면 실행 버튼이 잠겨 있다', () => {
+    퇴직탭([파기가능자]);
+    fireEvent.click(screen.getByRole('button', { name: '파기' }));
+
+    const dialog = screen.getByRole('dialog', { name: '퇴직자 개인정보 파기' });
+    fireEvent.change(within(dialog).getByLabelText(`${파기가능자.name}님 이름 확인`), {
+      target: { value: '다른이름' },
+    });
+
+    expect(within(dialog).getByRole('button', { name: '파기' })).toBeDisabled();
+    expect(purgeMutate).not.toHaveBeenCalled();
+  });
+
+  it('이름을 정확히 입력하면 실행 버튼이 열리고 파기 mutation이 호출된다', () => {
+    퇴직탭([파기가능자]);
+    fireEvent.click(screen.getByRole('button', { name: '파기' }));
+
+    const dialog = screen.getByRole('dialog', { name: '퇴직자 개인정보 파기' });
+    fireEvent.change(within(dialog).getByLabelText(`${파기가능자.name}님 이름 확인`), {
+      target: { value: 파기가능자.name },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '파기' }));
+
+    expect(purgeMutate).toHaveBeenCalledWith(파기가능자.id, expect.anything());
+  });
+
+  it('보류된 행은 사유가 보이고 파기 버튼이 잠긴다', () => {
+    퇴직탭([보류자]);
+
+    expect(screen.getByText(/보류: 재입사 예정/)).toBeInTheDocument();
+    const purgeButton = screen.getByRole('button', {
+      name: '파기 보류 상태입니다. 보류를 해제한 뒤 다시 시도해주세요.',
+    });
+    expect(purgeButton).toBeDisabled();
+    expect(screen.getByRole('button', { name: '파기 보류 해제' })).toBeInTheDocument();
+  });
+
+  it('보류 해제 버튼을 누르면 바로 해제한다', () => {
+    퇴직탭([보류자]);
+
+    fireEvent.click(screen.getByRole('button', { name: '파기 보류 해제' }));
+
+    expect(releaseHoldMutate).toHaveBeenCalledWith(보류자.id, expect.anything());
+  });
+
+  it('보류 설정은 사유 입력을 받아야 실행된다', () => {
+    퇴직탭([파기가능자]);
+    fireEvent.click(screen.getByRole('button', { name: '파기 보류' }));
+
+    const dialog = screen.getByRole('dialog', { name: '파기 보류' });
+    expect(within(dialog).getByRole('button', { name: '보류' })).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText(`${파기가능자.name}님의 파기 보류 사유`), {
+      target: { value: '재입사 예정' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '보류' }));
+
+    expect(placeHoldMutate).toHaveBeenCalledWith(
+      { id: 파기가능자.id, reason: '재입사 예정' },
+      expect.anything(),
+    );
+  });
+
+  it('이미 파기된 행에는 파기·보류 버튼이 없고 이름이 익명화된 채로 보인다', () => {
+    퇴직탭([파기된자]);
+
+    expect(screen.getByText('퇴직사원#304')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '파기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '파기 보류' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '파기 보류 해제' })).not.toBeInTheDocument();
+    // 스펙이 명시한 것은 파기·보류 버튼뿐이다 — 복구 버튼은 그대로 남는다
+    expect(screen.getByRole('button', { name: '퇴직 복구' })).toBeInTheDocument();
+  });
+
+  // 라벨과 Tabs 자체의 건수 배지(전체 퇴직자 수)가 한 버튼 안에 같이 붙으므로 접근성 이름은
+  // 부분 일치로 확인한다 — 정확히 일치시키면 전체 건수가 바뀔 때마다 깨진다.
+  it('파기 대상 건수 배지가 맞게 나온다', () => {
+    renderPage([나], [개발팀], [파기가능자, 파기미달자, 보류자, 파기된자]);
+
+    expect(screen.getByRole('button', { name: /파기대상 1/ })).toBeInTheDocument();
+  });
+
+  it('파기 대상이 없으면 배지를 띄우지 않는다', () => {
+    renderPage([나], [개발팀], [파기미달자, 보류자]);
+
+    expect(screen.queryByRole('button', { name: /파기대상/ })).not.toBeInTheDocument();
   });
 });

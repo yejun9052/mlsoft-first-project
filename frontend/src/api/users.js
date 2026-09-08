@@ -76,3 +76,22 @@ export async function restoreUser(id) {
   const res = await api.post(`/users/${id}/restore`);
   return res.data.data;
 }
+
+// 퇴직자 개인정보 수동 파기 — 되돌릴 수 없다 (POST /api/users/{id}/purge, SYSTEM_ADMIN 전용).
+// 3년 미만이면 PURGE_RETENTION_NOT_MET, 보류 중이면 PURGE_ON_HOLD, 이미 파기됐으면 ALREADY_PURGED.
+export async function purgeUser(id) {
+  const res = await api.post(`/users/${id}/purge`);
+  return res.data.data;
+}
+
+// 퇴직자 개인정보 파기 보류 설정 — 사유 필수 (POST /api/users/{id}/purge-hold, SYSTEM_ADMIN 전용)
+export async function placePurgeHold(id, { reason }) {
+  const res = await api.post(`/users/${id}/purge-hold`, { reason });
+  return res.data.data;
+}
+
+// 퇴직자 개인정보 파기 보류 해제 (DELETE /api/users/{id}/purge-hold, SYSTEM_ADMIN 전용)
+export async function releasePurgeHold(id) {
+  const res = await api.delete(`/users/${id}/purge-hold`);
+  return res.data.data;
+}
