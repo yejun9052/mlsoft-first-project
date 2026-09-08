@@ -137,6 +137,14 @@ public class User extends BaseTimeEntity {
     /** 퇴사일 */
     private LocalDate retiredAt;
 
+    /** 실제 데이터 파기 시각 — 재파기 방지와 파기 증적. 파기 상태 전이는 P2에서 추가한다. */
+    @Column(name = "purged_at")
+    private LocalDateTime purgedAt;
+
+    /** 파기 보류 사유 — null이면 보류 아님. 보류 상태 전이는 P2에서 추가한다. */
+    @Column(name = "purge_hold_reason", length = 255)
+    private String purgeHoldReason;
+
     /** 정보 업데이트 시점 */
     @LastModifiedDate
     @Column(name = "update_at")

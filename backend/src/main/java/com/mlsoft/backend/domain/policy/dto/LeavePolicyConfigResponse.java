@@ -4,6 +4,7 @@ import com.mlsoft.backend.domain.policy.entity.ConfigValueType;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigStatus;
+import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey.VisibilityCondition;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -38,7 +39,9 @@ public record LeavePolicyConfigResponse(
         String label,
         String description,
         /** ACTIVE면 지금 동작하는 설정, PENDING_FEATURE면 값만 저장되고 읽는 기능이 아직 없다 */
-        PolicyConfigStatus status
+        PolicyConfigStatus status,
+        /** 의존 설정이 requiredValue일 때만 표시. null이면 항상 표시 */
+        VisibilityCondition visibleWhen
 ) {
 
     /**
@@ -59,7 +62,8 @@ public record LeavePolicyConfigResponse(
                 key.getOptions(),
                 key.getLabel(),
                 key.getDescription(),
-                key.getStatus()
+                key.getStatus(),
+                key.getVisibleWhen()
         );
     }
 }

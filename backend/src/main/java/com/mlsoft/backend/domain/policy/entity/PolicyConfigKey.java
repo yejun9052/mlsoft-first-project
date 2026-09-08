@@ -107,7 +107,24 @@ public enum PolicyConfigKey {
             List.of("NONE", "D30", "D60", "D90", "QUARTER"),
             "자동 발송 주기",
             "기산일이 임박한 사원에게 안내 메일을 자동 발송하는 주기. NONE이면 발송하지 않는다.",
-            PolicyConfigStatus.ACTIVE);
+            PolicyConfigStatus.ACTIVE),
+
+    // ── 퇴직자 데이터 파기 P1 (설계-초안 §2·§8) ────────────────────────────────
+
+    RETIREE_PURGE_MODE(
+            "retiree_purge_mode", "MANUAL",
+            List.of("MANUAL", "AUTO"),
+            "퇴직자 데이터 파기 모드",
+            "퇴직자 데이터 파기 방식을 정한다. MANUAL은 관리자가 직접 실행하고 AUTO는 보존 기간이 지난 대상을 자동 파기한다.",
+            PolicyConfigStatus.PENDING_FEATURE),
+
+    RETIREE_PURGE_YEARS(
+            "retiree_purge_years", ConfigValueType.INTEGER, "3",
+            BigDecimal.valueOf(3), BigDecimal.TEN, "년",
+            "퇴직자 데이터 보존 기간",
+            "AUTO 모드에서 퇴직자 데이터를 파기하기 전 보존할 기간이다. 자동 모드에서만 쓰인다. 하한 3년은 근로기준법상 보존기간을 지키기 위한 값이므로 3년 미만으로 낮출 수 없다.",
+            PolicyConfigStatus.PENDING_FEATURE,
+            new VisibilityCondition("retiree_purge_mode", "AUTO"));
 
     /** DB `leave_policy_config.name`에 저장되는 키 */
     private final String key;
@@ -125,28 +142,47 @@ public enum PolicyConfigKey {
     private final String label;
     private final String description;
     private final PolicyConfigStatus status;
+    /**
+     * 조건을 만족할 때만 화면에 표시하는 선택적 의존 메타데이터. null이면 항상 표시한다.
+     * 화면 노출 힌트일 뿐 저장 검증 조건이 아니다 — MANUAL일 때도 값을 저장·검증해
+     * AUTO로 다시 전환할 때 설정값이 살아 있도록 한다.
+     */
+    private final VisibilityCondition visibleWhen;
+
+    /** 조건부 노출 조건 — 의존 설정이 requiredValue일 때만 해당 설정을 표시한다. */
+    public record VisibilityCondition(String dependsOnKey, String requiredValue) {
+    }
 
     /** BOOLEAN 설정 */
     PolicyConfigKey(String key, String defaultValue, String label, String description, PolicyConfigStatus status) {
-        this(key, ConfigValueType.BOOLEAN, defaultValue, null, null, null, List.of(), label, description, status);
+        this(key, ConfigValueType.BOOLEAN, defaultValue, null, null, null, List.of(), label, description, status, null);
     }
 
     /** ENUM 설정 */
     PolicyConfigKey(String key, String defaultValue, List<String> options,
                     String label, String description, PolicyConfigStatus status) {
-        this(key, ConfigValueType.ENUM, defaultValue, null, null, null, options, label, description, status);
+        this(key, ConfigValueType.ENUM, defaultValue, null, null, null, options, label, description, status, null);
     }
 
     /** INTEGER·DECIMAL 설정 */
     PolicyConfigKey(String key, ConfigValueType type, String defaultValue,
                     BigDecimal min, BigDecimal max, String unit,
                     String label, String description, PolicyConfigStatus status) {
-        this(key, type, defaultValue, min, max, unit, List.of(), label, description, status);
+        this(key, type, defaultValue, min, max, unit, List.of(), label, description, status, null);
+    }
+
+    /** INTEGER·DECIMAL 설정 — 조건부 노출 메타데이터 포함 */
+    PolicyConfigKey(String key, ConfigValueType type, String defaultValue,
+                    BigDecimal min, BigDecimal max, String unit,
+                    String label, String description, PolicyConfigStatus status,
+                    VisibilityCondition visibleWhen) {
+        this(key, type, defaultValue, min, max, unit, List.of(), label, description, status, visibleWhen);
     }
 
     PolicyConfigKey(String key, ConfigValueType type, String defaultValue,
                     BigDecimal min, BigDecimal max, String unit, List<String> options,
-                    String label, String description, PolicyConfigStatus status) {
+                    String label, String description, PolicyConfigStatus status,
+                    VisibilityCondition visibleWhen) {
         this.key = key;
         this.type = type;
         this.defaultValue = defaultValue;
@@ -157,6 +193,7 @@ public enum PolicyConfigKey {
         this.label = label;
         this.description = description;
         this.status = status;
+        this.visibleWhen = visibleWhen;
     }
 
     /** 키 문자열 → 카탈로그 항목. 카탈로그에 없는 키는 갱신 대상이 아니다(404) */

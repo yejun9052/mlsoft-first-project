@@ -61,8 +61,9 @@ CREATE TABLE `admin_audit_log` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `created_at` datetime(6) NOT NULL,
   -- 2026-08-16 USER_RESTORED 추가 (backfill-2026-08-16-user-restore.sql)
+  -- 2026-09-08 USER_PURGED 추가 (backfill-2026-09-08-retiree-purge.sql)
   -- AdminAction enum에 상수를 넣으면 이 목록도 함께 늘려야 한다 — ddl-auto: update는 기존 ENUM을 넓히지 않는다
-  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','EMAIL_BULK_SENT','EMAIL_RESENT','EMAIL_TEMPLATE_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','EMAIL_BULK_SENT','EMAIL_RESENT','EMAIL_TEMPLATE_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_PURGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `after_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `before_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `target_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -330,6 +331,8 @@ CREATE TABLE `users` (
   `onboarding_revised` bit(1) NOT NULL DEFAULT b'0',
   `onboarding_status` enum('COMPLETED','NOT_STARTED','PENDING_APPROVAL') COLLATE utf8mb4_unicode_ci NOT NULL,
   `position` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `purged_at` datetime(6) DEFAULT NULL,
+  `purge_hold_reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `retired_at` date DEFAULT NULL,
   `role` enum('EMPLOYEE','SYSTEM_ADMIN','TEAM_LEADER') COLLATE utf8mb4_unicode_ci NOT NULL,
   `update_at` datetime(6) DEFAULT NULL,
