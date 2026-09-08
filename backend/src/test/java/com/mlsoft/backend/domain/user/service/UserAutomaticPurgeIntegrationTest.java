@@ -2,7 +2,9 @@ package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.audit.entity.AdminAction;
 import com.mlsoft.backend.domain.audit.entity.AdminAuditLog;
+import com.mlsoft.backend.domain.audit.dto.AdminAuditLogResponse;
 import com.mlsoft.backend.domain.audit.repository.AdminAuditLogRepository;
+import com.mlsoft.backend.domain.audit.service.AdminAuditService;
 import com.mlsoft.backend.domain.policy.entity.LeavePolicyConfig;
 import com.mlsoft.backend.domain.policy.repository.LeavePolicyConfigRepository;
 import com.mlsoft.backend.domain.user.entity.Role;
@@ -13,6 +15,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -35,6 +39,8 @@ class UserAutomaticPurgeIntegrationTest {
     private LeavePolicyConfigRepository configRepository;
     @Autowired
     private AdminAuditLogRepository auditLogRepository;
+    @Autowired
+    private AdminAuditService adminAuditService;
     @Autowired
     private EntityManager entityManager;
 
@@ -78,6 +84,30 @@ class UserAutomaticPurgeIntegrationTest {
         User reloaded = userRepository.findById(target.getId()).orElseThrow();
         assertNull(reloaded.getPurgedAt());
         assertNull(reloaded.getPurgeNoticeSentAt());
+    }
+
+    @Test
+    @DisplayName("자동 파기 감사 행은 actor가 비어 있어도 목록에서 사라지지 않는다")
+    void 자동파기_감사행이_목록에_남는다() {
+        // 깨지면: actor_id를 비운 시스템 감사 행이 @EntityGraph 조인에서 탈락해
+        //         "누가 지웠는지 아무 기록도 없는" 파기가 된다. nullable로 바꾼 순간의 위험이다
+        setConfig("retiree_purge_mode", "AUTO");
+        setConfig("retiree_purge_years", "3");
+        LocalDate today = LocalDate.now();
+        User target = saveRetiredUser(today.minusYears(4));
+        target.markPurgeNoticeSent(today.minusDays(30).atStartOfDay());
+        userRepository.saveAndFlush(target);
+
+        assertEquals(1, userService.purgeAutomatically(target.getId(), today));
+        entityManager.clear();
+
+        Page<AdminAuditLogResponse> logs = adminAuditService.getLogs(
+                AdminAction.USER_PURGED, target.getId(), PageRequest.of(0, 10));
+
+        assertEquals(1, logs.getTotalElements(), "시스템 감사 행이 목록에서 빠졌다");
+        AdminAuditLogResponse row = logs.getContent().get(0);
+        assertNull(row.actorId(), "자동 파기는 사람이 누른 것이 아니다");
+        assertEquals("시스템", row.actorName());
     }
 
     private User saveRetiredUser(LocalDate retiredAt) {
