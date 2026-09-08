@@ -94,7 +94,7 @@ Google OAuth2 → `CustomOAuth2UserService`(도메인 검증 + 자동 가입) �
 - 값 검증은 **저장 시점**에 한다 (`PolicyConfigKey.validate`). 읽는 시점에 터지면 잘못 넣은 관리자가 아니라 **사원의 연차 신청이 실패**한다
 - 읽기는 `PolicyConfigReader`의 타입별 접근자로만. **읽을 때도 같은 검증을 다시** 통과시키고 어긋나면 기본값 + WARN — 옛 값이 상한을 무력화하는 것을 막는다
 - 그 값을 읽는 기능이 아직 없으면 반드시 `PENDING_FEATURE`로 둔다 (관리자 화면에 "미동작" 배지)
-- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 10개, PENDING_FEATURE 0개다(2026-09-07). 소진 안내 2키(`reminder_list_days`·`reminder_auto_cycle`)는 리마인더 잡이 붙으면서 ACTIVE로 전환했다.
+- 현재 카탈로그는 `PolicyConfigKey`를 기준으로 ACTIVE 12개, PENDING_FEATURE 0개다(2026-09-08). 소진 안내 2키(`reminder_list_days`·`reminder_auto_cycle`)는 리마인더 잡이 붙으면서 ACTIVE로 전환했다.
   실제 키·동작 여부는 enum과 `GET /api/admin/configs`에서 확인하고 이 문서에 키 목록을 복제하지 않는다.
 
 ### 프론트엔드 데이터 흐름
@@ -159,7 +159,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 - **테스트가 절대 못 잡는다.** H2는 매번 엔티티에서 스키마를 새로 만들어 새 상수가 항상 포함된다
 - **운영에서 fail-fast도 안 걸린다.** `ddl-auto: validate`는 ENUM 값 목록까지 검사하지 않아 기동은 정상이고, 그 값을 처음 저장하는 요청에서 500이 난다 — 컬럼 누락보다 더 조용히 터진다
 
-현재 `@Enumerated(STRING)`으로 쓰이는 enum은 12종, `db/schema.sql`의 `ENUM(...)` 컬럼은 15개다(2026-09-06 실측). **이제 손으로 대조하지 않는다** — `SchemaEnumConsistencyTest`가 `@Enumerated(STRING)` 필드를 전수로 훑어 `db/schema.sql`의 `ENUM(...)` 값 목록과 맞는지 검사한다. 상수를 추가하고 `schema.sql`·backfill을 빼먹으면 **그 테스트가 먼저 깨진다** — 위에 적은 "테스트가 절대 못 잡는다"를 메운 그물이다. 다만 backfill의 `MODIFY COLUMN`까지 검사하지는 못하므로 운영 DB 반영은 여전히 사람이 확인한다.
+현재 `@Enumerated(STRING)`으로 쓰이는 enum은 12종, `db/schema.sql`의 `ENUM(...)` 컬럼은 15개다(2026-09-08 실측). **이제 손으로 대조하지 않는다** — `SchemaEnumConsistencyTest`가 `@Enumerated(STRING)` 필드를 전수로 훑어 `db/schema.sql`의 `ENUM(...)` 값 목록과 맞는지 검사한다. 상수를 추가하고 `schema.sql`·backfill을 빼먹으면 **그 테스트가 먼저 깨진다** — 위에 적은 "테스트가 절대 못 잡는다"를 메운 그물이다. 다만 backfill의 `MODIFY COLUMN`까지 검사하지는 못하므로 운영 DB 반영은 여전히 사람이 확인한다.
 
 기동 fail-fast 2개 — `COOKIE_SECURE` 미설정 시 `CookieSecurityCheck`, `ALLOWED_DOMAIN`이 비면 `AllowedDomainCheck`(빈 값은 "제한 없음"이라 아무 Google 계정이나 자동 가입된다).
 
@@ -170,7 +170,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 | 문서 | 내용 |
 |---|---|
 | `docs/01-요구사항-기획.md` | 요구사항·기능 명세·권한 체계 |
-| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 20개 테이블·ENUM 대조 |
+| `docs/02-DB-설계.md` | 초기 DB 설계 + 현재 schema.sql 21개 테이블·ENUM 대조 |
 | `docs/03-API-설계.md` | 엔드포인트 + 공통 규칙(응답 포맷·페이징·에러 코드) |
 | `docs/04-코드-스타일-가이드.md` | 코드 컨벤션 (위 요약의 원본) |
 | `docs/05-디자인-가이드.md` | 디자인 토큰·화면 구조 |
