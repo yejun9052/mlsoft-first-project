@@ -248,6 +248,20 @@ public class LeaveRequest extends BaseTimeEntity {
         this.status = RequestStatus.APPROVED;
     }
 
+    /** 재입사로 이전 근속의 살아 있는 신청을 종결한다 — 선차감 복구는 새 잔액 초기화가 담당한다. */
+    public void cancelByRehire(String cancelReason) {
+        if (status != RequestStatus.PENDING && status != RequestStatus.CANCEL_PENDING) {
+            throw new BusinessException(ErrorCode.ALREADY_PROCESSED);
+        }
+        this.status = RequestStatus.CANCELLED;
+        this.cancelReason = cancelReason;
+    }
+
+    /** 재입사 취소 사유가 별도로 필요하지 않은 호출을 위한 편의 메서드. */
+    public void cancelByRehire() {
+        cancelByRehire(null);
+    }
+
     // 상태 전이 가드 — 기대 상태가 아니면 이미 처리된 신청
     private void validateStatus(RequestStatus expected) {
         if (this.status != expected) {

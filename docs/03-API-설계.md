@@ -36,6 +36,7 @@
 | PURGE_RETENTION_NOT_MET | 400 | 퇴직 후 3년이 지나야 파기할 수 있습니다. 보존 기간이 지난 뒤 다시 시도해주세요 |
 | PURGE_ON_HOLD | 400 | 파기 보류 상태입니다. 보류를 해제한 뒤 다시 시도해주세요 |
 | ALREADY_PURGED | 400 | 이미 파기된 사원입니다. 원본은 복구할 수 없으므로 다시 파기하지 마세요 |
+| REHIRE_DATE_BEFORE_RETIREMENT | 400 | 재입사일은 퇴직일보다 빠를 수 없습니다 |
 | INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
 | CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
 | HOLIDAY_API_KEY_NOT_CONFIGURED | 400 | 공휴일 API 키가 설정되지 않았습니다 |
@@ -98,6 +99,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 | PATCH | `/api/users/{id}/base-days` | 연차 직접 설정 `{baseDays}` | SA |
 | POST | `/api/users/{id}/retire` | 퇴직 처리 (leader 해제·결재 이관 포함) | SA |
 | POST | `/api/users/{id}/restore` | 퇴직 복구 — 재직 상태로 되돌린다 | SA |
+| POST | `/api/users/{id}/rehire` | 재입사 처리 `{hireDate, departmentId?}` — 과거 근속 저장·대기 신청 취소 후 연차를 0부터 시작 | SA |
 | POST | `/api/users/{id}/purge` | 수동 파기 — 사용자 식별정보와 자유 텍스트 본문을 익명화하고 감사 로그를 남긴다 | SA |
 | POST | `/api/users/{id}/purge-hold` | 파기 보류 설정 `{reason}` (사유 필수) | SA |
 | DELETE | `/api/users/{id}/purge-hold` | 파기 보류 해제 | SA |
@@ -106,6 +108,12 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 퇴직이 함께 수행한 **팀장직 해제와 대기 결재 이관은 그대로 둔다** — 그사이 다른 사람이 팀장이
 됐거나 이관된 결재가 이미 처리됐을 수 있어, 되살리면 그쪽을 말없이 덮어쓴다. 팀장은 부서 관리에서
 다시 지정한다. 퇴직자가 아닌 대상이면 `NOT_RETIRED`(400).
+
+**재입사 처리는 퇴직 복구와 다르다.** 퇴직자의 기존 근속을 `employment_periods`에 저장한 뒤
+`hireDate`와 `lastResetDate`를 재입사일로 바꾸고, `baseDays`·`bonusDays`·`useDays`·`advanceDays`를
+0으로 초기화한다. `PENDING`·`CANCEL_PENDING` 연차·복리후생 신청은 `CANCELLED`로 종결하고
+`APPROVED` 기록은 보존한다. `departmentId`가 없으면 부서를 미배정으로 비우며, 파기된 사원은
+`ALREADY_PURGED`로 거부한다.
 
 ## 부서 (departments)
 

@@ -3,6 +3,7 @@ package com.mlsoft.backend.domain.user.controller;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.DepartmentAssignRequest;
 import com.mlsoft.backend.domain.user.dto.PurgeHoldRequest;
+import com.mlsoft.backend.domain.user.dto.RehireRequest;
 import com.mlsoft.backend.domain.user.dto.RoleDepartmentUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.RoleUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
@@ -211,5 +212,17 @@ public class UserController {
     ) {
         userService.restore(id, authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_RESTORED));
+    }
+
+    /** 재입사 처리 — 이전 근속을 닫고 재입사일부터 연차를 새로 시작한다. */
+    @PostMapping("/{id}/rehire")
+    @PreAuthorize("hasRole('SYSTEM_ADMIN')")
+    public ResponseEntity<CommonResponse<UserResponse>> rehire(
+            @PathVariable Long id,
+            @Valid @RequestBody RehireRequest request,
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        UserResponse response = userService.rehire(id, request, authUser.id());
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.USER_REHIRED, response));
     }
 }

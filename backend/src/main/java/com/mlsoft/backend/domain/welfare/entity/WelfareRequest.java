@@ -150,6 +150,14 @@ public class WelfareRequest extends BaseTimeEntity {
         this.status = RequestStatus.CANCELLED;
     }
 
+    /** 재입사로 이전 근속의 살아 있는 신청을 종결한다 — 승인 완료 건은 보존한다. */
+    public void cancelByRehire() {
+        if (status != RequestStatus.PENDING && status != RequestStatus.CANCEL_PENDING) {
+            throw new BusinessException(ErrorCode.ALREADY_PROCESSED);
+        }
+        this.status = RequestStatus.CANCELLED;
+    }
+
     // 상태 전이 가드 — 기대 상태가 아니면 이미 처리된 신청
     private void validateStatus(RequestStatus expected) {
         if (this.status != expected) {

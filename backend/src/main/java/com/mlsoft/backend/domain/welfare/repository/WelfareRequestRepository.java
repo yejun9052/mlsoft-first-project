@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -40,6 +41,9 @@ public interface WelfareRequestRepository extends JpaRepository<WelfareRequest, 
     /** 내 신청 내역 (GET /api/welfare-requests/me) */
     @EntityGraph(attributePaths = {"user", "user.department", "policy"})
     Page<WelfareRequest> findByUser(User user, Pageable pageable);
+
+    /** 재입사 처리 — 이전 근속의 살아 있는 대기 신청을 종결하기 위한 조회. */
+    List<WelfareRequest> findByUserAndStatusIn(User user, Collection<RequestStatus> statuses);
 
     /**
      * 내가 승인자(primary 또는 sub)인 대기 목록 (GET /api/welfare-requests/pending).
@@ -71,7 +75,8 @@ public interface WelfareRequestRepository extends JpaRepository<WelfareRequest, 
 
     /**
      * 이 사람이 primary 승인자인 대기 건 — 퇴직 이관 대상 조회 (docs/01 2-9).
-     * WelfareRequest는 CANCEL_PENDING 상태가 없고 cancel()도 PENDING에서만 가능하므로 PENDING만 대상이다.
+     * 일반 복리후생 취소 경로는 PENDING만 처리하지만, 재입사 경로는 사용자 신청 조회에서
+     * PENDING·CANCEL_PENDING을 함께 종결한다.
      */
     List<WelfareRequest> findByPrimaryApproverAndStatus(User primaryApprover, RequestStatus status);
 

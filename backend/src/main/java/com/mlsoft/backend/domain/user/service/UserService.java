@@ -2,20 +2,26 @@ package com.mlsoft.backend.domain.user.service;
 
 import com.mlsoft.backend.domain.audit.entity.AdminAction;
 import com.mlsoft.backend.domain.audit.service.AdminAuditService;
+import com.mlsoft.backend.domain.common.RequestAction;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.department.repository.DepartmentRepository;
+import com.mlsoft.backend.domain.leave.entity.LeaveActionHistory;
 import com.mlsoft.backend.domain.leave.entity.LeaveRequest;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.user.dto.BaseDaysUpdateRequest;
+import com.mlsoft.backend.domain.user.dto.RehireRequest;
 import com.mlsoft.backend.domain.user.dto.UserProfileUpdateRequest;
 import com.mlsoft.backend.domain.user.dto.UserResponse;
 import com.mlsoft.backend.domain.user.dto.UserSummaryResponse;
+import com.mlsoft.backend.domain.user.entity.EmploymentPeriod;
 import com.mlsoft.backend.domain.user.entity.OnboardingStatus;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
+import com.mlsoft.backend.domain.user.repository.EmploymentPeriodRepository;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
+import com.mlsoft.backend.domain.welfare.entity.WelfareActionHistory;
 import com.mlsoft.backend.domain.welfare.entity.WelfareRequest;
 import com.mlsoft.backend.domain.welfare.repository.WelfareActionHistoryRepository;
 import com.mlsoft.backend.domain.welfare.repository.WelfareRequestRepository;
@@ -64,8 +70,14 @@ public class UserService {
     private static final List<RequestStatus> LEAVE_REASSIGN_STATUSES =
             List.of(RequestStatus.PENDING, RequestStatus.CANCEL_PENDING);
 
+    // 재입사 시 선차감이 남아 있는 이전 근속 신청을 종결할 상태
+    private static final List<RequestStatus> REHIRE_CLOSE_STATUSES =
+            List.of(RequestStatus.PENDING, RequestStatus.CANCEL_PENDING);
+    private static final String REHIRE_CANCELLATION_COMMENT = "재입사 처리로 자동 취소";
+
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final EmploymentPeriodRepository employmentPeriodRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveActionHistoryRepository leaveActionHistoryRepository;
     private final WelfareRequestRepository welfareRequestRepository;
@@ -550,6 +562,84 @@ public class UserService {
         adminAuditService.recordUserChange(actorId, AdminAction.USER_RESTORED, target,
                 "퇴직 (" + retiredAt + ")", "재직");
         log.info("[퇴직 복구] userId={}, 퇴직일이었던 값={}, actorId={}", targetId, retiredAt, actorId);
+    }
+
+    /**
+     * 재입사 처리 (POST /api/users/{id}/rehire, SA — 설계-초안/재입사자-처리-설계-2026-09-07 §4~§5).
+     *
+     * <p>퇴직 복구와 달리 이전 근속을 종료하고 재입사일부터 연차를 0으로 다시 시작한다. 현재 사용 중인
+     * {@code users.hireDate}/{@code retiredAt}를 덮어쓰기 전에 {@code employment_periods}에 이전 구간을
+     * 저장하며, 재입사 처리와 살아 있는 신청 종결·감사 기록은 같은 트랜잭션에 참여한다.
+     *
+     * <p>파기된 사원은 이메일이 바뀌어 신규 가입으로 들어와야 하므로 재입사 대상으로 취급하지 않는다.
+     */
+    @Transactional
+    public UserResponse rehire(Long targetId, RehireRequest request, Long actorId) {
+        User target = findUserOrThrow(targetId);
+        if (target.getPurgedAt() != null) {
+            throw new BusinessException(ErrorCode.ALREADY_PURGED);
+        }
+        if (target.isActive()) {
+            throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+
+        LocalDate retiredAt = target.getRetiredAt();
+        if (retiredAt == null) {
+            // 비활성 계정은 정상 퇴직 경로에서 반드시 퇴직일을 갖는다.
+            throw new BusinessException(ErrorCode.NOT_RETIRED);
+        }
+        if (request.hireDate().isBefore(retiredAt)) {
+            throw new BusinessException(ErrorCode.REHIRE_DATE_BEFORE_RETIREMENT);
+        }
+
+        Department department = request.departmentId() == null
+                ? null
+                : departmentRepository.findByIdAndActiveTrue(request.departmentId())
+                        .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        int nextSequence = employmentPeriodRepository.findTopByUserOrderBySeqDesc(target)
+                .map(period -> period.getSeq() + 1)
+                .orElse(1);
+
+        // 현재 근속은 users에만 두고, 재입사 직전의 종료된 근속만 별도 이력으로 남긴다.
+        employmentPeriodRepository.save(EmploymentPeriod.create(
+                target, nextSequence, target.getHireDate(), retiredAt));
+        closeLiveRequestsForRehire(target, actorId);
+
+        target.rehire(request.hireDate());
+        // 부서는 도메인의 근속 초기화와 분리해 서비스에서 폼 값(없으면 미배정)을 적용한다.
+        target.assignDepartment(department);
+        adminAuditService.recordUserChange(actorId, AdminAction.USER_REHIRED, target,
+                "퇴직 (" + retiredAt + ")", "재직 (재입사 " + request.hireDate() + ")");
+        log.info("[재입사 처리] userId={}, hireDate={}, departmentId={}, actorId={}",
+                targetId, request.hireDate(), request.departmentId(), actorId);
+        return UserResponse.of(target);
+    }
+
+    /**
+     * 이전 근속의 선차감 신청을 취소 상태로 종결한다.
+     *
+     * <p>재입사에서 users 잔액을 먼저 0으로 만들므로 여기서 User.restoreLeave를 호출하면 use_days가
+     * 음수가 된다. 살아 있는 신청의 상태와 이력만 취소하고, 새 근속의 잔액 초기화는 {@link User#rehire}
+     * 하나가 담당한다. APPROVED는 실제 사용 기록이므로 조회 대상에 넣지 않는다.
+     */
+    private void closeLiveRequestsForRehire(User target, Long actorId) {
+        List<LeaveRequest> leaves = leaveRequestRepository.findByUserAndStatusIn(target, REHIRE_CLOSE_STATUSES);
+        List<WelfareRequest> welfares = welfareRequestRepository.findByUserAndStatusIn(target, REHIRE_CLOSE_STATUSES);
+        if (leaves.isEmpty() && welfares.isEmpty()) {
+            return;
+        }
+
+        User actor = userRepository.getReferenceById(actorId);
+        leaves.forEach(leave -> {
+            leave.cancelByRehire(REHIRE_CANCELLATION_COMMENT);
+            leaveActionHistoryRepository.save(LeaveActionHistory.create(
+                    leave, actor, RequestAction.CANCELLED, REHIRE_CANCELLATION_COMMENT));
+        });
+        welfares.forEach(welfare -> {
+            welfare.cancelByRehire();
+            welfareActionHistoryRepository.save(WelfareActionHistory.create(
+                    welfare, actor, RequestAction.CANCELLED, REHIRE_CANCELLATION_COMMENT));
+        });
     }
 
     /**

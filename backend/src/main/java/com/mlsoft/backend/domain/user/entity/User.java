@@ -502,6 +502,35 @@ public class User extends BaseTimeEntity {
         this.purgeNoticeSentAt = null;
     }
 
+    /**
+     * 재입사 처리 — 퇴직으로 끊긴 근속을 새 근속으로 시작한다 (설계-초안/재입사자-처리-설계-2026-09-07 §4).
+     *
+     * <p>{@code lastResetDate}도 재입사일로 세운다. 이전 퇴직일의 값을 그대로 두면 기산일 스케줄러가
+     * 공백 기간을 catch-up으로 소급 처리해 재입사자에게 과거 근속 연차를 잘못 부여한다. 재입사일부터
+     * 새 회차를 시작해야 하므로 이 메서드에서 {@code hireDate}와 함께 반드시 갱신한다.
+     *
+     * <p>생일과 온보딩 상태는 이미 확인된 개인 정보·확정 절차이므로 유지한다. 부서는 조직 정책에 따라
+     * 서비스가 별도로 지정하며, 이 도메인 메서드에는 섞지 않는다.
+     */
+    public void rehire(LocalDate hireDate) {
+        this.hireDate = hireDate;
+        // 이전 기산일을 두면 퇴직 공백이 catch-up 대상으로 잡힌다 — 재입사일부터 새 회차를 시작한다.
+        this.lastResetDate = hireDate;
+        this.baseDays = BigDecimal.ZERO;
+        this.bonusDays = BigDecimal.ZERO;
+        this.useDays = BigDecimal.ZERO;
+        this.monthlyGrantedCount = 0;
+        this.lastBirthdayGrantYear = null;
+        this.isActive = true;
+        this.retiredAt = null;
+        this.purgeHoldReason = null;
+        this.purgeNoticeSentAt = null;
+        this.role = Role.EMPLOYEE;
+        this.position = null;
+        // advance_days는 파생값이므로 직접 대입하지 않고 단일 동기화 경계를 호출한다.
+        syncAdvanceDays();
+    }
+
     /** 권한 변경 (SYSTEM_ADMIN 전용) */
     public void changeRole(Role role) {
         this.role = role;

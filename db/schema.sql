@@ -39,6 +39,9 @@
 --   · mail_credentials — 메일 발신 계정 암호문 저장 (환경변수 fallback 지원)
 --   · email_templates — 관리자 편집 메일 양식
 --   · leave_reminder_dispatch — 연차 소진 안내 자동 발송 중복 방지 이력
+--
+-- 2026-09-08 추가 — 테이블 21개
+--   · employment_periods — 재입사 시 종료된 과거 근속 구간 보존 (현재 근속은 users에만 저장)
 -- =====================================================================
 
 CREATE DATABASE IF NOT EXISTS `mlsoft_leave`
@@ -62,8 +65,9 @@ CREATE TABLE `admin_audit_log` (
   `created_at` datetime(6) NOT NULL,
   -- 2026-08-16 USER_RESTORED 추가 (backfill-2026-08-16-user-restore.sql)
   -- 2026-09-08 USER_PURGED 추가 (backfill-2026-09-08-retiree-purge.sql)
+  -- 2026-09-08 USER_REHIRED 추가 (backfill-2026-09-08-rehire.sql)
   -- AdminAction enum에 상수를 넣으면 이 목록도 함께 늘려야 한다 — ddl-auto: update는 기존 ENUM을 넓히지 않는다
-  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','EMAIL_BULK_SENT','EMAIL_RESENT','EMAIL_TEMPLATE_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_PURGED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `action` enum('BASE_DAYS_CHANGED','CONFIG_CHANGED','DEPARTMENT_CHANGED','EMAIL_BULK_SENT','EMAIL_RESENT','EMAIL_TEMPLATE_CHANGED','ONBOARDING_APPROVED','ONBOARDING_REJECTED','ROLE_CHANGED','USER_PURGED','USER_REHIRED','USER_RESTORED','USER_RETIRED') COLLATE utf8mb4_unicode_ci NOT NULL,
   `after_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `before_value` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `target_label` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -344,6 +348,20 @@ CREATE TABLE `users` (
   UNIQUE KEY `UK6dotkott2kjsp8vw4d0m25fb7` (`email`),
   KEY `FKfi832e3qv89fq376fuh8920y4` (`department_id`),
   CONSTRAINT `FKfi832e3qv89fq376fuh8920y4` FOREIGN KEY (`department_id`) REFERENCES `department` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `employment_periods` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `hire_date` date NOT NULL,
+  `retired_at` date NOT NULL,
+  `seq` int NOT NULL,
+  `user_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_employment_periods_user_seq` (`user_id`,`seq`),
+  CONSTRAINT `FK_employment_periods_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

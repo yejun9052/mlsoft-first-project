@@ -42,6 +42,9 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
     @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     Page<LeaveRequest> findByUser(User user, Pageable pageable);
 
+    /** 재입사 처리 — 이전 근속의 선차감이 유지된 대기 신청을 종결하기 위한 조회. */
+    List<LeaveRequest> findByUserAndStatusIn(User user, Collection<RequestStatus> statuses);
+
     /** 내 신청 내역 — status 필터 */
     @EntityGraph(attributePaths = {"user", "user.department", "primaryApprover", "subApprover"})
     Page<LeaveRequest> findByUserAndStatus(User user, RequestStatus status, Pageable pageable);

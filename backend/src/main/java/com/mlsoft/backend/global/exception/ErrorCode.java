@@ -37,6 +37,7 @@ public enum ErrorCode {
     PURGE_RETENTION_NOT_MET(400, "퇴직 후 3년이 지나야 파기할 수 있습니다. 보존 기간이 지난 뒤 다시 시도해주세요."),
     PURGE_ON_HOLD(400, "파기 보류 상태입니다. 보류를 해제한 뒤 다시 시도해주세요."),
     ALREADY_PURGED(400, "이미 파기된 사원입니다. 원본은 복구할 수 없으므로 다시 파기하지 마세요."),
+    REHIRE_DATE_BEFORE_RETIREMENT(400, "재입사일은 퇴직일보다 빠를 수 없습니다."),
     ADVANCE_LIMIT_EXCEEDED(400, "당겨쓸 수 있는 연차 상한을 초과했습니다. 관리자에게 문의해주세요."),
     TOO_MANY_LEAVE_DATES(400, "한 번에 신청할 수 있는 날짜 수를 초과했습니다."),
     LEAVE_DATE_TOO_FAR(400, "다음 기산일 이후 1회차까지만 신청할 수 있습니다."),
