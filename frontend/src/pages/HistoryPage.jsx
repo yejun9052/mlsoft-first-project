@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import { Loader2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import PageHeader from '../components/ui/PageHeader.jsx';
 import StatusBadge from '../components/ui/StatusBadge.jsx';
 import Stat from '../components/ui/Stat.jsx';
@@ -22,6 +22,7 @@ import Pagination from '../components/ui/Pagination.jsx';
 import { paginate } from '../utils/paginate.js';
 import { LEAVE_TYPE_LABEL } from '../constants/status.js';
 import { useCancelLeave, useLeaveSummary, useMyLeaves } from '../hooks/useLeaves.js';
+import { useCurrentUser } from '../hooks/useAuth.js';
 import {
   NEXT_CYCLE_RESERVATION_LABEL,
   hasNextCycleReservation,
@@ -87,6 +88,74 @@ function ReasonCell({ reason, onOpen }) {
   );
 }
 
+// 이전 근속 신청 중 실제로 사용된 일수만 합산한다 (PENDING·반려·취소는 소진이 아니다)
+function sumApprovedDays(requests) {
+  return requests
+    .filter((req) => req.status === 'APPROVED')
+    .reduce((sum, req) => sum + Number(req.days), 0);
+}
+
+/**
+ * 이전 근속 신청 — 접혀 있는 상태로 시작한다 (설계-초안/재입사자-처리-설계-2026-09-07 §6).
+ *
+ * 근속 구간을 내려주는 조회 API(`GET /api/leaves/me/periods`)가 아직 없어 "1기 2019-01-02 ~
+ * 2024-03-15"처럼 실제 근속 시작·종료일로 나누지 못한다 — 그 날짜는 `employment_periods`에만
+ * 있고 프론트로 내려오지 않는다. 대신 신청 시각이 **현재** `hireDate`보다 이른지로만 가른다
+ * (설계 §5). 재입사가 여러 번이어도 이전 근속을 전부 하나로 묶어 보여준다 — 회차별로
+ * 나누려면 구간 경계가 필요한데 지금은 그 경계를 알 방법이 없다.
+ */
+function PreviousPeriodSection({ requests, onOpenReason }) {
+  const [open, setOpen] = useState(false);
+  const usedDays = sumApprovedDays(requests);
+
+  return (
+    <div className="mt-8 border-t border-white/[0.12] pt-5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-[13px] font-medium text-ink-mute transition-colors hover:text-ink-hi"
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        이전 근속 · 사용 {usedDays}일 ({requests.length}건)
+      </button>
+
+      {open && (
+        <TableCard className="mt-3" empty={requests.length === 0} emptyLabel="이전 근속 신청 내역이 없습니다.">
+          <Table className="min-w-[760px]">
+            <THead>
+              <Th>신청일</Th>
+              <Th>종류</Th>
+              <Th>기간</Th>
+              <Th right>일수</Th>
+              <Th>사유</Th>
+              <Th>상태</Th>
+            </THead>
+            <tbody>
+              {requests.map((req) => (
+                <TR key={req.id}>
+                  <Td>{dayjs(req.createdAt).format('YYYY.MM.DD')}</Td>
+                  <Td className="font-medium text-ink-hi">{LEAVE_TYPE_LABEL[req.leaveType]}</Td>
+                  <Td>{formatPeriod(req.dates)}</Td>
+                  <Td right className="font-semibold text-ink-hi">
+                    {req.days}일
+                  </Td>
+                  <Td className="text-ink-mute">
+                    <ReasonCell reason={req.requestReason} onOpen={onOpenReason} />
+                  </Td>
+                  <Td>
+                    <StatusBadge status={req.status} />
+                  </Td>
+                </TR>
+              ))}
+            </tbody>
+          </Table>
+        </TableCard>
+      )}
+    </div>
+  );
+}
+
 const PAGE_SIZE = 10;
 
 // 사용 내역 — 내 연차·복리후생 신청 이력 필터·조회 (docs/05 §④)
@@ -95,9 +164,27 @@ export default function HistoryPage() {
   const leavesQuery = useMyLeaves();
   const summaryQuery = useLeaveSummary();
   const cancelMutation = useCancelLeave();
+  const { data: currentUser } = useCurrentUser();
   const { data: page, isLoading } = leavesQuery;
   const { data: summary } = summaryQuery;
   const myLeaveRequests = useMemo(() => page?.content ?? [], [page]);
+
+  // 신청이 어느 근속에 속하는지는 신청 시각이 현재 hireDate보다 이른지로 가른다 — 날짜(leave_dates)로
+  // 가르면 퇴직 직전에 낸 미래 연차가 새 근속에 섞인다 (설계-초안 §5). 재입사한 적이 없는
+  // 대부분의 사원은 currentHireDate보다 이른 신청이 없으므로 previousPeriodRequests가 항상
+  // 빈 배열이라 아래 필터·통계는 지금과 동일하게 동작한다.
+  const currentHireDate = currentUser?.hireDate;
+  const { currentPeriodRequests, previousPeriodRequests } = useMemo(() => {
+    if (!currentHireDate) {
+      return { currentPeriodRequests: myLeaveRequests, previousPeriodRequests: [] };
+    }
+    const current = [];
+    const previous = [];
+    myLeaveRequests.forEach((req) => {
+      (dayjs(req.createdAt).isBefore(currentHireDate) ? previous : current).push(req);
+    });
+    return { currentPeriodRequests: current, previousPeriodRequests: previous };
+  }, [myLeaveRequests, currentHireDate]);
 
   // 취소 확인 다이얼로그 — 클릭한 건 하나만 담는다
   const [cancelTarget, setCancelTarget] = useState(null);
@@ -138,10 +225,11 @@ export default function HistoryPage() {
     );
   }
 
-  // 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선)
+  // 데이터에 존재하는 연도만 필터 칩으로 노출 (최신 연도 우선) — 현재 근속의 신청만 대상이다.
+  // 이전 근속은 별도 섹션(PreviousPeriodSection)에서 보여준다.
   const yearOptions = useMemo(
-    () => [...new Set(myLeaveRequests.map((req) => dayjs(req.dates[0]).year()))].sort((a, b) => b - a),
-    [myLeaveRequests],
+    () => [...new Set(currentPeriodRequests.map((req) => dayjs(req.dates[0]).year()))].sort((a, b) => b - a),
+    [currentPeriodRequests],
   );
   const [tab, setTab] = useState('LEAVE');
   const [yearFilter, setYearFilter] = useState(null);
@@ -152,13 +240,13 @@ export default function HistoryPage() {
   // 필터(연도·종류·상태) 적용 결과
   const filtered = useMemo(() => {
     const typeOption = TYPE_FILTERS.find((option) => option.value === typeFilter);
-    return myLeaveRequests.filter((req) => {
+    return currentPeriodRequests.filter((req) => {
       if (dayjs(req.dates[0]).year() !== activeYear) return false;
       if (typeOption?.match && !typeOption.match(req.leaveType)) return false;
       if (statusFilter !== 'ALL' && req.status !== statusFilter) return false;
       return true;
     });
-  }, [myLeaveRequests, activeYear, typeFilter, statusFilter]);
+  }, [currentPeriodRequests, activeYear, typeFilter, statusFilter]);
 
   // 화면에서 거른 뒤에 끊는다 — 서버가 먼저 끊으면 필터가 그 페이지 안에서만 걸린다 (paginate 주석).
   // 이름이 tablePage인 것은 위에서 `page`가 이미 서버 응답(Page)을 가리키고 있어서다.
@@ -318,8 +406,15 @@ export default function HistoryPage() {
           onChange={setTablePage}
         />
       </TableCard>
+
+      {/* 이전 근속이 없는 사원(대부분)에게는 이 섹션 자체가 렌더되지 않는다 — 지금과 똑같이 보인다
+          (설계-초안 §6, 가장 중요한 조건). */}
+      {previousPeriodRequests.length > 0 && (
+        <PreviousPeriodSection requests={previousPeriodRequests} onOpenReason={setReasonDetail} />
+      )}
         </>
       )}
+
 
       {reasonDetail && (
         <Modal title="신청 사유" onClose={() => setReasonDetail(null)} maxWidth={520}>
