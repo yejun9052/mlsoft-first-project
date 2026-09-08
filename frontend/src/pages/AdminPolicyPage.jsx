@@ -147,6 +147,19 @@ export default function AdminPolicyPage() {
   // 설정은 열 개 안팎이라 매 렌더 훑어도 된다(memo를 걸면 currentValue를 또 복제해야 한다).
   const changedConfigs = (configsQuery.data ?? []).filter((c) => currentValue(c) !== c.value);
 
+  // 조건부 노출 — visibleWhen이 있으면 의존 설정의 "지금 편집 중인 값"이 requiredValue와
+  // 같을 때만 보인다. 서버에 저장된 값이 아니라 currentValue를 봐야 모드를 막 바꾼 순간
+  // 저장 전에도 따라오는 설정이 나타난다. 숨겨져도 changedConfigs·저장 대상에서는 빠지지
+  // 않는다 — 여기는 화면 표시 여부만 거른다(설계: 퇴직자-데이터-파기-설계-2026-09-07.md §2).
+  function isConfigVisible(config) {
+    if (!config.visibleWhen) return true;
+    const dependency = (configsQuery.data ?? []).find((c) => c.name === config.visibleWhen.dependsOnKey);
+    if (!dependency) return true;
+    return currentValue(dependency) === config.visibleWhen.requiredValue;
+  }
+
+  const visibleConfigs = (configsQuery.data ?? []).filter(isConfigVisible);
+
   // 이탈 경고는 **시스템 설정에만** 건다. 위 근속년수별 정책은 편집 중인 행 안에 저장(✓)·취소(✕)가
   // 붙어 있어 놓칠 수가 없다 — 여기 저장 버튼만 카드 맨 아래 오른쪽으로 멀리 떨어져 있다.
   const unsavedGuard = useUnsavedGuard(changedConfigs.length > 0);
@@ -276,7 +289,7 @@ export default function AdminPolicyPage() {
           ) : (
             <>
               <div className="flex flex-col">
-                {configsQuery.data.map((c) => (
+                {visibleConfigs.map((c) => (
                   <div
                     key={c.name}
                     className="flex items-start justify-between gap-4 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0"
