@@ -3,6 +3,7 @@ package com.mlsoft.backend.domain.leave.controller;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.leave.dto.ApprovalRequest;
 import com.mlsoft.backend.domain.leave.dto.CancelRequest;
+import com.mlsoft.backend.domain.leave.dto.EmploymentPeriodResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveCalendarResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveHistoryResponse;
@@ -66,6 +67,15 @@ public class LeaveController {
             Pageable pageable
     ) {
         Page<LeaveResponse> response = leaveService.getMyLeaves(authUser.id(), status, pageable);
+        return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
+    }
+
+    /** 내 근속 구간 목록 — 과거 구간과 현재 구간을 순번 오름차순으로 반환 */
+    @GetMapping("/me/periods")
+    public ResponseEntity<CommonResponse<List<EmploymentPeriodResponse>>> getMyEmploymentPeriods(
+            @AuthenticationPrincipal AuthUser authUser
+    ) {
+        List<EmploymentPeriodResponse> response = leaveService.getMyEmploymentPeriods(authUser.id());
         return ResponseEntity.ok(CommonResponse.success(ResponseMessage.LEAVE_FETCHED, response));
     }
 

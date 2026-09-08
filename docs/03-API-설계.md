@@ -131,6 +131,7 @@ OAuth 처리 규칙 (01 §2-1): 도메인·email_verified 검증 → 미가입�
 |---|---|---|---|
 | POST | `/api/leaves` | 신청 `{leaveType, dates[], reason, subApproverId?}` — 선차감, 중복·잔여·휴일 검증 | 전체 |
 | GET | `/api/leaves/me` | 내 신청 내역 (페이징, status 필터) | 전체 |
+| GET | `/api/leaves/me/periods` | 내 근속 구간 목록 (순번·시작일·종료일·현재 여부; 구간별 부여·사용 일수 집계 없음) | 전체 |
 | GET | `/api/leaves/me/summary` | 잔여 현황 (base/bonus/use/잔여/현재 회차 대기/다음 기산일·차감 예정·다음 회차 예약/한도/허용 여부) | 전체 |
 | GET | `/api/leaves/me/annual-usage?year=` | 내 연차 사용 히트맵 — 승인 완료 날짜별 사용 일수 | 전체 |
 | GET | `/api/leaves/calendar?year=&month=&keyword=&departmentId=` | 캘린더용 승인 연차 (타인 사유 마스킹). `keyword`=신청자명 부분일치, `departmentId`=부서 — 둘 다 선택 | 전체 |

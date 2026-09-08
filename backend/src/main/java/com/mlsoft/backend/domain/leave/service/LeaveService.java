@@ -6,6 +6,7 @@ import com.mlsoft.backend.domain.department.entity.Department;
 import com.mlsoft.backend.domain.email.service.EmailNotificationPublisher;
 import com.mlsoft.backend.domain.leave.dto.ApprovalRequest;
 import com.mlsoft.backend.domain.leave.dto.CancelRequest;
+import com.mlsoft.backend.domain.leave.dto.EmploymentPeriodResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveCalendarResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveHistoryResponse;
@@ -19,8 +20,10 @@ import com.mlsoft.backend.domain.leave.entity.LeaveType;
 import com.mlsoft.backend.domain.leave.repository.LeaveActionHistoryRepository;
 import com.mlsoft.backend.domain.leave.repository.LeaveRequestRepository;
 import com.mlsoft.backend.domain.holiday.service.HolidayService;
+import com.mlsoft.backend.domain.user.entity.EmploymentPeriod;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
+import com.mlsoft.backend.domain.user.repository.EmploymentPeriodRepository;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
@@ -47,6 +50,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * 연차 도메인 서비스 — 신청·조회·승인/반려·취소 (docs/01 2-3·2-3(b)·2-5, docs/03 연차).
@@ -89,6 +93,7 @@ public class LeaveService {
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveActionHistoryRepository leaveActionHistoryRepository;
     private final UserRepository userRepository;
+    private final EmploymentPeriodRepository employmentPeriodRepository;
     /** 정책 설정 읽기 — 키 상수·파싱을 각 서비스에 흩지 않는다 (docs/02 3-11) */
     private final PolicyConfigReader policyConfigReader;
     /** 연차 정책 계산 — 리셋과 신청의 다음 회차 예상 가용량이 같은 공용 계산을 쓴다 */
@@ -179,6 +184,22 @@ public class LeaveService {
                 ? leaveRequestRepository.findByUser(user, pageable)
                 : leaveRequestRepository.findByUserAndStatus(user, status, pageable);
         return page.map(LeaveResponse::of);
+    }
+
+    /**
+     * 본인 근속 구간 목록 (GET /api/leaves/me/periods).
+     * 과거 구간은 순번 오름차순으로 조회하고, users의 현재 구간을 마지막에 붙인다.
+     */
+    @Transactional(readOnly = true)
+    public List<EmploymentPeriodResponse> getMyEmploymentPeriods(Long userId) {
+        User user = findUserOrThrow(userId);
+        List<EmploymentPeriod> previousPeriods =
+                employmentPeriodRepository.findByUserOrderBySeqAsc(user);
+        int currentSequence = previousPeriods.size() + 1;
+        return Stream.concat(
+                        previousPeriods.stream().map(EmploymentPeriodResponse::of),
+                        Stream.of(EmploymentPeriodResponse.current(user, currentSequence)))
+                .toList();
     }
 
     /** 잔여 현황 (GET /api/leaves/me/summary) */

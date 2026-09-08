@@ -4,6 +4,7 @@ import com.mlsoft.backend.domain.common.RequestAction;
 import com.mlsoft.backend.domain.common.RequestStatus;
 import com.mlsoft.backend.domain.leave.dto.ApprovalRequest;
 import com.mlsoft.backend.domain.leave.dto.CancelRequest;
+import com.mlsoft.backend.domain.leave.dto.EmploymentPeriodResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveCreateRequest;
 import com.mlsoft.backend.domain.leave.dto.LeaveResponse;
 import com.mlsoft.backend.domain.leave.dto.LeaveSummaryResponse;
@@ -17,8 +18,10 @@ import com.mlsoft.backend.domain.holiday.service.HolidayService;
 import com.mlsoft.backend.domain.policy.entity.PolicyConfigKey;
 import com.mlsoft.backend.domain.policy.service.LeavePolicyService;
 import com.mlsoft.backend.domain.policy.service.PolicyConfigReader;
+import com.mlsoft.backend.domain.user.entity.EmploymentPeriod;
 import com.mlsoft.backend.domain.user.entity.Role;
 import com.mlsoft.backend.domain.user.entity.User;
+import com.mlsoft.backend.domain.user.repository.EmploymentPeriodRepository;
 import com.mlsoft.backend.domain.user.repository.UserRepository;
 import com.mlsoft.backend.domain.user.service.ApproverResolver;
 import com.mlsoft.backend.global.exception.BusinessException;
@@ -41,6 +44,8 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -69,6 +74,8 @@ class LeaveServiceTest {
     private LeaveActionHistoryRepository leaveActionHistoryRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private EmploymentPeriodRepository employmentPeriodRepository;
     @Mock
     private PolicyConfigReader policyConfigReader;
     @Mock
@@ -975,6 +982,74 @@ class LeaveServiceTest {
         assertTrue(response.nextCycleReservationEnabled());
     }
 
+    // ============================ 근속 구간 ============================
+
+    @Test
+    @DisplayName("근속 구간 — 이전 근속이 없으면 현재 근속 1건을 반환한다")
+    void getMyEmploymentPeriods_withoutPrevious_returnsCurrentOnly() {
+        User me = periodUser(1L, LocalDate.of(2026, 9, 8), true, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(employmentPeriodRepository.findByUserOrderBySeqAsc(me)).willReturn(List.of());
+
+        List<EmploymentPeriodResponse> result = leaveService.getMyEmploymentPeriods(1L);
+
+        assertEquals(1, result.size());
+        assertEquals(1, result.get(0).seq());
+        assertEquals(LocalDate.of(2026, 9, 8), result.get(0).hireDate());
+        assertNull(result.get(0).retiredAt());
+        assertTrue(result.get(0).current());
+    }
+
+    @Test
+    @DisplayName("근속 구간 — 과거 구간 뒤에 현재 구간을 순번 오름차순으로 붙인다")
+    void getMyEmploymentPeriods_withRehire_appendsCurrentPeriod() {
+        User me = periodUser(1L, LocalDate.of(2026, 9, 8), true, null);
+        EmploymentPeriod previous = EmploymentPeriod.create(me, 1,
+                LocalDate.of(2019, 1, 2), LocalDate.of(2024, 3, 15));
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(employmentPeriodRepository.findByUserOrderBySeqAsc(me)).willReturn(List.of(previous));
+
+        List<EmploymentPeriodResponse> result = leaveService.getMyEmploymentPeriods(1L);
+
+        assertEquals(2, result.size());
+        assertEquals(1, result.get(0).seq());
+        assertFalse(result.get(0).current());
+        assertEquals(LocalDate.of(2019, 1, 2), result.get(0).hireDate());
+        assertEquals(LocalDate.of(2024, 3, 15), result.get(0).retiredAt());
+        assertEquals(2, result.get(1).seq());
+        assertTrue(result.get(1).current());
+        assertEquals(LocalDate.of(2026, 9, 8), result.get(1).hireDate());
+    }
+
+    @Test
+    @DisplayName("근속 구간 — 퇴직자의 현재 구간에 퇴직일을 담는다")
+    void getMyEmploymentPeriods_retiredUser_includesRetiredAt() {
+        LocalDate retiredAt = LocalDate.of(2026, 8, 31);
+        User me = periodUser(1L, LocalDate.of(2020, 1, 2), false, retiredAt);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(employmentPeriodRepository.findByUserOrderBySeqAsc(me)).willReturn(List.of());
+
+        List<EmploymentPeriodResponse> result = leaveService.getMyEmploymentPeriods(1L);
+
+        assertEquals(1, result.size());
+        assertEquals(retiredAt, result.get(0).retiredAt());
+        assertFalse(result.get(0).current());
+    }
+
+    @Test
+    @DisplayName("근속 구간 — 조회 사용자 본인의 저장소만 조회한다")
+    void getMyEmploymentPeriods_readsOnlyAuthenticatedUser() {
+        User me = periodUser(1L, LocalDate.of(2026, 9, 8), true, null);
+        User other = periodUser(2L, LocalDate.of(2019, 1, 2), true, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(me));
+        given(employmentPeriodRepository.findByUserOrderBySeqAsc(me)).willReturn(List.of());
+
+        leaveService.getMyEmploymentPeriods(1L);
+
+        verify(employmentPeriodRepository).findByUserOrderBySeqAsc(me);
+        verify(employmentPeriodRepository, never()).findByUserOrderBySeqAsc(other);
+    }
+
     // ============================ 히트맵 집계 ============================
 
     // Codex가 fixture 시그니처를 확인하지 못해 이 두 건을 내지 않았다(2026-08-20).
@@ -1096,6 +1171,22 @@ class LeaveServiceTest {
                 .bonusDays(BigDecimal.ZERO)
                 .advanceDays(new BigDecimal(advanceDays))
                 .isActive(true)
+                .build();
+    }
+
+    private User periodUser(Long id, LocalDate hireDate, boolean active, LocalDate retiredAt) {
+        return User.builder()
+                .id(id)
+                .name("user" + id)
+                .email("user" + id + "@mlsoft.com")
+                .role(Role.EMPLOYEE)
+                .baseDays(BigDecimal.ZERO)
+                .useDays(BigDecimal.ZERO)
+                .bonusDays(BigDecimal.ZERO)
+                .advanceDays(BigDecimal.ZERO)
+                .hireDate(hireDate)
+                .isActive(active)
+                .retiredAt(retiredAt)
                 .build();
     }
 
