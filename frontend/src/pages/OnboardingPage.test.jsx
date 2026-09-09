@@ -330,4 +330,10 @@ describe('OnboardingPage 최초 온보딩 제출 — 직급 선택 입력', () =
 
     expect(screen.queryByLabelText('직급')).not.toBeInTheDocument();
   });
+
+  // 내 정보 화면의 직급 placeholder와 같은 예시를 써야 한다 (B-3)
+  it('직급 placeholder가 내 정보 화면과 같은 예시를 쓴다', () => {
+    renderPage(notStartedUser());
+    expect(screen.getByPlaceholderText('예: 선임 연구원')).toBeInTheDocument();
+  });
 });

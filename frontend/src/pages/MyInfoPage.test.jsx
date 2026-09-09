@@ -262,6 +262,13 @@ describe('MyInfoPage', () => {
     expect(screen.getByDisplayValue('선임연구원')).toHaveAttribute('maxlength', '50');
   });
 
+  // 직책(역할)과 직급(직위)의 placeholder가 서로 뒤바뀌어 있던 결함 (B-3)
+  it('직책·직급 placeholder가 각 항목의 예시로 서로 다르다', () => {
+    renderPage();
+    expect(screen.getByPlaceholderText('예: 파트장')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('예: 선임 연구원')).toBeInTheDocument();
+  });
+
   it('연도 선택을 바꾸면 개인 기록과 공휴일을 같은 연도로 조회한다', () => {
     renderPage();
 

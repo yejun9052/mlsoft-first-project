@@ -215,7 +215,7 @@ export default function MyInfoPage() {
                   type="text"
                   value={position}
                   maxLength={50}
-                  placeholder="예: 선임 연구원"
+                  placeholder="예: 파트장"
                   onChange={(e) => setPosition(e.target.value)}
                 />
               </Field>
@@ -224,7 +224,7 @@ export default function MyInfoPage() {
                   type="text"
                   value={jobGrade}
                   maxLength={50}
-                  placeholder="예: 과장"
+                  placeholder="예: 선임 연구원"
                   onChange={(e) => setJobGrade(e.target.value)}
                 />
               </Field>
