@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import AdminDepartmentsPage from './AdminDepartmentsPage.jsx';
 import {
   useCreateDepartment,
@@ -67,8 +67,23 @@ function dragOnto(fromName, toName) {
   fireEvent.drop(target, { dataTransfer: dt });
 }
 
+const REAL_MATCH_MEDIA = window.matchMedia;
+
+function setViewport(isMobile) {
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches: isMobile,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  window.matchMedia = REAL_MATCH_MEDIA;
 });
 
 describe('AdminDepartmentsPage 드래그로 상위 부서 옮기기', () => {
@@ -136,3 +151,77 @@ describe('AdminDepartmentsPage 드래그로 상위 부서 옮기기', () => {
     expect(screen.getByText('상위 부서')).toBeInTheDocument();
   });
 });
+
+// 좁은 화면 터치 대안 (C-3) — 드래그가 안 먹는 화면에서 카드 + "상위 부서 변경" 버튼으로 대신한다
+describe('AdminDepartmentsPage 좁은 화면 상위 부서 변경', () => {
+  it('좁은 화면에서는 표 대신 카드로 부서를 보여준다', () => {
+    setViewport(true);
+    renderPage([개발본부, 개발팀, 미배정]);
+
+    expect(screen.getByTestId('responsive-table-cards')).toBeInTheDocument();
+    expect(screen.queryByTestId('responsive-table-table')).not.toBeInTheDocument();
+  });
+
+  it('넓은 화면에서는 카드 없이 표를 그대로 보여준다', () => {
+    setViewport(false);
+    renderPage([개발본부, 미배정]);
+
+    expect(screen.getByTestId('responsive-table-table')).toBeInTheDocument();
+    expect(screen.queryByTestId('responsive-table-cards')).not.toBeInTheDocument();
+  });
+
+  it('하위 부서 카드는 상위 부서 이름을 글자로 보여준다 — 들여쓰기만으로는 좁은 폭에서 잘린다', () => {
+    setViewport(true);
+    renderPage([개발본부, 개발팀, 미배정]);
+
+    const card = cardFor(개발팀.name);
+    expect(within(card).getByText(개발본부.name)).toBeInTheDocument();
+  });
+
+  it('최상위 부서 카드는 "최상위"로 표시한다', () => {
+    setViewport(true);
+    renderPage([개발본부, 미배정]);
+
+    const card = cardFor(개발본부.name);
+    expect(within(card).getByText('최상위')).toBeInTheDocument();
+  });
+
+  it('"상위 부서 변경" 버튼이 새 흐름이 아니라 기존 부서 수정 폼을 그대로 연다', () => {
+    setViewport(true);
+    renderPage([개발본부, 개발팀, 미배정]);
+
+    const card = cardFor(개발팀.name);
+    fireEvent.click(within(card).getByRole('button', { name: '상위 부서 변경' }));
+
+    // 드롭다운 경로 테스트와 같은 모달 — 상위 부서 select에 현재 값이 채워져 있다
+    expect(screen.getByDisplayValue(개발팀.name)).toBeInTheDocument();
+    const [, parentSelect] = screen.getAllByRole('combobox');
+    expect(parentSelect).toHaveValue(String(개발본부.id));
+  });
+
+  it('그 폼에서 저장하면 드래그와 같은 PUT 본문이 나간다 — 팀장이 공석이 되지 않는다', () => {
+    setViewport(true);
+    renderPage([개발본부, 개발팀, 미배정]);
+
+    const card = cardFor(개발팀.name);
+    fireEvent.click(within(card).getByRole('button', { name: '상위 부서 변경' }));
+
+    const [, parentSelect] = screen.getAllByRole('combobox');
+    fireEvent.change(parentSelect, { target: { value: String(미배정.id) } });
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    expect(updateMutate.mock.calls[0][0]).toEqual({
+      id: 개발팀.id,
+      name: 개발팀.name,
+      description: 개발팀.description,
+      leaderId: 개발팀.leaderId,
+      parentId: 미배정.id,
+    });
+  });
+});
+
+/** 모바일 카드 루트 요소 — 부서명 텍스트에서 <article>까지 올라간다 */
+function cardFor(name) {
+  return screen.getByText(name).closest('article');
+}
