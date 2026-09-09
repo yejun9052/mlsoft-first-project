@@ -16,6 +16,7 @@ import Pagination from '../components/ui/Pagination.jsx';
 import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { usePageClamp } from '../hooks/usePageClamp.js';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard.js';
+import useMediaQuery from '../hooks/useMediaQuery.js';
 import {
   useLeavePolicies,
   useLeavePolicyConfigs,
@@ -52,8 +53,13 @@ function validateConfigValue(config, value) {
 // 한 화면에 표가 셋이라 이력 표가 길면 아래 것이 통째로 화면 밖으로 밀린다. 다른 목록 화면보다 짧게 끊는다.
 const HISTORY_PAGE_SIZE = 10;
 
+// 표 전환과 같은 브레이크포인트(ResponsiveTable의 MOBILE_TABLE_QUERY, CHANGELOG 모바일 1단계).
+const MOBILE_QUERY = '(max-width: 767px)';
+
 // 연차 정책 — 근속년수별 정책(인라인 수정) / 시스템 설정(일괄 저장) / 리셋·소멸 이력 (docs/03, SYSTEM_ADMIN 전용)
 export default function AdminPolicyPage() {
+  // 좁은 화면에서는 저장 막대를 화면 아래에 고정한다 (아래 changedConfigs 배지 참고).
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const policiesQuery = useLeavePolicies();
   const configsQuery = useLeavePolicyConfigs();
   const currentYear = new Date().getFullYear();
@@ -160,6 +166,10 @@ export default function AdminPolicyPage() {
 
   const visibleConfigs = (configsQuery.data ?? []).filter(isConfigVisible);
 
+  // 좁은 화면 저장 막대 — 미저장 변경이 있을 때만 뜬다. 늘 떠 있으면 화면 아래를 영구히
+  // 잡아먹는 소음이 되고, 지금(데스크톱)도 변경이 없으면 배지가 조용하다.
+  const showMobileSaveBar = isMobile && changedConfigs.length > 0;
+
   // 이탈 경고는 **시스템 설정에만** 건다. 위 근속년수별 정책은 편집 중인 행 안에 저장(✓)·취소(✕)가
   // 붙어 있어 놓칠 수가 없다 — 여기 저장 버튼만 카드 맨 아래 오른쪽으로 멀리 떨어져 있다.
   const unsavedGuard = useUnsavedGuard(changedConfigs.length > 0);
@@ -196,7 +206,9 @@ export default function AdminPolicyPage() {
   }
 
   return (
-    <div>
+    // 좁은 화면 저장 막대가 fixed로 뜨는 동안, 그 아래 깔리는 콘텐츠(리셋 이력 페이지네이션 등)가
+    // 가려지지 않게 여백을 더한다.
+    <div className={showMobileSaveBar ? 'pb-24' : undefined}>
       <PageHeader title="연차 정책" subtitle="근속년수별 연차·시스템 설정·소멸 이력 관리" />
 
       {/* 상단 2단: 근속년수별 정책 | 시스템 설정 */}
@@ -292,7 +304,9 @@ export default function AdminPolicyPage() {
                 {visibleConfigs.map((c) => (
                   <div
                     key={c.name}
-                    className="flex items-start justify-between gap-4 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0"
+                    // 좁은 화면에서는 라벨·설명 위 / 입력 아래로 세로로 쌓는다 — 한 줄로
+                    // 밀어붙이면 설명이 강제로 줄바꿈되며 입력칸과 겹쳐 보인다.
+                    className="flex flex-col gap-2 border-b border-white/[0.10] py-3.5 first:pt-0 last:border-0 last:pb-0 md:flex-row md:items-start md:justify-between md:gap-4"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -316,7 +330,8 @@ export default function AdminPolicyPage() {
                         </div>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                    {/* 숫자 입력과 단위가 같은 flex 줄 안에 있어 폭이 좁아져도 떨어지지 않는다 */}
+                    <div className="flex shrink-0 items-center justify-end gap-1.5 md:pt-0.5">
                       <ConfigControl
                         config={c}
                         value={currentValue(c)}
@@ -331,17 +346,21 @@ export default function AdminPolicyPage() {
               </div>
               {/* 저장 버튼 옆 미저장 배지 — 떠날 때 붙잡는 것만으로는 부족하다.
                   토글은 눌리는 순간 켜진 것처럼 보여서, 애초에 "아직 저장 안 됨"이 화면에
-                  보여야 저장 버튼을 찾게 된다. 이탈 경고는 그걸 놓쳤을 때의 그물이다 */}
-              <div className="mt-5 flex items-center justify-end gap-3">
-                {changedConfigs.length > 0 && (
-                  <span className="text-[12px] font-medium text-warn">
-                    저장하지 않은 변경 {changedConfigs.length}건
-                  </span>
-                )}
-                <Button Icon={Save} onClick={handleSaveConfigs} loading={savingConfigs}>
-                  설정 저장
-                </Button>
-              </div>
+                  보여야 저장 버튼을 찾게 된다. 이탈 경고는 그걸 놓쳤을 때의 그물이다.
+                  좁은 화면에서는 이 줄 대신 화면 아래 고정 막대(showMobileSaveBar)를 쓴다 —
+                  카드 바닥은 스크롤해야 보이는데, 이 화면은 저장 누락을 막으려고 만든 화면이다. */}
+              {!isMobile && (
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  {changedConfigs.length > 0 && (
+                    <span className="text-[12px] font-medium text-warn">
+                      저장하지 않은 변경 {changedConfigs.length}건
+                    </span>
+                  )}
+                  <Button Icon={Save} onClick={handleSaveConfigs} loading={savingConfigs}>
+                    설정 저장
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </Card>
@@ -437,12 +456,32 @@ export default function AdminPolicyPage() {
         />
       </TableCard>
 
+      {/* 좁은 화면 저장 막대 — 스크롤 위치와 무관하게 화면 아래 고정한다.
+          미저장 변경이 없으면 아예 그리지 않는다(showMobileSaveBar) — 늘 떠 있으면 소음이다. */}
+      {showMobileSaveBar && (
+        <div
+          role="status"
+          className="safe-area-bottom glass-strong fixed inset-x-0 bottom-0 z-40 flex items-center justify-between gap-3 border-t border-white/[0.12] px-4 py-3"
+        >
+          <span className="text-[12px] font-medium text-warn">
+            저장하지 않은 변경 {changedConfigs.length}건
+          </span>
+          <Button Icon={Save} onClick={handleSaveConfigs} loading={savingConfigs}>
+            설정 저장
+          </Button>
+        </div>
+      )}
+
       {/* 저장하지 않고 나가려 할 때 — 저장 버튼이 **어디에 있는지**까지 말해준다.
           "저장되지 않았습니다"만 띄우면 이 창을 처음 본 사람은 어디를 눌러야 할지 모른다 */}
       <ConfirmDialog
         open={unsavedGuard.blocked}
         title="저장하지 않고 나가시겠습니까?"
-        message={`시스템 설정 ${changedConfigs.length}건을 바꿨지만 아직 저장하지 않았습니다. '연차 시스템 설정' 카드 오른쪽 아래의 '설정 저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다.`}
+        message={
+          isMobile
+            ? `시스템 설정 ${changedConfigs.length}건을 바꿨지만 아직 저장하지 않았습니다. 화면 아래 고정된 '설정 저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다.`
+            : `시스템 설정 ${changedConfigs.length}건을 바꿨지만 아직 저장하지 않았습니다. '연차 시스템 설정' 카드 오른쪽 아래의 '설정 저장' 버튼을 눌러야 반영됩니다. 지금 나가면 바꾼 값은 사라집니다.`
+        }
         tone="danger"
         confirmLabel="그냥 나가기"
         cancelLabel="취소"

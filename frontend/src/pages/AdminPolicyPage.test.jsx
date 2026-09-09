@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import AdminPolicyPage from './AdminPolicyPage.jsx';
 import {
@@ -61,9 +61,24 @@ function renderPage({ configs = [] } = {}) {
   return render(<RouterProvider router={router} />);
 }
 
+const REAL_MATCH_MEDIA = window.matchMedia;
+
+function setViewport(isMobile) {
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches: isMobile,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   syncMutate.mockReset();
+});
+
+afterEach(() => {
+  window.matchMedia = REAL_MATCH_MEDIA;
 });
 
 describe('AdminPolicyPage 공휴일 동기화', () => {
@@ -173,5 +188,41 @@ describe('AdminPolicyPage 시스템 설정 조건부 노출', () => {
 
     fireEvent.change(screen.getByLabelText(MODE_CONFIG.label), { target: { value: 'AUTO' } });
     expect(screen.getByLabelText(YEARS_CONFIG.label)).toHaveValue(5);
+  });
+});
+
+// 좁은 화면 저장 막대 (C-2) — 값을 바꾸고도 저장 버튼을 못 보고 나가는 것을 막는다
+describe('AdminPolicyPage 좁은 화면 저장 막대', () => {
+  it('넓은 화면에서는 화면 아래 고정 막대를 그리지 않는다', () => {
+    setViewport(false);
+    renderPage({ configs: [YEARS_CONFIG] });
+
+    fireEvent.change(screen.getByLabelText(YEARS_CONFIG.label), { target: { value: '5' } });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    // 카드 안 저장 버튼은 그대로 하나만 있다
+    expect(screen.getAllByRole('button', { name: '설정 저장' })).toHaveLength(1);
+  });
+
+  it('좁은 화면에서 변경이 없으면 조용하다 — 늘 떠 있으면 소음이다', () => {
+    setViewport(true);
+    renderPage({ configs: [YEARS_CONFIG] });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText(/저장하지 않은 변경/)).not.toBeInTheDocument();
+  });
+
+  it('좁은 화면에서 값을 바꾸면 저장 막대가 뜨고, 그 버튼으로 저장할 수 있다', () => {
+    setViewport(true);
+    renderPage({ configs: [YEARS_CONFIG] });
+
+    fireEvent.change(screen.getByLabelText(YEARS_CONFIG.label), { target: { value: '5' } });
+
+    const bar = screen.getByRole('status');
+    expect(within(bar).getByText('저장하지 않은 변경 1건')).toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole('button', { name: '설정 저장' }));
+
+    expect(updateConfigMutateAsync).toHaveBeenCalledWith({ name: YEARS_CONFIG.name, value: '5' });
   });
 });
