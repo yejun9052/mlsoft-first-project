@@ -320,13 +320,43 @@ public class UserService {
         });
     }
 
-    /** 부서 변경 (PATCH /api/users/{id}/department, SA) — 퇴직자 대상이면 ALREADY_RETIRED */
+    /** 부서 변경 (PATCH /api/users/{id}/department, SA) — 팀장 자리 보유자는 먼저 자리 정리를 요구한다. */
     @Transactional
     public UserResponse changeDepartment(Long targetId, Long departmentId, Long actorId) {
+        return changeDepartmentInternal(targetId, departmentId, actorId, false);
+    }
+
+    /**
+     * 부서 변경 공통 구현.
+     *
+     * <p>단독 부서 변경은 {@code department.leader_id}를 기준으로 팀장 자리 보유자를 거부한다.
+     * 역할·부서 동시 변경에서 사원으로 내리는 경우에만 기존 팀장 자리를
+     * {@link #releaseDepartmentLeader(Department, Long)}로 먼저 비운 뒤 이동한다.
+     */
+    private UserResponse changeDepartmentInternal(
+            Long targetId,
+            Long departmentId,
+            Long actorId,
+            boolean allowLeaderRelease
+    ) {
         User target = findUserOrThrow(targetId);
         validateNotRetired(target);
         Department department = departmentRepository.findByIdAndActiveTrue(departmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+
+        // 역할(users.role)은 실제 결재선을 결정하지 않는다 — 반드시 leader_id를 본다.
+        // 단독 이동에서 이 검사를 통과시키면 원래 부서의 결재선이 옮긴 사람을 계속 가리킨다.
+        List<Department> ledDepartments = departmentRepository.findByLeader(target);
+        if (!allowLeaderRelease && !ledDepartments.isEmpty()) {
+            throw new BusinessException(ErrorCode.LEADER_REASSIGNMENT_REQUIRED_FOR_DEPARTMENT_CHANGE);
+        }
+
+        // 팀장→사원 동시 변경은 관리자가 먼저 다른 팀장을 지정한 것과 같은 정리 절차다.
+        // 공석 처리·역할 강등·대기 결재 이관은 기존 공용 메서드에 맡긴다.
+        if (allowLeaderRelease) {
+            ledDepartments.forEach(ledDepartment -> releaseDepartmentLeader(ledDepartment, actorId));
+        }
+
         String before = departmentLabel(target.getDepartment());
         target.assignDepartment(department);
         adminAuditService.recordUserChange(actorId, AdminAction.DEPARTMENT_CHANGED, target,
@@ -342,10 +372,10 @@ public class UserService {
      * 부분 성공을 막을 수 없다. 이 진입점의 트랜잭션이 두 기존 메서드와 감사 기록을
      * 함께 감싸므로, 역할 변경이 실패하면 먼저 수행한 부서 변경도 롤백된다.
      *
-     * <p>순서는 의도적으로 부서 변경이 먼저다. {@link #changeRole}의
-     * {@code DEPARTMENT_REQUIRED_FOR_LEADER} 가드는 마지막 그물로 그대로 두고,
-     * 팀장 교체·기존 팀장 강등·대기 결재 이관은 {@link #assignDepartmentLeader}가
-     * 가진 기존 규칙을 그대로 재사용한다.
+     * <p>기본 순서는 부서 변경이 먼저다. 다만 사원으로 내리면서 이동하는 경우에는
+     * {@link #releaseDepartmentLeader(Department, Long)}로 기존 팀장 자리를 먼저 비운다.
+     * 팀장 승격의 {@code DEPARTMENT_REQUIRED_FOR_LEADER} 가드는 마지막 그물로 그대로 두고,
+     * 팀장 교체·기존 팀장 강등·대기 결재 이관은 기존 공용 메서드의 규칙을 재사용한다.
      */
     @Transactional
     public UserResponse changeRoleAndDepartment(
@@ -354,7 +384,14 @@ public class UserService {
             Long departmentId,
             Long actorId
     ) {
-        changeDepartment(targetId, departmentId, actorId);
+        UserResponse departmentChanged = changeDepartmentInternal(
+                targetId, departmentId, actorId, role == Role.EMPLOYEE);
+
+        // releaseDepartmentLeader가 이미 팀장 역할을 사원으로 내린 경우에는
+        // changeRole을 다시 호출하지 않아 "사원→사원" 감사 기록을 만들지 않는다.
+        if (role == Role.EMPLOYEE && Role.EMPLOYEE.name().equals(departmentChanged.role())) {
+            return departmentChanged;
+        }
         return changeRole(targetId, role, actorId);
     }
 

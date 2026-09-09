@@ -649,6 +649,109 @@ class UserServiceTest {
         verify(departmentRepository, never()).findByIdAndActiveTrue(any());
     }
 
+    @Test
+    @DisplayName("부서 변경 — leader_id로 팀장인 대상은 이동을 거부하고 기존 상태·감사 기록을 유지한다")
+    void changeDepartment_leaderPointer_throwsAndKeepsState() {
+        Department current = Department.create("개발팀", "설명", null);
+        Department destination = Department.create("기획팀", "설명", null);
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        target.assignDepartment(current);
+        current.assignLeader(target);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(destination));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of(current));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.changeDepartment(1L, 10L, ACTOR_ID));
+
+        assertEquals(ErrorCode.LEADER_REASSIGNMENT_REQUIRED_FOR_DEPARTMENT_CHANGE, ex.getErrorCode());
+        assertEquals(current, target.getDepartment(), "거부됐는데 대상의 소속 부서가 바뀌었다");
+        assertEquals(target, current.getLeader(), "거부됐는데 기존 부서의 팀장이 바뀌었다");
+        verify(adminAuditService, never()).recordUserChange(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("부서 변경 — 역할은 팀장이어도 leader_id가 다른 사람인 어긋난 상태는 이동을 허용한다")
+    void changeDepartment_roleLeaderButNotDepartmentLeader_succeeds() {
+        Department current = Department.create("개발팀", "설명", null);
+        Department destination = Department.create("기획팀", "설명", null);
+        User actualLeader = activeUser(2L, Role.TEAM_LEADER);
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        target.assignDepartment(current);
+        current.assignLeader(actualLeader);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(destination));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+
+        userService.changeDepartment(1L, 10L, ACTOR_ID);
+
+        assertEquals(destination, target.getDepartment());
+        assertEquals(actualLeader, current.getLeader());
+    }
+
+    @Test
+    @DisplayName("부서 변경 — 사원은 기존처럼 다른 부서로 이동할 수 있다")
+    void changeDepartment_employee_succeeds() {
+        Department current = Department.create("개발팀", "설명", null);
+        Department destination = Department.create("기획팀", "설명", null);
+        User target = activeUser(1L, Role.EMPLOYEE);
+        target.assignDepartment(current);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(destination));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of());
+
+        userService.changeDepartment(1L, 10L, ACTOR_ID);
+
+        assertEquals(destination, target.getDepartment());
+    }
+
+    @Test
+    @DisplayName("역할·부서 동시 변경 — 팀장을 사원으로 내리면서 이동하면 기존 부서를 공석으로 만든다")
+    void changeRoleAndDepartment_demoteLeaderWhileMoving_releasesOldDepartment() {
+        Department current = Department.create("개발팀", "설명", null);
+        Department destination = Department.create("기획팀", "설명", null);
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        target.assignDepartment(current);
+        current.assignLeader(target);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(destination));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of(current));
+        givenNoReassignTargets(target);
+
+        UserResponse response = userService.changeRoleAndDepartment(
+                1L, Role.EMPLOYEE, 10L, ACTOR_ID);
+
+        assertEquals(destination, target.getDepartment());
+        assertNull(current.getLeader(), "기존 부서가 공석이 되지 않았다");
+        assertEquals(Role.EMPLOYEE, target.getRole());
+        assertEquals(Role.EMPLOYEE.name(), response.role());
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.ROLE_CHANGED, target, "팀장", "사원");
+        verify(adminAuditService).recordUserChange(
+                ACTOR_ID, AdminAction.DEPARTMENT_CHANGED, target, "개발팀", "기획팀");
+    }
+
+    @Test
+    @DisplayName("역할·부서 동시 변경 — 팀장 역할을 유지한 채 이동하면 leader_id 기준으로 거부한다")
+    void changeRoleAndDepartment_keepLeaderRoleWhileMoving_throws() {
+        Department current = Department.create("개발팀", "설명", null);
+        Department destination = Department.create("기획팀", "설명", null);
+        User target = activeUser(1L, Role.TEAM_LEADER);
+        target.assignDepartment(current);
+        current.assignLeader(target);
+        given(userRepository.findById(1L)).willReturn(Optional.of(target));
+        given(departmentRepository.findByIdAndActiveTrue(10L)).willReturn(Optional.of(destination));
+        given(departmentRepository.findByLeader(target)).willReturn(List.of(current));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> userService.changeRoleAndDepartment(1L, Role.TEAM_LEADER, 10L, ACTOR_ID));
+
+        assertEquals(ErrorCode.LEADER_REASSIGNMENT_REQUIRED_FOR_DEPARTMENT_CHANGE, ex.getErrorCode());
+        assertEquals(current, target.getDepartment(), "거부됐는데 대상의 소속 부서가 바뀌었다");
+        assertEquals(target, current.getLeader(), "거부됐는데 기존 부서의 팀장이 바뀌었다");
+        verify(adminAuditService, never()).recordUserChange(any(), any(), any(), any(), any());
+    }
+
     // ============================ 마지막 SYSTEM_ADMIN 보호 (리뷰 S-2) ============================
 
     @Test

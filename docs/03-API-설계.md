@@ -39,6 +39,7 @@
 | REHIRE_DATE_BEFORE_RETIREMENT | 400 | 재입사일은 퇴직일보다 빠를 수 없습니다 |
 | INVALID_CONFIG_VALUE | 400 | 설정 값 형식이 올바르지 않습니다 |
 | CONFIG_VALUE_OUT_OF_RANGE | 400 | 설정 값이 허용 범위를 벗어났습니다 |
+| LEADER_REASSIGNMENT_REQUIRED_FOR_DEPARTMENT_CHANGE | 400 | 팀장은 먼저 다른 사람을 팀장으로 지정한 뒤 부서를 옮겨야 합니다 |
 | HOLIDAY_API_KEY_NOT_CONFIGURED | 400 | 공휴일 API 키가 설정되지 않았습니다 |
 | HOLIDAY_API_CALL_FAILED | 502 | 공휴일 API 호출에 실패했습니다 |
 | HOLIDAY_API_BAD_RESPONSE | 502 | 공휴일 API 응답이 올바르지 않습니다 |
