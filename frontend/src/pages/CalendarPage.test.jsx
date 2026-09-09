@@ -222,10 +222,56 @@ describe('CalendarPage 하루 상세 모달', () => {
     fireEvent.click(screen.getByRole('button', { name: '2026-08-21 등록 날짜 선택' }));
     expect(screen.getByText(/2일 선택됨/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '선택 완료' }));
+    fireEvent.click(screen.getByRole('button', { name: '적용' }));
     const panel = screen.getByRole('dialog', { name: '캘린더 등록 패널' });
     expect(within(panel).getByText('8/20 (목)')).toBeInTheDocument();
     expect(within(panel).getByText('8/21 (금)')).toBeInTheDocument();
+  });
+
+  it('날짜 선택 모드에서 고른 날짜는 하단 바에 칩으로 쌓이고 칩의 ×로 뺄 수 있다', () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: `${DATE} 등록 날짜 선택` }));
+    fireEvent.click(screen.getByRole('button', { name: '8월 20일에 추가' }));
+    fireEvent.click(screen.getByRole('button', { name: '날짜 더 선택하기' }));
+    fireEvent.click(screen.getByRole('button', { name: '2026-08-21 등록 날짜 선택' }));
+
+    const toolbar = screen.getByTestId('mobile-date-selection-toolbar');
+    expect(within(toolbar).getByText('8/20 (목)')).toBeInTheDocument();
+    expect(within(toolbar).getByText('8/21 (금)')).toBeInTheDocument();
+
+    fireEvent.click(within(toolbar).getByRole('button', { name: '2026-08-21 제거' }));
+    expect(within(toolbar).queryByText('8/21 (금)')).not.toBeInTheDocument();
+    expect(screen.getByText(/1일 선택됨/)).toBeInTheDocument();
+  });
+
+  it('날짜 선택 모드에서 취소하면 들어가기 전 선택 상태로 신청 화면에 돌아온다', () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: `${DATE} 등록 날짜 선택` }));
+    fireEvent.click(screen.getByRole('button', { name: '8월 20일에 추가' }));
+    fireEvent.click(screen.getByRole('button', { name: '날짜 더 선택하기' }));
+    fireEvent.click(screen.getByRole('button', { name: '2026-08-21 등록 날짜 선택' }));
+    expect(screen.getByText(/2일 선택됨/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(screen.queryByTestId('mobile-date-selection-toolbar')).not.toBeInTheDocument();
+    const panel = screen.getByRole('dialog', { name: '캘린더 등록 패널' });
+    expect(within(panel).getByText('8/20 (목)')).toBeInTheDocument();
+    expect(within(panel).queryByText('8/21 (금)')).not.toBeInTheDocument();
   });
 });
 

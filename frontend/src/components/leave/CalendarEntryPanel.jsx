@@ -6,6 +6,7 @@ import { LEAVE_TYPE_LABEL, SCHEDULE_TYPE_LABEL } from '../../constants/status.js
 import { useApplyLeave } from '../../hooks/useLeaves.js';
 import { useCreateSchedule, useScheduleTypes } from '../../hooks/useSchedules.js';
 import { useApprovers } from '../../hooks/useUsers.js';
+import useMediaQuery from '../../hooks/useMediaQuery.js';
 import Field from '../ui/Field.jsx';
 import SegmentedControl from '../ui/SegmentedControl.jsx';
 import Textarea from '../ui/Textarea.jsx';
@@ -95,12 +96,28 @@ export default function CalendarEntryPanel({
   const isLeave = mode === 'LEAVE';
   const pending = isLeave ? applyLeaveMutation.isPending : createScheduleMutation.isPending;
 
-  // 패널 위치 — 처음엔 우측 상단, 이후 드래그 값 유지
+  // 패널 위치 — 처음엔 우측 상단, 이후 드래그 값 유지 (모바일에서는 CSS가 하단 시트로 고정한다)
   const [pos, setPos] = useState(() => ({
     x: Math.max(16, window.innerWidth - 452),
     y: 108,
   }));
   const dragOffset = useRef(null);
+
+  // 모바일 하단 시트 — 평소엔 뒷화면이 보이는 높이, 위로 끌거나 입력칸에 포커스가 가면(키보드가
+  // 올라오면) 전체 화면으로 펼친다. 1단계에서 "전체 화면 고정"으로 정했던 이유(키보드가 남는
+  // 높이를 가리는 문제)를 이 방식이 그대로 대신한다 (docs/12 ⑩C-4 사용자 답변 2026-08-20).
+  const isMobile = useMediaQuery('(max-width: 639px)');
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const mobileDragStartYRef = useRef(null);
+
+  // 입력칸(텍스트영역)에 포커스가 가면 키보드가 올라온다는 신호로 보고 확장한다.
+  // select는 OS 피커라 키보드를 띄우지 않으므로 대상에서 뺀다.
+  function handleContentFocus(e) {
+    if (!isMobile) return;
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+      setMobileExpanded(true);
+    }
+  }
 
   // 창이 좁아져도(윈도우 스냅·모니터 변경) 패널이 화면 밖에 고립되지 않게 재클램프
   useEffect(() => {
@@ -123,20 +140,52 @@ export default function CalendarEntryPanel({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // 포인터 캡처 미지원 환경(jsdom, 일부 구형 브라우저)에서도 드래그 자체는 계속 동작해야 한다.
+  function capturePointer(e) {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // 캡처 없이도 onPointerMove/Up은 대상 엘리먼트에서 계속 받는다 — 조용히 넘어간다
+    }
+  }
+
   function onDragStart(e) {
+    if (isMobile) {
+      mobileDragStartYRef.current = e.clientY;
+      capturePointer(e);
+      return;
+    }
     dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
+    capturePointer(e);
   }
 
   function onDragMove(e) {
-    if (!dragOffset.current) return;
+    if (isMobile || !dragOffset.current) return;
     setPos({
       x: Math.min(Math.max(8, e.clientX - dragOffset.current.dx), window.innerWidth - 120),
       y: Math.min(Math.max(8, e.clientY - dragOffset.current.dy), window.innerHeight - 60),
     });
   }
 
-  function onDragEnd() {
+  // 모바일 시트 — 위로 끌면 전체 화면, 아래로 끌면 원래 높이로(이미 원래 높이면 닫기).
+  // 임계값(40px) 미만은 탭·미세한 흔들림으로 보고 무시한다.
+  function onDragEnd(e) {
+    if (isMobile) {
+      const startY = mobileDragStartYRef.current;
+      mobileDragStartYRef.current = null;
+      if (startY == null) return;
+      const deltaY = startY - e.clientY;
+      if (deltaY > 40) {
+        setMobileExpanded(true);
+      } else if (deltaY < -40) {
+        if (mobileExpanded) {
+          setMobileExpanded(false);
+        } else {
+          onClose();
+        }
+      }
+      return;
+    }
     dragOffset.current = null;
   }
 
@@ -231,11 +280,14 @@ export default function CalendarEntryPanel({
     <div
       role="dialog"
       aria-label="캘린더 등록 패널"
-      className="calendar-entry-panel glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.15] shadow-card"
+      className={`calendar-entry-panel glass-strong glass-edge fixed z-50 w-[424px] overflow-hidden rounded-card border border-white/[0.15] shadow-card ${
+        mobileExpanded ? 'calendar-entry-panel-expanded' : ''
+      }`}
       style={{ left: pos.x, top: pos.y }}
     >
-      {/* 드래그 핸들 헤더 */}
+      {/* 드래그 핸들 헤더 — 데스크톱은 위치 이동, 모바일은 위/아래로 끌어 시트를 확장·축소한다 */}
       <div
+        data-testid="calendar-entry-panel-handle"
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}
         onPointerUp={onDragEnd}
@@ -257,7 +309,7 @@ export default function CalendarEntryPanel({
         />
       </div>
 
-      <div className="flex flex-col gap-4 px-5 py-4">
+      <div className="flex flex-col gap-4 px-5 py-4" onFocus={handleContentFocus}>
         {/* 1단 — 성격이 다른 두 흐름을 먼저 가른다 (차감·결재 유무) */}
         <SegmentedControl options={MODE_OPTIONS} value={mode} onChange={setMode} />
 

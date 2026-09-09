@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import CalendarEntryPanel from './CalendarEntryPanel.jsx';
 import { useApplyLeave } from '../../hooks/useLeaves.js';
 import { useCreateSchedule, useScheduleTypes } from '../../hooks/useSchedules.js';
@@ -115,5 +115,69 @@ describe('CalendarEntryPanel 다음 회차 예약 분리', () => {
 
     expect(screen.getByText(/주말·공휴일 1일이 포함/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '신청하기' })).toBeDisabled();
+  });
+});
+
+describe('CalendarEntryPanel 모바일 시트 확장', () => {
+  const REAL_MATCH_MEDIA = window.matchMedia;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    useApplyLeave.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+    useCreateSchedule.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+    useScheduleTypes.mockReturnValue({ data: [] });
+    useApprovers.mockReturnValue({ data: [] });
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+  });
+
+  afterEach(() => {
+    window.matchMedia = REAL_MATCH_MEDIA;
+  });
+
+  // 키보드가 실제로 올라오는지는 jsdom에서 관측할 수 없다. 대신 키보드를 띄우는 유일한 신호인
+  // "텍스트 입력칸 포커스"로 판정하므로, 그 포커스 이벤트가 확장 클래스를 붙이는지로 검증한다.
+  it('사유 입력칸에 포커스가 가면 시트가 전체 화면 클래스를 얻는다', () => {
+    renderPanel({ dates: ['2026-08-20'], remainingDays: 12 });
+
+    const panel = screen.getByRole('dialog', { name: '캘린더 등록 패널' });
+    expect(panel.className).not.toMatch(/calendar-entry-panel-expanded/);
+
+    fireEvent.focus(screen.getByPlaceholderText('사유를 입력하세요 (승인자에게만 표시)'));
+
+    expect(panel.className).toMatch(/calendar-entry-panel-expanded/);
+  });
+
+  it('데스크톱(모바일이 아님)에서는 입력칸 포커스로 확장하지 않는다', () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+    renderPanel({ dates: ['2026-08-20'], remainingDays: 12 });
+
+    fireEvent.focus(screen.getByPlaceholderText('사유를 입력하세요 (승인자에게만 표시)'));
+
+    const panel = screen.getByRole('dialog', { name: '캘린더 등록 패널' });
+    expect(panel.className).not.toMatch(/calendar-entry-panel-expanded/);
+  });
+
+  it('핸들을 위로 끌면 전체 화면으로, 다시 아래로 끌면 원래 높이로 돌아온다', () => {
+    renderPanel({ dates: ['2026-08-20'], remainingDays: 12 });
+
+    const panel = screen.getByRole('dialog', { name: '캘린더 등록 패널' });
+    const handle = screen.getByTestId('calendar-entry-panel-handle');
+
+    fireEvent.pointerDown(handle, { clientY: 400, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientY: 320, pointerId: 1 });
+    expect(panel.className).toMatch(/calendar-entry-panel-expanded/);
+
+    fireEvent.pointerDown(handle, { clientY: 320, pointerId: 1 });
+    fireEvent.pointerUp(handle, { clientY: 400, pointerId: 1 });
+    expect(panel.className).not.toMatch(/calendar-entry-panel-expanded/);
   });
 });

@@ -375,6 +375,8 @@ export default function CalendarPage() {
     [holidays, otherYearHolidaysQuery.data],
   );
   const [mobileDateSelectionMode, setMobileDateSelectionMode] = useState(false);
+  // 날짜 선택 모드에 들어가기 전 선택 상태 — 취소하면 여기로 되돌린다.
+  const dateSelectionSnapshotRef = useRef([]);
   const [dayDetail, setDayDetail] = useState(null);
 
   // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산
@@ -598,6 +600,7 @@ export default function CalendarPage() {
 
   function openMobileDateSelection() {
     if (!isMobile) return;
+    dateSelectionSnapshotRef.current = selectedDates;
     setSelectedDates((previous) =>
       previous.length > 0 ? previous : [mobileFocusedDateForView],
     );
@@ -607,6 +610,13 @@ export default function CalendarPage() {
 
   function completeMobileDateSelection() {
     if (selectedDates.length === 0) return;
+    setMobileDateSelectionMode(false);
+    setPanelOpen(true);
+  }
+
+  // 취소 — 날짜 선택 모드에 들어오면서 고르거나 뺀 것을 전부 무르고 신청 화면으로 돌아간다.
+  function cancelMobileDateSelection() {
+    setSelectedDates(dateSelectionSnapshotRef.current);
     setMobileDateSelectionMode(false);
     setPanelOpen(true);
   }
@@ -748,20 +758,49 @@ export default function CalendarPage() {
           className="mobile-date-selection-toolbar"
           aria-label="모바일 날짜 선택"
         >
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-ink-hi">날짜 선택</p>
-            <p aria-live="polite" className="mt-0.5 text-[11px] text-ink-mute">
-              {selectedDates.length}일 선택됨 · 날짜를 눌러 추가하거나 해제하세요
-            </p>
+          <div className="mobile-date-selection-toolbar-header">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-ink-hi">날짜 선택</p>
+              <p aria-live="polite" className="mt-0.5 text-[11px] text-ink-mute">
+                {selectedDates.length}일 선택됨 · 날짜를 눌러 추가하거나 해제하세요
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={cancelMobileDateSelection}
+                className="rounded-badge bg-navy-app/60 px-3 py-2 text-[12px] font-semibold text-ink-mute ring-1 ring-inset ring-white/[0.14] transition-colors hover:text-ink-body"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={completeMobileDateSelection}
+                disabled={selectedDates.length === 0}
+                className="rounded-badge bg-accent-cyan px-3 py-2 text-[12px] font-bold text-navy-app transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                적용
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={completeMobileDateSelection}
-            disabled={selectedDates.length === 0}
-            className="shrink-0 rounded-badge bg-accent-cyan px-3 py-2 text-[12px] font-bold text-navy-app transition-opacity disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            선택 완료
-          </button>
+
+          {selectedDates.length > 0 && (
+            <div className="mobile-date-selection-chips" aria-label="선택한 날짜 목록">
+              {selectedDates.map((date) => (
+                <span key={date} className="mobile-date-selection-chip">
+                  {dayjs(date).format('M/D')} ({WEEKDAYS[dayjs(date).day()]})
+                  <button
+                    type="button"
+                    onClick={() => toggleSelectedDate(date)}
+                    aria-label={`${date} 제거`}
+                    className="mobile-date-selection-chip-remove"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
