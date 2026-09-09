@@ -507,6 +507,33 @@ describe('AdminMembersPage 재입사 처리', () => {
   });
 });
 
+describe('AdminMembersPage 표 가로 스크롤에서도 관리 열이 보인다', () => {
+  // 컬럼이 많아 표가 가로로 스크롤되면 관리 열(복구·재입사·보류·파기)이 오른쪽 밖으로 잘려
+  // 있는지조차 모르는 결함이었다 (B-2). sticky로 고정해 항상 보이게 한다.
+  const 퇴직자 = { ...남, name: '최민서', retiredAt: '2026-05-01' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('재직 탭의 관리 열은 오른쪽에 고정된다', () => {
+    renderPage();
+
+    const 관리열 = screen.getByRole('columnheader', { name: '관리' });
+    expect(관리열.className).toContain('sticky');
+    expect(관리열.className).toContain('right-0');
+  });
+
+  it('퇴직 탭의 관리 열도 오른쪽에 고정된다', () => {
+    renderPage([나], [개발팀], [퇴직자]);
+    fireEvent.click(screen.getByRole('button', { name: /^퇴직\d*$/ }));
+
+    const 관리열 = screen.getByRole('columnheader', { name: '관리' });
+    expect(관리열.className).toContain('sticky');
+    expect(관리열.className).toContain('right-0');
+  });
+});
+
 describe('AdminMembersPage 퇴직자 파기', () => {
   // 3년 이상 지나 파기할 수 있는 사람 — purgeEligible은 서버가 보존 기간·보류·파기 여부를
   // 모두 반영해 계산해 내려주므로(UserService.toRetiredResponse) 화면은 이 값 하나만 본다.

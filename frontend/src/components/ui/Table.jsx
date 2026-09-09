@@ -17,13 +17,16 @@ export function THead({ children }) {
   );
 }
 
-// 헤더 셀
-export function Th({ children, right = false, className = '' }) {
+// 헤더 셀. sticky=true면 오른쪽에 고정한다 — 컬럼이 많아 가로 스크롤이 생기는 표에서
+// 마지막 "관리" 열이 스크롤 밖으로 밀려 조작 버튼 자체를 못 보는 문제 대응 (B-2).
+// navy-card는 글래스 카드의 불투명 폴백 토큰이라(index.css) 스크롤되는 셀이 밑으로
+// 비쳐 보이지 않게 가리는 배경으로 그대로 재사용한다 — 새 색을 만들지 않는다.
+export function Th({ children, right = false, sticky = false, className = '' }) {
   return (
     <th
       className={`whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-faint ${
         right ? 'text-right' : 'text-left'
-      } ${className}`}
+      } ${sticky ? 'sticky right-0 z-10 border-l border-white/[0.12] bg-navy-card' : ''} ${className}`}
     >
       {children}
     </th>
@@ -43,9 +46,15 @@ export function TR({ children, className = '', ...rest }) {
   );
 }
 
-// 데이터 셀
-export function Td({ children, right = false, className = '' }) {
+// 데이터 셀. sticky는 Th와 짝을 맞춰 같은 열을 고정한다 (B-2 — Th 주석 참고)
+export function Td({ children, right = false, sticky = false, className = '' }) {
   return (
-    <td className={`whitespace-nowrap px-5 py-3 ${right ? 'text-right' : ''} ${className}`}>{children}</td>
+    <td
+      className={`whitespace-nowrap px-5 py-3 ${right ? 'text-right' : ''} ${
+        sticky ? 'sticky right-0 z-10 border-l border-white/[0.12] bg-navy-card' : ''
+      } ${className}`}
+    >
+      {children}
+    </td>
   );
 }

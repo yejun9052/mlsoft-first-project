@@ -595,11 +595,11 @@ export default function AdminMembersPage() {
             <Th right>연차 (잔여/기본)</Th>
             <Th>입사일</Th>
             {tab === TAB_ACTIVE ? (
-              <Th right>관리</Th>
+              <Th right sticky>관리</Th>
             ) : (
               <>
                 <Th>퇴직일</Th>
-                <Th right>관리</Th>
+                <Th right sticky>관리</Th>
               </>
             )}
           </THead>
@@ -614,7 +614,7 @@ export default function AdminMembersPage() {
                     <span className="font-medium text-ink-hi">{m.name}</span>
                   </div>
                 </Td>
-                <Td className="text-ink-mute">{m.email}</Td>
+                <Td className="max-w-[180px] truncate text-ink-mute">{m.email}</Td>
                 {/* 부서·역할은 표에서 바로 고친다. 퇴직 탭은 조회 전용이라 텍스트·배지 그대로 둔다 */}
                 <Td className="text-ink-body">
                   {tab === TAB_ACTIVE ? (
@@ -669,7 +669,7 @@ export default function AdminMembersPage() {
                 </Td>
                 <Td className="text-ink-mute">{m.hireDate ?? '-'}</Td>
                 {tab === TAB_ACTIVE ? (
-                  <Td right>
+                  <Td right sticky>
                     <div className="flex items-center justify-end gap-1">
                       {/* 역할·부서 아이콘 버튼은 없앴다 — 같은 일을 하는 길이 둘이면 어느 쪽이
                           최신인지 헷갈리고, 표의 셀렉트가 이미 더 빠르다 */}
@@ -698,7 +698,7 @@ export default function AdminMembersPage() {
                         <div className="mt-1 text-[11px] text-warn">보류: {m.purgeHoldReason}</div>
                       )}
                     </Td>
-                    <Td right>
+                    <Td right sticky>
                       <div className="flex items-center justify-end gap-1">
                         {/* 복구는 되살리는 조작이라 accent(시안)다 — 퇴직 처리의 danger와 방향이 반대인 것이
                             색으로 보여야 옆자리를 잘못 누르지 않는다 */}
