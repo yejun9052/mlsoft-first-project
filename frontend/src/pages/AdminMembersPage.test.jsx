@@ -490,6 +490,33 @@ describe('AdminMembersPage 재입사 처리', () => {
     );
   });
 
+  // 연차가 0이 된다는 사실이 눌러야만 보이던 결함 (B-4) — 재입사일을 넣으면 그 행의 실제
+  // 데이터(역할·직급·연차·기산일)로 채운 적용 결과가 바로 보여야 한다.
+  it('재입사일을 입력하면 적용 결과에 역할·직급·연차·기산일이 그 행의 실제 값으로 보인다', () => {
+    const 팀장이었던퇴직자 = {
+      ...퇴직자,
+      role: 'TEAM_LEADER',
+      position: '책임',
+      jobGrade: '과장',
+      remainingDays: 15,
+      baseDays: 16,
+    };
+    퇴직탭([팀장이었던퇴직자]);
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-09-08' },
+    });
+
+    expect(within(dialog).getByText(/역할\s*팀장\s*→\s*사원/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/직책\s*책임\s*→/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/직급\s*과장\s*→/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/연차\s*15\/16\s*→\s*0\/0, 기산일\s*2026-09-08/),
+    ).toBeInTheDocument();
+  });
+
   it('부서를 고르지 않으면 미배정(null)으로 호출된다', () => {
     퇴직탭();
     fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));

@@ -905,6 +905,9 @@ export default function AdminMembersPage() {
                   직책 {rehireTarget.user.position ?? '-'} → <span className="text-ink-faint">(비움)</span>
                 </p>
                 <p className="mt-1">
+                  직급 {rehireTarget.user.jobGrade ?? '-'} → <span className="text-ink-faint">(비움)</span>
+                </p>
+                <p className="mt-1">
                   연차 {Number(rehireTarget.user.remainingDays)}/{Number(rehireTarget.user.baseDays)} → 0/0, 기산일{' '}
                   {rehireTarget.hireDate}
                 </p>
