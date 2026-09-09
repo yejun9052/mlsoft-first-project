@@ -517,6 +517,23 @@ describe('AdminMembersPage 재입사 처리', () => {
     ).toBeInTheDocument();
   });
 
+  // 사원이고 직책·직급이 비어 있으면 "사원 → 사원", "- → (비움)"이 되어 아무것도 알려 주지 않는다.
+  // 바뀌는 것만 남겨야 진짜 변화(연차 초기화)가 눈에 들어온다.
+  it('바뀌지 않는 역할·직책·직급 줄은 적용 결과에 나오지 않는다', () => {
+    퇴직탭([{ ...퇴직자, role: 'EMPLOYEE', position: null, jobGrade: null }]);
+    fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));
+
+    const dialog = screen.getByRole('dialog', { name: '재입사 처리' });
+    fireEvent.change(within(dialog).getByLabelText(`${퇴직자.name}님의 재입사일`), {
+      target: { value: '2026-09-08' },
+    });
+
+    expect(within(dialog).queryByText(/역할/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/직책/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/직급/)).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/연차[\s\S]*기산일\s*2026-09-08/)).toBeInTheDocument();
+  });
+
   it('부서를 고르지 않으면 미배정(null)으로 호출된다', () => {
     퇴직탭();
     fireEvent.click(screen.getByRole('button', { name: '재입사 처리' }));

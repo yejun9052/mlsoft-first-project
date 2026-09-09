@@ -897,16 +897,24 @@ export default function AdminMembersPage() {
             </Field>
             {rehireTarget.hireDate && !rehireDateBeforeRetirement && (
               <div className="rounded-btn border border-white/[0.12] bg-white/[0.03] p-3 text-[12px] leading-relaxed text-ink-body">
-                <p>
-                  역할 {ROLE_LABEL[rehireTarget.user.role]} → {ROLE_LABEL[ROLE.EMPLOYEE]}
-                  <span className="text-ink-faint"> (관리자가 다시 지정해야 합니다)</span>
-                </p>
-                <p className="mt-1">
-                  직책 {rehireTarget.user.position ?? '-'} → <span className="text-ink-faint">(비움)</span>
-                </p>
-                <p className="mt-1">
-                  직급 {rehireTarget.user.jobGrade ?? '-'} → <span className="text-ink-faint">(비움)</span>
-                </p>
+                {/* 실제로 바뀌는 것만 적는다. "사원 → 사원"이나 "- → (비움)"은 읽는 사람에게
+                    아무것도 알려 주지 않으면서 진짜 변화를 묻는다 */}
+                {rehireTarget.user.role !== ROLE.EMPLOYEE && (
+                  <p>
+                    역할 {ROLE_LABEL[rehireTarget.user.role]} → {ROLE_LABEL[ROLE.EMPLOYEE]}
+                    <span className="text-ink-faint"> (관리자가 다시 지정해야 합니다)</span>
+                  </p>
+                )}
+                {rehireTarget.user.position && (
+                  <p className="mt-1">
+                    직책 {rehireTarget.user.position} → <span className="text-ink-faint">(비움)</span>
+                  </p>
+                )}
+                {rehireTarget.user.jobGrade && (
+                  <p className="mt-1">
+                    직급 {rehireTarget.user.jobGrade} → <span className="text-ink-faint">(비움)</span>
+                  </p>
+                )}
                 <p className="mt-1">
                   연차 {Number(rehireTarget.user.remainingDays)}/{Number(rehireTarget.user.baseDays)} → 0/0, 기산일{' '}
                   {rehireTarget.hireDate}
