@@ -352,16 +352,33 @@ export default function CalendarPage() {
   const holidaysQuery = useHolidays(year);
   const holidays = useMemo(() => holidaysQuery.data ?? [], [holidaysQuery.data]);
 
+
   const isFiltered = Boolean(nameQuery) || Boolean(departmentId);
 
   // 등록 패널 — 선택 날짜(YYYY-MM-DD)는 페이지가 소유, 패널 닫으면 선택도 초기화
   const [panelOpen, setPanelOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState([]);
+  // 선택한 날짜가 보고 있는 해를 벗어나면(다음 회차 예약이 그렇다) 그 해 공휴일도 함께 받아야
+  // 패널이 공휴일을 판정할 수 있다. 신청 범위가 다음 1회차까지라 해는 최대 두 개다.
+  const selectedOtherYear = useMemo(() => {
+    const other = selectedDates
+      .map((d) => Number(d.slice(0, 4)))
+      .find((y) => Number.isFinite(y) && y !== year);
+    return other ?? null;
+  }, [selectedDates, year]);
+  const otherYearHolidaysQuery = useHolidays(selectedOtherYear);
+  const holidayDates = useMemo(
+    () => [
+      ...holidays.map((holiday) => holiday.date),
+      ...(otherYearHolidaysQuery.data ?? []).map((holiday) => holiday.date),
+    ],
+    [holidays, otherYearHolidaysQuery.data],
+  );
   const [mobileDateSelectionMode, setMobileDateSelectionMode] = useState(false);
   const [dayDetail, setDayDetail] = useState(null);
 
   // 월 그리드(주 단위 셀 배열)와 날짜별 데이터 계산
-  const { weeks, calData, blockedDates, calendarSpans, multiDayEventKeys } = useMemo(() => {
+  const { weeks, calData, calendarSpans, multiDayEventKeys } = useMemo(() => {
     const base = dayjs(`${year}-${String(month).padStart(2, '0')}-01`);
     const daysInMonth = base.daysInMonth();
     const startOffset = base.day();
@@ -442,24 +459,16 @@ export default function CalendarPage() {
       })),
     );
 
-    // 주말·공휴일 — 연차로 신청할 수 없는 날짜. 개인 일정은 등록할 수 있으므로
-    // 셀 클릭을 막지 않고 패널이 모드에 따라 판단하게 넘긴다.
+    // 공휴일 — 연차로 신청할 수 없는 날짜다. 개인 일정은 등록할 수 있으므로 셀 클릭을 막지 않고
+    // 패널이 모드에 따라 판단하게 넘긴다. **주말은 여기서 세지 않는다** — 패널이 날짜에서 직접
+    // 판정한다. 이 목록이 보이는 달에 묶여 있어, 달을 넘기면 앞서 고른 주말이 빠지던 결함 때문이다.
     const spanData = buildCalendarSpanData(spanRecords, rows, year, month);
-    const blocked = [];
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const weekday = dayjs(dateStr).day();
-      if (weekday === 0 || weekday === 6 || holidays.some((holiday) => holiday.date === dateStr)) {
-        blocked.push(dateStr);
-      }
-    }
 
     return {
       weeks: rows,
       calData: buildCalendarData([...flatLeaves, ...flatSchedules], holidays, year, month),
       calendarSpans: spanData.segmentsByWeek,
       multiDayEventKeys: spanData.multiDayEventKeys,
-      blockedDates: blocked,
     };
   }, [year, month, calendarQuery.data, scheduleQuery.data, holidays, me?.id]);
 
@@ -998,7 +1007,7 @@ export default function CalendarPage() {
       {panelOpen && (
         <CalendarEntryPanel
           dates={selectedDates}
-          blockedDates={blockedDates}
+          holidayDates={holidayDates}
           remainingDays={summaryQuery.data?.remainingDays ?? 0}
           nextResetDate={summaryQuery.data?.nextResetDate ?? null}
           nextCycleReservedDays={summaryQuery.data?.nextCycleReservedDays ?? 0}

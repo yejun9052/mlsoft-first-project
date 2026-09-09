@@ -19,7 +19,7 @@ function renderPanel(props) {
   return render(
     <CalendarEntryPanel
       dates={[]}
-      blockedDates={[]}
+      holidayDates={[]}
       remainingDays={12}
       onRemoveDate={vi.fn()}
       onClose={vi.fn()}
@@ -99,5 +99,21 @@ describe('CalendarEntryPanel 다음 회차 예약 분리', () => {
     });
 
     expect(screen.getByRole('button', { name: '신청하기' })).not.toBeDisabled();
+  });
+
+  it('다른 달의 주말이 섞여 있어도 경고가 뜨고 신청 버튼이 잠긴다', () => {
+    // 깨지면: 달을 넘겨 날짜를 추가하는 순간 앞서 고른 주말이 "막힌 날짜"에서 빠져
+    //         경고가 사라지고 신청이 열린다 — 제출한 뒤에야 서버가 거부한다 (B-1)
+    renderPanel({ dates: ['2026-10-10', '2026-12-10'], holidayDates: [] });
+
+    expect(screen.getByText(/주말·공휴일 1일이 포함/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '신청하기' })).toBeDisabled();
+  });
+
+  it('공휴일은 넘겨받은 목록으로 판정한다', () => {
+    renderPanel({ dates: ['2026-12-25'], holidayDates: ['2026-12-25'] });
+
+    expect(screen.getByText(/주말·공휴일 1일이 포함/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '신청하기' })).toBeDisabled();
   });
 });

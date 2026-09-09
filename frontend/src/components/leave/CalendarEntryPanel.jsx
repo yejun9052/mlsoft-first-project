@@ -57,7 +57,7 @@ function readLastUsed() {
  */
 export default function CalendarEntryPanel({
   dates,
-  blockedDates,
+  holidayDates = [],
   remainingDays,
   nextResetDate,
   nextCycleReservedDays = 0,
@@ -161,7 +161,16 @@ export default function CalendarEntryPanel({
   const nextCycleBlocked = hasNextCycleSelection && !nextCycleReservationEnabled;
 
   // 연차는 주말·공휴일을 신청할 수 없다 (서버도 거부). 개인 일정은 허용하므로 모드에 따라 갈린다.
-  const blockedSelected = isLeave ? dates.filter((d) => blockedDates.includes(d)) : [];
+  //
+  // **주말은 이 패널이 직접 판정한다.** 예전에는 부모가 넘겨준 "막힌 날짜 목록"만 봤는데, 그 목록이
+  // 화면에 보이는 달 기준이라 달을 넘겨 다른 날짜를 추가하면 앞서 고른 주말이 목록에서 빠져
+  // **경고가 사라지고 신청 버튼이 열렸다.** 날짜만 있으면 요일은 언제나 알 수 있으므로 목록에
+  // 의존할 이유가 없다. 공휴일만 조회한 값이 필요해 부모가 넘긴다.
+  const isBlockedDate = (d) => {
+    const weekday = dayjs(d).day();
+    return weekday === 0 || weekday === 6 || holidayDates.includes(d);
+  };
+  const blockedSelected = isLeave ? dates.filter(isBlockedDate) : [];
   const hasBlocked = blockedSelected.length > 0;
 
   function rememberChoice() {
@@ -283,7 +292,7 @@ export default function CalendarEntryPanel({
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {dates.map((d) => {
-                const blocked = isLeave && blockedDates.includes(d);
+                const blocked = isLeave && isBlockedDate(d);
                 return (
                   <span
                     key={d}
@@ -409,7 +418,9 @@ export default function CalendarEntryPanel({
         <Button
           onClick={handleSubmit}
           loading={pending}
-          disabled={isLeave && nextCycleBlocked}
+          // 주말·공휴일이 섞이면 눌러 보기 전에 막는다. 같은 패널의 다음 회차 차단과 동작을
+          // 맞춘 것이다 — 한쪽은 잠기고 한쪽은 눌러야 알려 주면 사용자가 규칙을 배울 수 없다.
+          disabled={isLeave && (nextCycleBlocked || hasBlocked)}
           size="lg"
           className="w-full"
         >
