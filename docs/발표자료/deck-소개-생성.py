@@ -6,7 +6,8 @@
     python -X utf8 docs/발표자료/deck-소개-생성.py --output 다른경로.pptx
     python -X utf8 docs/발표자료/deck-소개-생성.py --export-png 임시검수폴더
 
-필수: python-pptx 1.0.2. PNG 내보내기는 Windows의 PowerPoint COM을 사용한다.
+필수: python-pptx 1.0.2, Pillow. POWERPNT가 없을 때만 COM으로 PNG를 내보낸다.
+POWERPNT 실행 중에는 COM을 호출하지 않고 기하 검사 결과만 보고한다.
 모든 흐름도·아키텍처·표는 편집 가능한 PowerPoint 네이티브 개체다.
 2026-09-11 코드 대조: 취소 시점, 총관리자 자기 결재, 파기 전 재입사,
 기존 감사 로그 보존 범위, 이메일 총 3회 시도 상한을 브리프보다 우선한다.
@@ -16,8 +17,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
+import re
 import subprocess
+from functools import lru_cache
+
+from PIL import ImageFont
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -171,7 +177,7 @@ def arrow(s, points, color=LINE, dashed=False, both=False):
 
 
 def label(s, x, y, w, content, color=MUTED, size=13):
-    return text(s, x, y, w, 0.45, content, size, color, align=PP_ALIGN.CENTER)
+    return text(s, x, y, w, 0.25, content, size, color, align=PP_ALIGN.CENTER)
 
 
 def new_slide(title, subtitle="", source="", dark=False):
@@ -191,6 +197,104 @@ def new_slide(title, subtitle="", source="", dark=False):
 
 def footnote(s, content, color=MUTED):
     text(s, 0.68, 6.63, 11.95, 0.40, content, 13, color)
+
+
+ERD_ENTITIES = {}
+ERD_RELATIONS = []
+ERD_MARKS = set()
+
+
+@lru_cache(maxsize=128)
+def measure_font(size, bold=False):
+    """맑은 고딕의 실제 글리프 폭을 4배 해상도로 측정한다."""
+    filename = "malgunbd.ttf" if bold else "malgun.ttf"
+    return ImageFont.truetype(str(Path("C:/Windows/Fonts") / filename), round(size * 4))
+
+
+def text_width(value, size, bold=False):
+    return measure_font(size, bold).getlength(value) / 4 / 72
+
+
+def entity(s, name, x, y, columns, color=NAVY):
+    """하나의 사각형에 진한 제목 띠와 편집 가능한 컬럼을 배치한다."""
+    w, head, leading, pad = 2.30, .29, .157, .07
+    lines = []
+    for column in columns:
+        # 긴 FK 참조만 둘째 줄로 내려 실제 컬럼명은 끊지 않는다.
+        if text_width(column, 10) > w - 2 * pad and " → " in column:
+            key, target = column.split(" → ", 1)
+            lines.extend([key, "  → " + target])
+        else:
+            lines.append(column)
+    h = head + .07 + len(lines) * leading + .035
+    sh = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(x), Inches(y), Inches(w), Inches(h))
+    sh.name = "ERD|" + name
+    sh.line.color.rgb = rgb(color)
+    sh.line.width = Pt(.85)
+    sh.shadow.inherit = False
+    # 같은 위치에 두 색 정지점을 두어 상단 띠가 있는 단일 도형으로 만든다.
+    sh.fill.gradient()
+    grad = sh._element.spPr.xpath("./a:gradFill")[0]
+    for item in list(grad):
+        grad.remove(item)
+    gs_list = OxmlElement("a:gsLst")
+    stop = str(round(head / h * 100000))
+    for pos, value in [("0", color), (stop, color), (stop, WHITE), ("100000", WHITE)]:
+        gs = OxmlElement("a:gs")
+        gs.set("pos", pos)
+        srgb = OxmlElement("a:srgbClr")
+        srgb.set("val", value)
+        gs.append(srgb)
+        gs_list.append(gs)
+    grad.append(gs_list)
+    linear = OxmlElement("a:lin")
+    linear.set("ang", "5400000")
+    linear.set("scaled", "0")
+    grad.append(linear)
+    tf = sh.text_frame
+    format_frame(tf, name + "\n" + "\n".join(lines), 10, INK, margin=0)
+    tf.margin_left = tf.margin_right = Inches(pad)
+    tf.margin_top = Inches(.035)
+    for i, p in enumerate(tf.paragraphs):
+        p.line_spacing = Inches(head if i == 0 else leading)
+        for run in p.runs:
+            run.font.size = Pt(11 if i == 0 else 10)
+            run.font.bold = i == 0
+            run.font.color.rgb = rgb(WHITE if i == 0 else INK)
+    ERD_ENTITIES[(len(prs.slides), name)] = sh
+    return sh
+
+
+def relation(s, child, fields, parent, points, color=BLUE, logical=False):
+    """각 FK 열의 참조명과 이어지는 관계선. 같은 두 엔티티의 FK는 한 선으로 묶는다."""
+    ERD_RELATIONS.extend((child, field, parent) for field in fields if not logical)
+    for i, (start, end) in enumerate(zip(points, points[1:])):
+        assert start[0] == end[0] or start[1] == end[1], "ERD 대각선 연결 금지"
+        sh = s.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(start[0]), Inches(start[1]),
+                                   Inches(end[0]), Inches(end[1]))
+        sh.name = f"관계|{child}|{','.join(fields)}|{parent}|{i}"
+        sh.line.color.rgb = rgb(color)
+        sh.line.width = Pt(1)
+        sh.shadow.inherit = False
+        if logical:
+            dash = OxmlElement("a:prstDash")
+            dash.set("val", "dash")
+            sh._element.spPr.get_or_add_ln().append(dash)
+    # 경로는 부모(1)에서 자식(N)으로 지정한다. 라벨은 선 옆 빈 공간에 둔다.
+    for point, neighbor, value in [(points[0], points[1], "1"), (points[-1], points[-2], "N")]:
+        key = (len(prs.slides), point, value)
+        if key in ERD_MARKS:
+            continue
+        ERD_MARKS.add(key)
+        dx, dy = neighbor[0] - point[0], neighbor[1] - point[1]
+        if dx:
+            tx = point[0] + .02 if dx > 0 else point[0] - .19
+            ty = point[1] - .20 if value == "1" else point[1] + .02
+        else:
+            tx = point[0] - .20 if value == "1" else point[0] + .03
+            ty = point[1] + .02 if dy > 0 else point[1] - .21
+        mark = text(s, tx, ty, .17, .19, value, 11, color, True)
+        mark.name = "관계수|" + child + "|" + parent + "|" + value
 
 
 def rows(s, items, y=2.00, step=1.00):
@@ -253,7 +357,7 @@ s = new_slide("시스템 전체 구성", "브라우저 화면과 업무 서버�
 node(s, .72, 3.03, 2.22, 1.38, "브라우저", "React 화면", "normal", 24, 19)
 node(s, 4.04, 2.72, 4.10, 1.85, "Spring Boot 서버", "화면 파일 제공 + 업무 API\n단일 앱 컨테이너 · 포트 8080", "navy", 24, 16)
 arrow(s, [(2.94, 3.72), (4.04, 3.72)], BLUE, both=True)
-label(s, 2.92, 3.15, 1.15, "요청·응답", BLUE)
+label(s, 3.00, 3.15, .97, "요청·응답", BLUE)
 for y, title, body in [(1.90, "Google OAuth2", "회사 계정 로그인"),
                        (3.10, "MySQL 8", "운영 데이터 저장"),
                        (4.30, "SMTP", "이메일 발송"),
@@ -279,10 +383,11 @@ table(s, ["외부 서비스", "용도 · 호출 시점", "실패하면", "인증
      "서버 환경변수\n(클라이언트 ID · 시크릿)"],
     ["Gmail SMTP",
      "이메일 발송 (587 · STARTTLS)\n업무 사건 즉시 + 15분마다 재시도",
-     "실패 이력 기록 · 총 3회 재시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
+     "실패 이력 기록 · 최초 포함 총 3회 시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
      "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
 ], [2.3, 3.75, 3.6, 2.3], row_h=1.0, sizes=[15, 13.5, 13.5, 13.5])
-footnote(s, "자격 증명은 저장만 되고 화면에는 마스킹된 값만 보입니다. 공휴일은 요청마다 외부를 부르지 않고 DB 캐시를 씁니다.")
+text(s, .68, 6.26, 11.95, .29, "자격 증명은 마스킹해 표시합니다. 공휴일은 DB 캐시를 사용합니다.", 11, MUTED)
+text(s, .68, 6.69, 11.95, .27, "메일은 업무 저장과 함께 큐에 적재 → 15분마다 재시도(최초 포함 총 3회) → 실패 건은 관리자 수동 재발송", 11, MUTED)
 
 # 16. 백엔드 내부.
 s = new_slide("서버 내부의 업무 구조", "12개 업무 영역을 나누고, 요청 처리와 업무 규칙·데이터 저장의 역할을 분리했습니다.", "CLAUDE.md, 계층 구조\nbackend/src/main/java/com/mlsoft/backend/domain/")
@@ -296,7 +401,7 @@ table(s, ["사람과 조직", "연차와 일정", "운영 지원"], [
     ["인증", "연차", "이메일"], ["구성원", "복리후생", "공휴일"],
     ["부서", "개인 일정", "외부 연동 자격 증명"], ["감사 기록", "정책", "공통 상태"],
 ], [3.94, 3.94, 3.94], y=4.29, row_h=.40, sizes=[16,16,16])
-footnote(s, "인증 정보는 JWT가 담긴 HttpOnly 쿠키로 전달하고, 서버는 최신 계정 상태를 다시 확인합니다.")
+text(s, .68, 6.56, 11.95, .40, "매 요청 서버가 재직·역할·온보딩 상태를 재확인 · 본인 결재 금지(총관리자 예외)\n마지막 총관리자 강등·퇴직 금지 · 본인 퇴직 처리 금지", 11, MUTED)
 
 # 17. 프론트 구조.
 s = new_slide("화면과 데이터의 연결", "17개 화면이 서버 데이터를 공통 방식으로 요청하고 갱신합니다.", "CLAUDE.md, 프론트엔드 데이터 흐름\nfrontend/src/pages/\nfrontend/src/api/index.js")
@@ -313,159 +418,174 @@ text(s, 7.01, 4.71, 5.53, 1.22,
      "구성원 · 부서 · 연차 정책 · 복리후생 정책\n처리 이력 · 이메일 · 외부 연동", 17, MUTED)
 footnote(s, "권한에 맞춰 화면을 열고, 오류 알림을 공통 처리합니다. 디자인 값은 Tailwind v4의 CSS에서 관리합니다.")
 
-# 15c. 데이터베이스 구조 — 사원(users)을 중심으로 21개 테이블을 영역별로 묶어 보여 준다.
-s = new_slide("데이터베이스 구조", "사원(users)을 중심으로 21개 테이블이 7개 영역으로 나뉩니다.", "db/schema.sql — CREATE TABLE 21개, FOREIGN KEY 27개")
-# 1행
-node(s, .68, 1.85, 3.60, 1.35, "조직", "department 부서 (parent_id 계층 · leader_id 팀장)\nemployment_periods 과거 근속 구간", "normal", 17, 12.5)
-node(s, 4.75, 1.85, 3.80, 1.35, "연차", "leave_requests 신청 · leave_dates 날짜별 행\nleave_action_history 처리 이력\nleave_reset_history 기산일 스냅샷", "blue", 17, 12.5)
-node(s, 8.95, 1.85, 3.68, 1.35, "복리후생", "welfare_policies 정책\nwelfare_requests 신청 (policy_id)\nwelfare_action_history 처리 이력", "normal", 17, 12.5)
-# 2행 — 가운데가 users
-node(s, .68, 3.42, 3.60, 1.20, "일정 · 공휴일", "schedule_entries 개인 일정 · schedule_dates 날짜\nholidays 공휴일 캐시 (독립)", "normal", 17, 12.5)
-node(s, 5.45, 3.50, 2.45, 1.05, "users 사원", "잔액 3필드 · 기산일 · 역할\n온보딩 · 퇴직/파기 상태", "navy", 18, 12.5)
-node(s, 8.95, 3.42, 3.68, 1.20, "이메일", "email_history 발송 큐·이력\nleave_reminder_dispatch 소진 안내 기록\nemail_templates 양식", "normal", 17, 12.5)
-# 3행
-node(s, .68, 4.85, 3.60, 1.35, "정책 · 자격 증명", "leave_policy 근속별 부여 · leave_policy_config 설정 12키\nmail_credentials · holiday_api_credentials (암호화 저장)", "gold", 17, 12.5)
-node(s, 4.75, 4.85, 3.80, 1.35, "감사", "admin_audit_log 관리자 조작 기록\nactor_id 누가 · target_user_id 누구에게 · action 13종", "normal", 17, 12.5)
-text(s, 9.05, 4.95, 3.5, 1.2, "화살표는 users를 참조하는 외래 키입니다.\n정책·자격 증명은 사원과 무관한 설정입니다.\n파기 시 행을 지우지 않고 값만 익명화합니다.", 13, MUTED)
-# 외래 키 화살표 — users에서 각 영역으로
-arrow(s, [(6.675, 3.50), (6.675, 3.20)], BLUE)
-arrow(s, [(6.675, 4.55), (6.675, 4.85)], LINE)
-arrow(s, [(5.45, 4.02), (4.28, 4.02)], LINE)
-arrow(s, [(7.90, 4.02), (8.95, 4.02)], LINE)
-arrow(s, [(5.45, 3.72), (4.52, 3.72), (4.52, 3.00), (4.28, 3.00)], LINE)
-arrow(s, [(7.90, 3.72), (8.72, 3.72), (8.72, 3.00), (8.95, 3.00)], LINE)
-text(s, 6.80, 3.21, 1.9, 0.26, "user_id · 승인자 2명", 11, BLUE)
-text(s, 6.80, 4.58, 2.1, 0.26, "actor_id · target_user_id", 11, MUTED)
-text(s, 4.40, 3.74, 0.95, 0.26, "user_id", 11, MUTED)
-text(s, 8.00, 3.74, 0.90, 0.26, "user_id", 11, MUTED)
-footnote(s, "연차 일수는 소수 첫째 자리까지 저장합니다. 상태 값은 DB ENUM으로 제한해 잘못된 값이 들어가지 않습니다.")
+# 15c. ERD 1. 실제 FK 18개를 12개 관계선으로 묶는다.
+s = new_slide("ERD 1 · 사원·조직·연차·복리후생", "FK 열의 →는 참조 테이블, 1·N은 최대 관계 수입니다. 같은 두 테이블의 FK는 한 선으로 묶었습니다.",
+              "db/schema.sql\n정정: department.parent_id는 논리 관계만 존재. 날짜별 행은 복합 UNIQUE이며 PK 선언 없음.")
+a, b, c, d, e = .48, 3.03, 5.58, 8.13, 10.68
+entity(s, "employment_periods", a, 2.10, ["id PK", "user_id FK → users", "seq", "hire_date", "retired_at"])
+entity(s, "leave_reset_history", a, 4.58, ["id PK", "user_id FK → users", "reset_date", "prev_base_days", "new_base_days", "prev_use_days", "carried_bonus_days", "expired_days", "advance_settled"])
+entity(s, "users", b, 2.10, ["id PK", "email", "name", "role", "department_id FK → department", "hire_date", "last_reset_date", "base_days", "bonus_days", "use_days", "advance_days", "onboarding_status", "is_active", "retired_at", "purged_at", "version"], BLUE)
+entity(s, "department", b, 5.35, ["id PK", "name", "parent_id → department (논리)", "leader_id FK → users", "system_default", "active"])
+entity(s, "leave_requests", c, 2.10, ["id PK", "user_id FK → users", "primary_approver_id FK → users", "sub_approver_id FK → users", "status", "leave_type", "days", "request_reason", "cancel_reason", "advance_used_days"])
+entity(s, "leave_dates", c, 4.56, ["leave_requests_id FK", "  → leave_requests", "day", "UQ (leave_requests_id, day)"])
+entity(s, "leave_action_history", c, 5.70, ["id PK", "leave_requests_id FK", "  → leave_requests", "user_id · actor_id FK → users", "action · comment"])
+entity(s, "welfare_requests", d, 2.10, ["id PK", "user_id FK → users", "policy_id FK → welfare_policies", "primary_approver_id FK → users", "sub_approver_id FK → users", "status", "category", "target", "add_days", "reason"])
+entity(s, "welfare_action_history", d, 4.98, ["id PK", "welfare_request_id FK", "  → welfare_requests", "user_id · actor_id FK → users", "action", "comment"])
+entity(s, "welfare_policies", e, 2.10, ["id PK", "category", "target", "default_days", "default_evidence", "active"])
+# 좌측은 근속·리셋, 우측은 신청·이력. 공유 선분은 같은 users 참조다.
+relation(s, "employment_periods", ["user_id"], "users", [(b, 2.54), (a+2.30, 2.54)])
+relation(s, "leave_reset_history", ["user_id"], "users", [(b, 3.00), (2.91, 3.00), (2.91, 4.98), (a+2.30, 4.98)])
+relation(s, "leave_requests", ["user_id", "primary_approver_id", "sub_approver_id"], "users", [(b+2.30, 2.60), (c, 2.60)])
+relation(s, "welfare_requests", ["user_id", "primary_approver_id", "sub_approver_id"], "users", [(4.85, 2.10), (4.85, 1.87), (8.48, 1.87), (8.48, 2.10)])
+relation(s, "users", ["department_id"], "department", [(3.72, 5.35), (3.72, 5.007)])
+relation(s, "department", ["leader_id"], "users", [(4.58, 5.007), (4.58, 5.35)], TEAL)
+relation(s, "department", ["parent_id"], "department", [(3.03, 5.48), (2.91, 5.48), (2.91, 6.39), (3.03, 6.39)], GOLD, logical=True)
+relation(s, "leave_dates", ["leave_requests_id"], "leave_requests", [(6.05, 4.065), (6.05, 4.56)], TEAL)
+relation(s, "leave_action_history", ["leave_requests_id"], "leave_requests", [(7.88, 3.85), (8.00, 3.85), (8.00, 6.10), (7.88, 6.10)], TEAL)
+relation(s, "leave_action_history", ["user_id", "actor_id"], "users", [(5.33, 4.75), (5.45, 4.75), (5.45, 6.18), (5.58, 6.18)])
+relation(s, "welfare_requests", ["policy_id"], "welfare_policies", [(10.68, 2.82), (10.43, 2.82)], TEAL)
+relation(s, "welfare_action_history", ["welfare_request_id"], "welfare_requests", [(9.35, 4.065), (9.35, 4.98)], TEAL)
+relation(s, "welfare_action_history", ["user_id", "actor_id"], "users", [(5.33, 4.12), (5.45, 4.12), (5.45, 4.32), (10.55, 4.32), (10.55, 6.55), (9.75, 6.55), (9.75, 6.317)])
+text(s, 10.70, 4.25, 2.24, 1.90, "점선: 부서의 논리 자기참조\n(실제 FK 제약 없음)\n\n날짜별 행: 복합 UQ\n근속 구간: 사원·순번 복합 UQ\n\nNULL 허용은 FK별로 다름", 11, MUTED)
+text(s, .48, 6.96, 11.35, .21, "연차 일수: DECIMAL(4,1). 상태·종류: MySQL ENUM. 개인정보 파기는 행을 보존하고 식별값·사유 본문을 익명화합니다.", 11, MUTED)
 
-# 15d. 핵심 테이블 — 자주 보게 될 여섯 테이블의 주요 컬럼. 셀이 자동으로 늘어나므로 문구를 짧게 유지한다.
-s = new_slide("핵심 테이블의 주요 항목", "자주 보게 될 여섯 테이블입니다. 컬럼 이름은 실제 스키마 그대로입니다.", "db/schema.sql")
-table(s, ["테이블", "무엇을 담나", "주요 컬럼"], [
-    ["users (사원)", "계정·역할·소속과 연차 잔액, 퇴직·파기 상태", "base_days · bonus_days · use_days (잔액) · advance_days (파생) · hire_date · last_reset_date (기산일) · role · onboarding_status · is_active · retired_at · purged_at · purge_hold_reason · version (낙관적 락)"],
-    ["leave_requests + leave_dates", "연차 신청 1건과 날짜별 행", "status (PENDING · APPROVED · REJECTED · CANCELLED · CANCEL_PENDING) · leave_type (종일·오전·오후) · days · primary_approver_id · sub_approver_id · request_reason · cancel_reason · advance_used_days · leave_dates.day"],
-    ["welfare_requests", "복리후생 신청", "policy_id · category · target · add_days (승인 시 bonus_days에 가산) · status · 승인자 2명 · reason"],
-    ["department", "부서 계층과 팀장", "name · parent_id (상위 부서) · leader_id (팀장) · system_default (미배정 부서) · active"],
-    ["email_history", "발송 큐이자 이력", "email_type · status (PENDING · SENDING · SENT · FAILED) · retry_count · sending_at · sent_at · error_message · title · content (보낸 HTML 원문)"],
-    ["admin_audit_log", "관리자 조작 기록", "actor_id 누가 · action 13종 · target_user_id · target_label 누구에게 · before_value · after_value"],
-], [1.95, 2.25, 7.75], row_h=.5, sizes=[13, 12, 11.5])
+# 15d. ERD 2. 실제 FK 9개, 독립 테이블 5개. users는 6장의 참조 상자다.
+s = new_slide("ERD 2 · 이메일·일정·감사·정책", "users는 앞 장의 참조입니다. FK가 없는 정책·자격 증명·공휴일 테이블도 함께 표시합니다.", "db/schema.sql\n정정: schedule_dates는 복합 UNIQUE. 감사 로그의 actor_id와 target_user_id 모두 NULL 허용.")
+entity(s, "users", a, 2.10, ["id PK", "name", "role"], BLUE)
+entity(s, "email_history", b, 2.10, ["id PK", "user_id FK → users", "from_id FK → users", "email_type", "status", "retry_count", "sending_at", "sent_at", "error_message", "title"])
+entity(s, "leave_reminder_dispatch", c, 2.10, ["id PK", "user_id FK → users", "email_history_id FK", "  → email_history", "cycle", "period_key", "reference_date", "next_reset_date", "remaining_days_snapshot", "result"])
+entity(s, "schedule_entries", d, 2.10, ["id PK", "user_id FK → users", "schedule_type", "memo"])
+entity(s, "schedule_dates", e, 2.10, ["schedule_entry_id FK", "  → schedule_entries", "day", "UQ (schedule_entry_id, day)"])
+entity(s, "email_templates", a, 4.58, ["id PK", "template_key", "subject_template", "body_template", "version", "updated_by FK → users"])
+entity(s, "admin_audit_log", b, 4.58, ["id PK", "actor_id FK → users (NULL 허용)", "target_user_id FK → users", "  (NULL 허용)", "action", "target_label", "before_value", "after_value"])
+entity(s, "mail_credentials", c, 4.58, ["id PK", "provider", "username", "encrypted_secret", "active"])
+entity(s, "holidays", d, 3.93, ["id PK", "date", "name", "year"])
+entity(s, "leave_policy", e, 3.93, ["id PK", "years_of_service", "annual_leave_days", "active"])
+entity(s, "leave_policy_config", d, 5.36, ["id PK", "name", "value"])
+entity(s, "holiday_api_credentials", e, 5.36, ["id PK", "provider", "encrypted_api_key", "active"])
+relation(s, "email_history", ["user_id", "from_id"], "users", [(2.78, 2.63), (3.03, 2.63)])
+relation(s, "leave_reminder_dispatch", ["user_id"], "users", [(2.25, 2.10), (2.25, 1.87), (6.02, 1.87), (6.02, 2.10)])
+relation(s, "schedule_entries", ["user_id"], "users", [(2.25, 2.10), (2.25, 1.87), (8.67, 1.87), (8.67, 2.10)])
+relation(s, "leave_reminder_dispatch", ["email_history_id"], "email_history", [(5.33, 2.94), (5.58, 2.94)], TEAL)
+relation(s, "email_templates", ["updated_by"], "users", [(1.18, 2.966), (1.18, 4.58)])
+relation(s, "admin_audit_log", ["actor_id", "target_user_id"], "users", [(2.18, 2.966), (2.18, 4.31), (4.05, 4.31), (4.05, 4.58)])
+relation(s, "schedule_dates", ["schedule_entry_id"], "schedule_entries", [(10.43, 2.64), (10.68, 2.64)], TEAL)
+text(s, .48, 6.63, 7.3, .27, "소진 안내 중복 방지: UNIQUE (user_id, cycle, period_key). 날짜별 행은 복합 UQ이며 PK는 없습니다.", 11, MUTED)
+text(s, .48, 6.96, 11.35, .21, "독립 테이블은 관계선을 두지 않습니다. 1·N은 최대 관계 수이며, NULL 허용 FK는 연결된 부모가 없을 수 있습니다.", 11, MUTED)
 
 # 06. 신청과 결재.
 s = new_slide("연차 신청과 결재", "현재 회차의 연차는 신청 즉시 차감됩니다. 승인 시 추가 차감은 없습니다.", LEAVE + "\n" + EMAIL)
-node(s, .70, 2.02, 2.30, .85, "사원: 날짜 선택", "종일·오전·오후반차", body_size=14.5)
-node(s, 3.45, 2.02, 2.25, .85, "승인자 확인·신청", "기본·서브 승인자", body_size=14.5)
-decision(s, 6.10, 1.84, 1.80, 1.22, "신청 가능?", 15)
-node(s, 8.35, 1.98, 4.20, .95, "대기 상태 · 현재 회차 선차감", "메일: 신청자 + 기본·서브 승인자", "blue", 18, 14.5)
-arrow(s, [(3.00, 2.45), (3.45, 2.45)])
-arrow(s, [(5.70, 2.45), (6.10, 2.45)])
-arrow(s, [(7.90, 2.45), (8.35, 2.45)], BLUE)
-label(s, 7.88, 2.03, .47, "예", BLUE)
-arrow(s, [(7.00, 3.06), (7.00, 3.63)], RED)
-node(s, 5.77, 3.63, 2.45, .72, "사유 안내 후 수정", tone="red", size=16)
-label(s, 7.04, 3.16, .72, "아니오", RED)
-text(s, .74, 3.22, 4.62, 1.10, "확인 항목\n주말·공휴일·지난 날짜·중복·잔여일수", 16, MUTED)
-arrow(s, [(10.45, 2.93), (10.45, 4.72)], BLUE)
-label(s, 10.50, 3.56, 2.12, "승인자 중 한 명이 결재", BLUE, 13)
-decision(s, 9.50, 4.72, 1.90, 1.22, "결재 결과", 15)
-node(s, 5.05, 4.87, 3.34, .91, "승인 · 잔액 유지", tone="green")
-node(s, .75, 4.87, 3.30, .91, "반려 · 잔액 복구", "반려 사유 입력", "red", 18, 14.5)
-arrow(s, [(9.50, 5.33), (8.39, 5.33)], GREEN)
-label(s, 8.47, 4.94, .88, "승인", GREEN)
-arrow(s, [(10.45, 5.94), (10.45, 6.15), (2.40, 6.15), (2.40, 5.78)], RED)
-label(s, 6.20, 6.16, 1.0, "반려", RED)
-footnote(s, "결재 결과 메일: 신청자 + 기본·서브 승인자 + 재직 총관리자 전원")
+node(s, .90, 2.18, 2.50, .95, "날짜·내용 작성", "승인자 확인 후 신청", size=18, body_size=14.5)
+decision(s, 4.00, 1.96, 2.10, 1.40, "신청 가능?", 15)
+node(s, 7.00, 2.18, 4.10, .95, "대기 상태 · 현재 회차 선차감", "승인자 두 명 중 한 명이 결재", "blue", 18, 14.5)
+arrow(s, [(3.40, 2.66), (4.00, 2.66)])
+arrow(s, [(6.10, 2.66), (7.00, 2.66)], BLUE)
+label(s, 6.24, 2.20, .62, "가능", BLUE, 12)
+node(s, .90, 4.47, 2.50, 1.10, "날짜·내용 수정", "검증·반려 사유 확인", "red", 18, 14)
+arrow(s, [(5.05, 3.36), (5.05, 3.85), (2.15, 3.85), (2.15, 4.47)], RED)
+text(s, 5.22, 3.47, 2.82, .28, "검증 실패: 사유 확인", 12.5, RED)
+text(s, .94, 5.82, 3.15, .28, "수정 후 다시 신청", 14, RED, True)
+# 검증 실패와 반려는 같은 수정 단계로 모아 왼쪽 여백으로 되돌린다.
+arrow(s, [(.90, 5.02), (.48, 5.02), (.48, 2.66), (.90, 2.66)], RED)
+decision(s, 8.55, 4.32, 2.10, 1.40, "결재 결과", 15)
+arrow(s, [(9.60, 3.13), (9.60, 4.32)], BLUE)
+node(s, 4.85, 4.47, 2.70, 1.10, "반려 · 잔액 복구", "반려 사유 입력", "red", 17, 14)
+arrow(s, [(8.55, 5.02), (7.55, 5.02)], RED)
+label(s, 7.63, 4.58, .82, "반려", RED, 12)
+arrow(s, [(4.85, 5.02), (3.40, 5.02)], RED)
+label(s, 3.48, 4.60, 1.27, "사유 확인", RED, 12)
+node(s, 11.13, 4.47, 1.58, 1.10, "승인", "연차 사용", "green", 18, 14)
+arrow(s, [(10.65, 5.02), (11.13, 5.02)], GREEN)
+label(s, 10.67, 4.59, .43, "승인", GREEN, 11)
+text(s, 5.23, 5.96, 7.22, .29, "확인 항목: 주말·공휴일·지난 날짜·중복·잔여일수", 13, MUTED)
+text(s, .68, 6.46, 11.95, .56,
+     "복리후생 신청도 같은 결재 흐름이며, 승인 시 보너스 연차로 가산합니다.\n메일: 신청 시 신청자 + 승인자 2명 / 결과는 재직 총관리자 전원도 수신합니다.", 12.5, MUTED)
 
 # 07. 취소 — 브리프와 다른 현재 동작을 반영한다.
 s = new_slide("연차 취소", "승인 여부와 사용 날짜에 따라 즉시 취소 또는 취소 결재로 나뉩니다.", LEAVE + ":413~479\n" + EMAIL)
-node(s, .72, 2.25, 2.05, .85, "사원: 취소 요청")
-decision(s, 3.28, 1.95, 2.12, 1.46, "승인된 건에\n지난 날짜 포함?", 14.5)
-node(s, 6.10, 2.16, 3.00, 1.02, "즉시 취소", "현재 회차 차감분 복구", "green", 20, 15)
-text(s, 9.53, 2.13, 3.07, 1.10, "메일\n신청자 + 승인자", 16, MUTED)
-arrow(s, [(2.77, 2.68), (3.28, 2.68)])
-arrow(s, [(5.40, 2.68), (6.10, 2.68)], GREEN)
-label(s, 5.40, 2.23, .7, "아니오", GREEN)
-node(s, 3.21, 4.10, 2.30, .88, "취소 결재 대기", "이때는 잔액 유지", "gold", 18, 14.5)
-arrow(s, [(4.34, 3.41), (4.34, 4.10)], GOLD)
-label(s, 4.48, 3.55, .55, "예", GOLD)
-decision(s, 6.13, 3.80, 1.90, 1.45, "취소 승인?", 16)
-arrow(s, [(5.51, 4.54), (6.13, 4.54)])
-node(s, 9.03, 3.78, 3.54, .86, "취소 완료 · 잔액 복구", tone="green", size=18)
-node(s, 9.03, 5.17, 3.54, .86, "승인 상태 유지 · 복구 없음", tone="red", size=17)
-arrow(s, [(8.03, 4.53), (8.55, 4.53), (8.55, 4.21), (9.03, 4.21)], GREEN)
-label(s, 8.10, 3.81, .80, "승인", GREEN)
-arrow(s, [(7.08, 5.25), (7.08, 5.60), (9.03, 5.60)], RED)
-label(s, 7.79, 5.18, 1.05, "거부", RED)
-text(s, .76, 5.35, 5.03, .97, "취소 요청 메일: 신청자 + 승인자\n취소 결재 결과: 위 수신자 + 총관리자 전원", 14.5, MUTED)
-footnote(s, "승인 전 신청, 승인 후 오늘·미래 날짜만 있는 신청은 즉시 취소할 수 있습니다.")
+node(s, .90, 2.25, 2.40, .96, "사원: 취소 요청", size=18)
+decision(s, 4.00, 1.99, 2.40, 1.48, "승인된 건에\n지난 날짜 포함?", 14.5)
+node(s, 7.20, 2.22, 2.20, 1.02, "즉시 취소", tone="green", size=20)
+node(s, 10.00, 2.22, 2.58, 1.02, "취소 완료 · 잔액 복구", "필요하면 다시 신청\n8장 신청 단계로", "green", 16, 13)
+arrow(s, [(3.30, 2.73), (4.00, 2.73)])
+arrow(s, [(6.40, 2.73), (7.20, 2.73)], GREEN)
+label(s, 6.42, 2.27, .74, "아니오", GREEN, 12)
+arrow(s, [(9.40, 2.73), (10.00, 2.73)], GREEN)
+node(s, 4.00, 4.15, 2.40, 1.02, "취소 결재 대기", "이때는 잔액 유지", "gold", 18, 14)
+arrow(s, [(5.20, 3.47), (5.20, 4.15)], GOLD)
+label(s, 5.35, 3.62, .55, "예", GOLD, 12)
+decision(s, 7.00, 3.98, 2.00, 1.38, "취소 승인?", 15)
+arrow(s, [(6.40, 4.67), (7.00, 4.67)])
+# 즉시 취소와 취소 승인은 동일한 복구·재신청 단계로 합류한다.
+arrow(s, [(8.00, 3.98), (8.00, 3.65), (11.29, 3.65), (11.29, 3.24)], GREEN)
+text(s, 8.76, 3.73, 1.0, .22, "승인", 12, GREEN)
+node(s, 10.00, 4.15, 2.58, 1.02, "승인 상태 유지", "잔액 복구 없음", "red", 18, 14)
+arrow(s, [(9.00, 4.67), (10.00, 4.67)], RED)
+label(s, 9.08, 4.20, .82, "거부", RED, 12)
+arrow(s, [(11.29, 5.17), (11.29, 6.05), (.48, 6.05), (.48, 2.73), (.90, 2.73)], RED)
+text(s, .94, 5.61, 6.65, .29, "취소 거부 후 다시 취소 요청 가능", 14, RED, True)
+text(s, .68, 6.43, 11.95, .59,
+     "승인 전 신청과 승인 후 오늘·미래 날짜만 있는 신청은 즉시 취소하며, 현재 회차 차감분을 복구합니다.\n메일: 취소 요청은 신청자 + 승인자 / 취소 결재 결과는 재직 총관리자 전원도 수신합니다.", 12.5, MUTED)
 
 # 08. 회차별 잔액.
 s = new_slide("연차 잔액이 계산되는 방식", "기산일은 연차가 새로 부여되는 기준일입니다. 신청 날짜별로 어느 회차인지 확인합니다.", "CLAUDE.md, 연차 잔액 모델\n" + LEAVE)
-text(s, .75, 1.97, 11.90, .70, "잔여 연차 = 부여된 연차 + 보너스 연차 − 사용·대기 연차", 27, BLUE, True)
-decision(s, .75, 3.31, 2.12, 1.53, "신청 날짜가\n현재 회차인가?", 14)
-node(s, 3.42, 2.96, 2.48, .95, "현재 회차 잔액 확인", "기산일 ~ 다음 기산일 전날", "blue", 16, 12.5)
-node(s, 3.42, 5.04, 2.48, 1.12, "다음 회차 예약", "허용·한도 내일 때 접수\n현재 잔액은 유지", "normal", 17, 13.5)
-arrow(s, [(2.87, 4.075), (3.14, 4.075), (3.14, 3.435), (3.42, 3.435)], BLUE)
-label(s, 2.78, 3.04, .6, "예", BLUE)
-arrow(s, [(1.81, 4.84), (1.81, 5.60), (3.42, 5.60)])
-label(s, 1.90, 5.09, 1.48, "다음 회차", MUTED)
-decision(s, 6.40, 2.86, 1.85, 1.15, "잔여 충분?", 14)
-arrow(s, [(5.90, 3.435), (6.40, 3.435)])
-node(s, 8.85, 2.98, 3.70, .90, "접수 · 현재 회차 선차감", tone="green", size=19)
-arrow(s, [(8.25, 3.435), (8.85, 3.435)], GREEN)
-label(s, 8.26, 3.01, .58, "예", GREEN)
-decision(s, 6.33, 4.45, 2.00, 1.28, "당겨쓰기\n허용·상한 내?", 14)
-arrow(s, [(7.325, 4.01), (7.325, 4.45)], GOLD)
-label(s, 7.42, 4.06, .95, "아니오", GOLD)
-node(s, 8.85, 4.57, 3.70, 1.03, "부족분 기록 후 접수", "다음 기산일의 새 연차에서 상환", "gold", 19, 14)
-arrow(s, [(8.33, 5.09), (8.85, 5.09)], GOLD)
-label(s, 8.30, 4.68, .54, "예", GOLD)
-node(s, 6.32, 6.05, 2.02, .53, "신청 제한", tone="red", size=16)
-arrow(s, [(7.33, 5.73), (7.33, 6.05)], RED)
-label(s, 7.40, 5.76, 1.0, "아니오", RED)
-text(s, .76, 6.68, 11.85, .38, "다음 1회차까지만 예약하며, 예약 한도에는 당겨쓰기를 적용하지 않습니다.", 13, MUTED)
+text(s, .75, 1.94, 11.90, .43, "잔여 연차 = 부여된 연차 + 보너스 연차 − 사용·대기 연차", 24, BLUE, True)
+node(s, .80, 3.78, 2.50, 1.00, "날짜 선택·신청", "신청 날짜별 회차 구분", "blue", 18, 14)
+decision(s, 4.10, 2.72, 3.10, 1.40, "잔여 충분 또는\n당겨쓰기\n허용·상한 내?", 14)
+decision(s, 4.10, 4.65, 3.10, 1.40, "다음 회차 예약\n허용·한도 내?", 14)
+arrow(s, [(3.30, 4.00), (3.65, 4.00), (3.65, 3.42), (4.10, 3.42)], BLUE)
+text(s, 3.33, 3.05, .68, .23, "현재", 11.5, BLUE, align=PP_ALIGN.CENTER)
+arrow(s, [(3.30, 4.55), (3.65, 4.55), (3.65, 5.35), (4.10, 5.35)])
+text(s, 3.33, 5.59, .68, .23, "다음", 11.5, MUTED, align=PP_ALIGN.CENTER)
+node(s, 8.10, 2.85, 4.40, 1.14, "접수 · 현재 회차 선차감", "부족분은 당겨쓰기로 기록\n다음 기산일의 새 연차에서 상환", "green", 18, 14)
+arrow(s, [(7.20, 3.42), (8.10, 3.42)], GREEN)
+label(s, 7.28, 2.99, .74, "가능", GREEN, 12)
+node(s, 8.10, 4.77, 4.40, 1.14, "다음 회차 예약 접수", "현재 잔액 유지\n예약 한도에는 당겨쓰기 없음", "green", 18, 14)
+arrow(s, [(7.20, 5.35), (8.10, 5.35)], GREEN)
+label(s, 7.28, 4.91, .74, "가능", GREEN, 12)
+node(s, .80, 2.65, 2.50, .95, "신청 제한", "날짜 줄여 재신청", "red", 17, 14)
+node(s, .80, 5.23, 2.50, .92, "예약 불가·한도 초과", "날짜 줄여 재신청", "red", 16, 14)
+# 현재 회차와 예약 실패를 위·아래로 나눠 되돌려서 선이 서로 교차하지 않는다.
+arrow(s, [(5.65, 2.72), (5.65, 2.50), (2.05, 2.50), (2.05, 2.65)], RED)
+text(s, 3.32, 2.65, .72, .23, "불가", 11.5, RED, align=PP_ALIGN.CENTER)
+arrow(s, [(.80, 3.13), (.48, 3.13), (.48, 4.00), (.80, 4.00)], RED)
+arrow(s, [(5.65, 6.05), (5.65, 6.33), (2.05, 6.33), (2.05, 6.15)], RED)
+text(s, 5.84, 6.07, .83, .23, "불가", 11.5, RED)
+arrow(s, [(.80, 5.69), (.48, 5.69), (.48, 4.55), (.80, 4.55)], RED)
+footnote(s, "다음 1회차까지만 예약합니다. 현재 회차는 기산일부터 다음 기산일 전날까지입니다.")
 
 # 09. 온보딩.
 s = new_slide("첫 로그인과 입사 정보 확인", "온보딩이 완료되어야 다른 업무 화면을 사용할 수 있습니다.", "backend/src/main/java/com/mlsoft/backend/domain/auth/service/AuthService.java\n" + EMAIL)
-node(s, .70, 2.03, 2.10, .86, "Google 로그인", "회사 도메인 확인", body_size=14.5)
-node(s, 3.25, 2.03, 2.10, .86, "자동 가입·입력", "생일·입사일·직급", size=16.5, body_size=14)
-decision(s, 5.80, 1.86, 2.04, 1.22, "최근 90일 내\n입사일인가?", 14.5)
-node(s, 8.40, 2.02, 4.13, .89, "즉시 완료 · 연차 산정", tone="green", size=21)
-arrow(s, [(2.80, 2.46), (3.25, 2.46)])
-arrow(s, [(5.35, 2.46), (5.80, 2.46)])
-arrow(s, [(7.84, 2.47), (8.40, 2.47)], GREEN)
-label(s, 7.86, 2.04, .53, "예", GREEN)
-node(s, 5.33, 3.70, 2.96, .92, "관리자 승인 대기", "연차 0일 · 총관리자에게 메일", "gold", 18, 13.5)
-arrow(s, [(6.82, 3.08), (6.82, 3.70)], GOLD)
-label(s, 6.95, 3.20, 1.04, "아니오", GOLD)
-decision(s, 9.11, 3.47, 1.90, 1.38, "관리자 결재", 14)
-arrow(s, [(8.29, 4.16), (9.11, 4.16)])
-node(s, 7.36, 5.44, 2.88, .91, "승인 · 연차 산정", "본인에게 결과 메일", "green", 17.5, 14)
-node(s, 10.64, 5.44, 2.00, .91, "반려 · 재입력", "본인에게 메일", "red", 16, 13.5)
-arrow(s, [(9.60, 4.51), (9.60, 5.03), (8.80, 5.03), (8.80, 5.44)], GREEN)
-label(s, 8.10, 4.70, 1.2, "승인", GREEN)
-arrow(s, [(11.01, 4.16), (11.64, 4.16), (11.64, 5.44)], RED)
-label(s, 11.67, 4.68, .70, "반려", RED)
-text(s, .76, 3.65, 4.07, 2.55,
-     "자동 승인 기간은 관리자 설정으로 조정합니다.\n\n수정 허용 시, 대기 중 입사일·생일을 1회 수정할 수 있습니다. 수정 후 다시 판정하며 총관리자에게 알립니다.", 16, MUTED)
-footnote(s, "미래 입사일은 입력할 수 없습니다. 반려 메일에는 반려된 입사일을 함께 안내합니다.")
-
-# 10. 복리후생.
-s = new_slide("복리후생 신청과 보너스 연차", "정책에 따른 신청이 승인되면 보너스 연차가 쌓입니다.", "backend/src/main/java/com/mlsoft/backend/domain/welfare/service/WelfareService.java\n" + EMAIL)
-node(s, .76, 2.48, 2.28, 1.05, "정책 선택", "경조·포상 등", size=21, body_size=17)
-node(s, 3.64, 2.48, 2.53, 1.05, "사유 입력·신청", "승인자 확인", size=20, body_size=17)
-decision(s, 6.84, 2.23, 2.07, 1.55, "결재 결과", 18)
-node(s, 9.70, 2.01, 2.88, 1.10, "승인 · 보너스 가산", tone="green", size=18)
-node(s, 9.70, 4.12, 2.88, 1.10, "반려 · 가산 없음", tone="red", size=19)
-arrow(s, [(3.04, 3.00), (3.64, 3.00)])
-arrow(s, [(6.17, 3.00), (6.84, 3.00)])
-arrow(s, [(8.91, 3.00), (9.30, 3.00), (9.30, 2.56), (9.70, 2.56)], GREEN)
-label(s, 8.93, 2.13, .70, "승인", GREEN)
-arrow(s, [(7.875, 3.78), (7.875, 4.67), (9.70, 4.67)], RED)
-label(s, 8.65, 4.23, .85, "반려", RED)
-text(s, .78, 4.40, 6.10, 1.5,
-     "신청 메일\n신청자 + 기본·서브 승인자\n\n결재 결과 메일\n위 수신자 + 재직 총관리자 전원", 17, MUTED)
-footnote(s, "관리자는 복리후생 정책과 정책별 가산 일수를 화면에서 관리합니다.")
+node(s, .90, 2.18, 2.15, .95, "회사 계정 로그인", "회사 도메인 확인", size=17, body_size=14)
+node(s, 3.50, 2.18, 2.40, .95, "자동 가입·정보 입력", "생일·입사일·직급", size=17, body_size=14)
+decision(s, 6.50, 1.97, 2.35, 1.40, "최근 90일 내\n입사일인가?", 14.5)
+node(s, 9.50, 2.18, 3.05, .95, "온보딩 완료 · 연차 산정", tone="green", size=18)
+arrow(s, [(3.05, 2.67), (3.50, 2.67)])
+arrow(s, [(5.90, 2.67), (6.50, 2.67)])
+arrow(s, [(8.85, 2.67), (9.50, 2.67)], GREEN)
+label(s, 8.90, 2.22, .54, "예", GREEN, 12)
+node(s, 6.30, 3.83, 2.75, .95, "관리자 승인 대기", "연차 0일 · 총관리자 메일", "gold", 17, 13.5)
+arrow(s, [(7.675, 3.37), (7.675, 3.83)], GOLD)
+text(s, 7.83, 3.47, .9, .25, "아니오", 12, GOLD)
+decision(s, 9.80, 3.62, 2.30, 1.37, "관리자 결재", 15)
+arrow(s, [(9.05, 4.305), (9.80, 4.305)])
+# 승인 결과는 처음의 자동 완료와 합류하고, 반려는 별도 재입력 단계를 거친다.
+arrow(s, [(12.10, 4.305), (12.90, 4.305), (12.90, 2.67), (12.55, 2.67)], GREEN)
+text(s, 12.18, 3.48, .66, .25, "승인", 12, GREEN)
+node(s, 9.60, 5.45, 2.75, .93, "반려", "본인에게 결과 메일", "red", 18, 14)
+arrow(s, [(10.95, 4.99), (10.95, 5.45)], RED)
+text(s, 11.12, 5.08, .70, .25, "반려", 12, RED)
+node(s, 6.30, 5.45, 2.75, .93, "입사일 재입력", "반려된 입사일 확인", "red", 18, 14)
+arrow(s, [(9.60, 5.915), (9.05, 5.915)], RED)
+node(s, 3.50, 3.83, 2.40, .95, "대기 중 1회 수정", "허용 시 입사일·생일 수정", "gold", 16.5, 12.5)
+arrow(s, [(6.30, 4.305), (5.90, 4.305)], GOLD)
+# 두 수정 경로는 왼쪽 외곽에서 합류해 입사일 판정으로 직접 돌아간다.
+arrow(s, [(4.70, 4.78), (4.70, 5.10), (.55, 5.10), (.55, 3.50), (6.15, 3.50), (6.15, 2.67), (6.50, 2.67)], GOLD)
+arrow(s, [(6.30, 5.915), (.55, 5.915), (.55, 5.10)], RED)
+text(s, .94, 4.40, 2.20, .28, "수정 후 다시 판정", 14, GOLD, True)
+text(s, .94, 5.51, 4.94, .27, "반려 후 재입력도 같은 판정으로", 13.5, RED)
+text(s, .68, 6.46, 11.95, .56,
+     "자동 승인 기간과 대기 중 수정 허용은 관리자 설정입니다. 수정 후 총관리자에게 알립니다.\n미래 입사일은 입력할 수 없습니다. 관리자 승인·반려 결과는 본인에게 메일로 안내합니다.", 12.5, MUTED)
 
 # 11. 일일 자동 처리. 분기 대신 고정 순서를 크게 보여 준다.
 s = new_slide("매일 00:10 자동 처리", "한국 시간 기준으로 다섯 작업을 정해진 순서대로 실행합니다.", "docs/09-스케줄러-설계.md\nbackend/src/main/java/com/mlsoft/backend/domain/leave/scheduler/LeaveScheduler.java")
@@ -486,28 +606,6 @@ text(s, .76, 5.36, 5.52, 1.05, "순서를 고정하는 이유\n잔액을 갱신�
 text(s, 6.84, 5.36, 5.67, 1.05, "사원 1명씩 독립 처리\n한 사원의 오류가 다른 사원에게 번지지 않습니다.", 18, INK)
 footnote(s, "소진 안내는 같은 주기 중복 발송을 막습니다. 자동 파기 30일 예고·결과 메일은 총관리자에게 보냅니다.")
 
-# 12. 이메일 발송.
-s = new_slide("이메일이 나가는 경로", "업무 결과를 먼저 기록한 뒤 발송하며, 실패 이력은 자동 재시도와 수동 재발송에 사용합니다.", EMAIL + "\nbackend/src/main/java/com/mlsoft/backend/domain/email/service/EmailDeliveryService.java\nbackend/src/main/java/com/mlsoft/backend/domain/email/service/MailSenderResolver.java")
-node(s, .75, 2.14, 2.19, 1.00, "업무 사건 발생", "신청·결재·입사·생일 등", size=18, body_size=13.5)
-node(s, 3.45, 2.14, 2.30, 1.00, "발송 대기 기록", "업무 저장과 함께 적재", "blue", 18, 14)
-node(s, 6.31, 2.14, 2.37, 1.00, "발송 중 선점", "중복 발송 방지", size=18, body_size=14)
-node(s, 9.20, 2.14, 3.38, 1.00, "발송 계정 선택 → SMTP", "화면 저장 계정 우선", size=17, body_size=14)
-for a, b in [(2.94, 3.45), (5.75, 6.31), (8.68, 9.20)]:
-    arrow(s, [(a, 2.64), (b, 2.64)])
-text(s, 6.32, 3.44, 2.35, .82, "저장 계정이 없으면\n서버 환경 설정 사용", 14, MUTED)
-decision(s, 9.92, 3.76, 1.96, 1.30, "발송 성공?", 16)
-arrow(s, [(10.90, 3.14), (10.90, 3.76)])
-node(s, 8.88, 5.62, 3.70, .64, "발송 완료", tone="green", size=20)
-arrow(s, [(10.90, 5.06), (10.90, 5.62)], GREEN)
-label(s, 11.02, 5.16, .7, "예", GREEN)
-node(s, 5.70, 4.22, 3.28, .84, "실패 이력 · 자동 재시도", tone="red", size=17)
-arrow(s, [(9.92, 4.41), (9.45, 4.41), (9.45, 4.64), (8.98, 4.64)], RED)
-label(s, 9.02, 3.81, .9, "아니오", RED)
-text(s, .78, 4.15, 4.30, 2.05,
-     "관리자가 할 수 있는 일\n제목·본문·변수 편집\n대상 선택·일괄 발송\n이력 조회·실패 건 수동 재발송", 17, INK)
-text(s, 5.74, 5.38, 2.88, .94, "15분마다 재시도\n최초 포함 총 3회 실패 시 중단", 14, MUTED)
-footnote(s, "메일 발송 경로는 구현되어 있으며, 실제 환경 설정을 마친 뒤 최종 수신 확인이 필요합니다.")
-
 # 13. 퇴직 후 세 경로. 재입사를 파기 뒤에 잇지 않는다.
 s = new_slide("퇴직 이후의 개인정보와 재입사", "퇴직 처리 후 복구·재입사·개인정보 파기를 구분해 관리합니다.", USER + ":434~648\nbackend/src/main/java/com/mlsoft/backend/domain/user/service/RetireePurgeService.java\nbackend/src/main/java/com/mlsoft/backend/domain/audit/service/AdminAuditService.java")
 node(s, .72, 2.29, 2.23, 1.02, "퇴직 처리", "즉시 로그인 차단", "blue", 21, 16)
@@ -522,99 +620,154 @@ text(s, 7.83, 3.42, 4.74, 1.12, "연차는 0일에서 새로 시작합니다.\n�
 text(s, 7.83, 5.00, 4.79, 1.45, "기본 보존 3년 · 자동 파기는 30일 예고\n계정을 익명화하고 신청·메일 본문을 지웁니다.\n파기 처리 기록은 보존합니다.", 15.5, MUTED)
 footnote(s, "본인 계정의 퇴직 처리는 막습니다. 파기된 개인정보는 퇴직 복구나 재입사로 되살릴 수 없습니다.")
 
-# 14. 권한 확인.
-s = new_slide("권한과 접근 제어", "사원·팀장·총관리자의 권한을 서버가 요청마다 다시 확인합니다.", "backend/src/main/java/com/mlsoft/backend/security/OnboardingCheckInterceptor.java\n" + LEAVE + ":638~655\n" + USER)
-node(s, .73, 2.19, 2.10, 1.00, "화면에서 요청", "로그인 쿠키 전달", size=19, body_size=15)
-node(s, 3.43, 2.19, 3.15, 1.00, "서버가 최신 정보 확인", "재직 · 역할 · 온보딩 상태", "blue", 18, 14)
-decision(s, 7.21, 2.00, 2.08, 1.40, "접근 가능?", 17)
-node(s, 10.06, 1.94, 2.51, .89, "업무 처리", tone="green", size=21)
-node(s, 10.06, 3.93, 2.51, .89, "접근 차단·안내", tone="red", size=19)
-arrow(s, [(2.83, 2.70), (3.43, 2.70)])
-arrow(s, [(6.58, 2.70), (7.21, 2.70)])
-arrow(s, [(9.29, 2.70), (9.65, 2.70), (9.65, 2.39), (10.06, 2.39)], GREEN)
-label(s, 9.36, 1.97, .65, "예", GREEN)
-arrow(s, [(8.25, 3.40), (8.25, 4.37), (10.06, 4.37)], RED)
-label(s, 8.48, 3.92, 1.08, "아니오", RED)
-rule(s, .78, 5.29, 11.76, "CCD6E5")
-text(s, .78, 5.57, 5.44, .99, "결재 권한\n본인 결재는 제한하되 총관리자는 예외입니다.", 17)
-text(s, 6.96, 5.57, 5.58, .99, "관리자 계정 보호\n본인 퇴직 처리 금지\n마지막 총관리자의 강등·퇴직 금지", 17)
-footnote(s, "역할 변경은 다음 요청부터 반영하며, 결재는 배정된 기본·서브 승인자만 처리합니다.")
+# 18+19. 기술 스택을 좌우 두 개의 네이티브 표로 통합한다.
+s = new_slide("기술 스택", "백엔드는 업무 규칙과 저장을, 프론트엔드는 화면과 서버 데이터 갱신을 담당합니다.", "backend/build.gradle\nfrontend/package.json\n" + STATUS)
+text(s, .68, 1.96, 5.84, .38, "백엔드 · Java 21 / Spring Boot 4.1.0 / Gradle", 16, BLUE, True)
+text(s, 6.86, 1.96, 5.78, .38, "프론트엔드 · React 19.2 / Vite 8 / Node.js", 16, BLUE, True)
+table(s, ["기술·라이브러리", "용도"], [
+    ["Spring Web MVC", "업무 REST API 제공"],
+    ["Spring Data JPA / Hibernate", "업무 객체와 DB 연결"],
+    ["Spring Security / OAuth2 Client", "Google 로그인·역할 제어"],
+    ["jjwt 0.12.6", "JWT 발급·검증"],
+    ["Spring Mail", "SMTP 이메일 발송"],
+    ["Bean Validation", "입력 형식·요청 값 검증"],
+    ["Lombok", "반복되는 Java 코드 축소"],
+    ["mysql-connector-j / H2", "운영 DB 연결 / 테스트 DB"],
+    ["JUnit 5 / Mockito", "업무 규칙·권한 자동 검증"],
+], [3.06, 2.78], x=.68, y=2.52, row_h=.365, sizes=[11,12])
+table(s, ["기술·라이브러리", "용도"], [
+    ["React 19.2 / react-dom", "화면·입력 상태 구성"],
+    ["react-router-dom 7", "화면 이동·접근 제한"],
+    ["@tanstack/react-query 5", "서버 데이터 캐시·갱신"],
+    ["Axios", "요청·로그인 만료·오류 처리"],
+    ["Tailwind CSS 4 / Vite 플러그인", "공통 CSS 디자인 값 적용"],
+    ["Day.js", "날짜·회차 계산과 표시"],
+    ["lucide-react / react-hot-toast", "아이콘·처리 결과 알림"],
+    ["Vitest / Testing Library / jsdom", "화면·사용자 조작 자동 검증"],
+    ["Oxlint", "기본 오류·규칙 위반 검사"],
+], [3.15, 2.63], x=6.86, y=2.52, row_h=.365, sizes=[11,12])
+footnote(s, "Docker 단계별 빌드로 화면·서버를 통합하고, Docker Compose로 앱과 MySQL 8을 구성합니다.")
 
-# 18. 라이브러리 — 사용 목적까지 포함한 편집 가능한 표.
-s = new_slide("백엔드 기술과 라이브러리", "Java 21 · Spring Boot 4.1.0 · Gradle", "backend/build.gradle\n" + STATUS)
-table(s, ["기술·라이브러리", "쓰는 이유"], [
-    ["spring-boot-starter-webmvc", "브라우저가 호출하는 업무 REST API를 제공한다"],
-    ["spring-boot-starter-data-jpa + Hibernate", "업무 객체를 MySQL 데이터와 연결한다"],
-    ["spring-boot-starter-security + oauth2-client", "Google 로그인과 역할별 접근을 제어한다"],
-    ["jjwt 0.12.6", "JWT 로그인 토큰을 발급하고 검증한다"],
-    ["spring-boot-starter-mail", "SMTP 계정으로 이메일을 발송한다"],
-    ["spring-boot-starter-validation", "요청 값과 입력 형식을 검증한다"],
-    ["Lombok", "반복되는 자바 기본 코드를 줄인다"],
-    ["mysql-connector-j / H2", "운영 MySQL 연결 / 테스트용 데이터베이스를 제공한다"],
-    ["JUnit 5 + Mockito", "업무 계산·예외·권한 동작을 자동 검증한다"],
-], [5.37, 6.59], row_h=.445, sizes=[14,15])
-footnote(s, "자동 테스트 기록: 백엔드 500건 · 2026-09-08 실행 기준")
+# 20+21. 구현 규모와 남은 운영 확인을 한 장에서 확인한다.
+s = new_slide("구현 규모와 운영 전 확인", "구현 수치는 2026-09-11 코드 기준이며, 자동 테스트는 2026-09-11 실행 기준입니다.", "HTTP 매핑 88개 · 페이지 17개 · schema.sql 테이블 21개 · 활성 설정 12개\n" + STATUS)
+for x, value, unit in [(.77,"88","업무 API"), (3.24,"17","화면"), (5.71,"21","DB 테이블"), (8.18,"12","관리자 설정"), (10.65,"829","자동 테스트")]:
+    text(s, x, 1.98, 2.0, .74, value, 40, BLUE, True)
+    text(s, x, 2.84, 2.0, .40, unit, 17)
+rule(s, .77, 3.43, 11.80, "CCD6E5")
+text(s, .77, 3.74, 5.52, .48, "구현된 업무", 23, BLUE, True)
+text(s, .77, 4.39, 5.40, 1.88, "연차·복리후생 신청과 결재\n일정·조직·정책 관리\n매일 새벽 5개 자동 처리\n이메일 양식·발송·이력 관리\n퇴직자 파기와 재입사", 18)
+text(s, 6.97, 3.74, 5.57, .48, "운영 전 확인", 23, GOLD, True)
+text(s, 6.97, 4.39, 5.57, 1.99, "회사 Google 계정 로그인과\n실제 사원 데이터 확인\n실제 메일 수신·SMTP·공휴일 API 연동 확인\n운영 DB 스키마 반영과 배포 검증", 18)
+footnote(s, "자동 테스트 기록: 백엔드 500건 + 프론트엔드 329건. 실제 운영 환경에서의 확인은 남아 있습니다.")
 
-# 19. 프론트 라이브러리.
-s = new_slide("프론트엔드 기술과 라이브러리", "React 19.2 · Vite 8 · Node.js", "frontend/package.json\n" + STATUS)
-table(s, ["기술·라이브러리", "쓰는 이유"], [
-    ["React 19.2 / react-dom", "화면과 입력 상태를 구성한다"],
-    ["react-router-dom 7", "화면을 이동하고 권한에 맞춰 접근을 제한한다"],
-    ["@tanstack/react-query 5", "서버 데이터 조회·캐시·갱신을 공통 관리한다"],
-    ["Axios", "HTTP 요청과 로그인 만료·오류 응답을 처리한다"],
-    ["Tailwind CSS 4 / @tailwindcss/vite", "CSS의 공통 디자인 값으로 스타일을 적용한다"],
-    ["Day.js", "날짜와 회차를 계산하고 표시한다"],
-    ["lucide-react / react-hot-toast", "아이콘과 처리 결과 알림을 표시한다"],
-    ["Vitest / Testing Library / jsdom", "화면과 사용자 조작을 자동 검증한다"],
-    ["Oxlint", "코드의 기본 오류와 규칙 위반을 검사한다"],
-], [5.37,6.59], row_h=.445, sizes=[14.5,15])
-footnote(s, "자동 테스트 기록: 프론트엔드 332건 · 2026-09-08 실행 기준")
 
-# 20. 규모와 인프라.
-s = new_slide("현재 구현 규모", "코드와 설계 파일을 다시 확인한 2026-09-11 기준입니다.", "코드 실측: HTTP 메서드 매핑 88개, 테스트 제외 페이지 17개, schema.sql CREATE TABLE 21개, 정책 설정 ACTIVE 12개\n" + STATUS + "\nDockerfile\ndocker-compose.prod.yml")
-for x, value, unit in [(.77,"88","업무 API"), (3.91,"17","화면"), (7.05,"21","DB 테이블"), (10.19,"12","관리자 설정")]:
-    text(s, x, 2.06, 2.35, .97, value, 52, BLUE, True)
-    text(s, x, 3.23, 2.5, .45, unit, 21)
-rule(s, .77, 4.02, 11.80, "CCD6E5")
-text(s, .77, 4.50, 3.15, .83, "832건", 42, INK, True)
-text(s, 4.31, 4.56, 8.25, 1.12, "자동 테스트 기록\n백엔드 500 + 프론트엔드 332 · 2026-09-08 실행", 20)
-footnote(s, "인프라: Docker 단계별 빌드로 화면·서버를 통합하며, Docker Compose로 앱과 MySQL 8을 구성합니다.")
+def shape_bounds(sh):
+    return tuple(v / 914400 for v in (sh.left, sh.top, sh.left + sh.width, sh.top + sh.height))
 
-# 21. 현재 상태. “완료”는 운영 검증 완료라는 뜻이 아니다.
-s = new_slide("구현된 범위와 남은 확인", "소개한 기능은 코드와 테스트가 있으며, 실제 운영 환경에서의 확인이 남아 있습니다.", STATUS)
-text(s, .78, 2.10, 5.53, .55, "구현된 업무", 25, BLUE, True)
-text(s, .78, 2.94, 5.39, 2.68,
-     "연차·복리후생 신청과 결재\n일정·조직·정책 관리\n매일 새벽 5개 자동 처리\n이메일 양식·발송·이력 관리\n퇴직자 파기와 재입사", 21)
-text(s, 7.08, 2.10, 5.49, .55, "운영 전 확인", 25, GOLD, True)
-text(s, 7.08, 2.94, 5.43, 2.78,
-     "회사 Google 계정으로 로그인해 실제 사원 데이터로 확인\n실제 메일 수신과 외부 연동(SMTP · 공휴일 API) 확인\n운영 DB 스키마 반영과 배포 검증", 20)
 
+def frame_fit_errors(frame, width, height):
+    """폰트 실측 폭과 명시한 행간으로 잘림 가능성을 검사한다."""
+    available_w = width - (frame.margin_left + frame.margin_right) / 914400
+    available_h = height - (frame.margin_top + frame.margin_bottom) / 914400
+    used_h = 0
+    for p in frame.paragraphs:
+        if not p.runs:
+            continue
+        size = max((r.font.size.pt if r.font.size else 18) for r in p.runs)
+        length = sum(text_width(r.text, r.font.size.pt if r.font.size else size, bool(r.font.bold)) for r in p.runs)
+        line_count = max(1, math.ceil((length - .001) / max(available_w, .001))) if frame.word_wrap else 1
+        if not frame.word_wrap and length > available_w + .025:
+            return "텍스트 폭 초과: " + p.text
+        leading = p.line_spacing
+        line_h = leading / 914400 if isinstance(leading, int) else (leading or 1.13) * size / 72
+        used_h += line_count * line_h
+        used_h += ((p.space_before or 0) + (p.space_after or 0)) / 914400
+    if used_h > available_h + .035:
+        return f"텍스트 높이 초과 {used_h:.3f}/{available_h:.3f}: {frame.text[:60]}"
+    return None
+
+
+def connector_crosses(sh, other):
+    """직교 선분이 도형 내부를 관통하는지 판정한다. 끝점 접촉은 허용한다."""
+    x1, y1, x2, y2 = shape_bounds(sh)
+    left, top, right, bottom = shape_bounds(other)
+    eps = .009
+    is_diamond = other.shape_type == 1 and other.auto_shape_type == MSO_SHAPE.DIAMOND
+    if is_diamond:
+        cx, cy, rx, ry = (left+right)/2, (top+bottom)/2, (right-left)/2, (bottom-top)/2
+        if abs(x2-x1) < eps:
+            half = ry * max(0, 1 - abs(x1-cx)/rx)
+            top, bottom = cy-half, cy+half
+        else:
+            half = rx * max(0, 1 - abs(y1-cy)/ry)
+            left, right = cx-half, cx+half
+    if abs(x2-x1) < eps:
+        return left+eps < x1 < right-eps and min(y2,bottom)-max(y1,top) > eps
+    if abs(y2-y1) < eps:
+        return top+eps < y1 < bottom-eps and min(x2,right)-max(x1,left) > eps
+    raise AssertionError("대각선 커넥터")
 
 
 def validate_deck():
-    """기본 구조 검사. 시각 검수는 PowerPoint PNG를 별도로 확인한다."""
-    assert 15 <= len(prs.slides) <= 25
-    assert len(prs.slides) == 20
-    minimum_font = 100.0
+    """15장 구성·글꼴·FK·도형 경계·텍스트 적합·관통과 겹침을 함께 검사한다."""
+    assert len(prs.slides) == 15, len(prs.slides)
+    errors, minimum_font = [], 100.0
+    tables = [i for i, sl in enumerate(prs.slides, 1) if any(sh.has_table for sh in sl.shapes)]
+    assert tables == [3, 4, 14], tables
     for index, slide in enumerate(prs.slides, 1):
-        for shape in slide.shapes:
-            assert shape.left >= -10 and shape.top >= -10, (index, shape.name)
-            assert shape.left + shape.width <= prs.slide_width + 10, (index, shape.name)
-            assert shape.top + shape.height <= prs.slide_height + 10, (index, shape.name)
+        objects, connectors = [], []
+        for sh in slide.shapes:
+            left, top, right, bottom = shape_bounds(sh)
+            if min(left, top) < -.001 or right > WIDTH+.001 or bottom > HEIGHT+.001:
+                errors.append((index, "페이지 경계 초과", sh.name))
+            if sh.shape_type == 9:
+                connectors.append(sh)
+            else:
+                objects.append(sh)
             frames = []
-            if shape.has_text_frame:
-                frames.append(shape.text_frame)
-            if shape.has_table:
-                frames.extend(cell.text_frame for row in shape.table.rows for cell in row.cells)
-            for frame in frames:
-                for p in frame.paragraphs:
+            if sh.has_text_frame:
+                frames.append((sh.text_frame, sh.width/914400, sh.height/914400))
+            if sh.has_table:
+                frames.extend((cell.text_frame, sh.table.columns[j].width/914400, sh.table.rows[i].height/914400)
+                              for i, row in enumerate(sh.table.rows) for j, cell in enumerate(row.cells))
+            for frame, width, height in frames:
+                issue = frame_fit_errors(frame, width, height)
+                if issue:
+                    errors.append((index, sh.name, issue))
+                for pi, p in enumerate(frame.paragraphs):
                     for r in p.runs:
                         if r.text and r.font.size:
                             minimum_font = min(minimum_font, r.font.size.pt)
-                            assert r.font.size.pt >= 11, (index, r.text)
-    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (3,4,7,17,18))
+                            minimum = 10 if sh.name.startswith("ERD|") and pi > 0 else 11
+                            if r.font.size.pt < minimum:
+                                errors.append((index, "최소 글꼴 미달", r.text))
+        for i, first in enumerate(objects):
+            l1,t1,r1,b1 = shape_bounds(first)
+            for second in objects[i+1:]:
+                l2,t2,r2,b2 = shape_bounds(second)
+                if min(r1,r2)-max(l1,l2) > .015 and min(b1,b2)-max(t1,t2) > .015:
+                    errors.append((index, "도형 겹침", first.name, second.name))
+        for line in connectors:
+            for other in objects:
+                if connector_crosses(line, other):
+                    errors.append((index, "커넥터 관통", line.name, other.name))
+    # 브리프의 기억값이 아니라 실제 스키마 FK 집합을 대조한다.
+    schema = Path(__file__).resolve().parents[2] / "db" / "schema.sql"
+    sql = schema.read_text(encoding="utf-8")
+    foreign_keys = set()
+    for name, body in re.findall(r"CREATE TABLE `([^`]+)` \((.*?)\) ENGINE", sql, re.S):
+        foreign_keys.update((name, field, parent) for field, parent in re.findall(r"FOREIGN KEY \(`([^`]+)`\) REFERENCES `([^`]+)`", body))
+    assert set(ERD_RELATIONS) == foreign_keys, {"누락": sorted(foreign_keys-set(ERD_RELATIONS)), "추가": sorted(set(ERD_RELATIONS)-foreign_keys)}
+    assert len(ERD_ENTITIES) == 22 and len(foreign_keys) == 27
+    for n in range(8, 12):
+        slide = prs.slides[n-1]
+        assert any(sh.shape_type == 1 and sh.auto_shape_type == MSO_SHAPE.DIAMOND for sh in slide.shapes), n
+        assert any(sh.shape_type == 9 and sh._element.spPr.xpath("./a:ln/a:tailEnd") for sh in slide.shapes), n
+    assert not errors, json.dumps(errors, ensure_ascii=False, indent=2)
     return {"장수": len(prs.slides), "최소글꼴pt": minimum_font,
-            "네이티브표장": [3,4,7,17,18], "흐름도장": list(range(8,17))}
+            "네이티브표장": tables, "흐름도장": list(range(8, 12)), "ERD테이블수": 21,
+            "스키마FK일치": len(foreign_keys), "논리자기참조": 1,
+            "경계·겹침·관통·텍스트적합오류": len(errors)}
 
 
 def export_png(pptx_path: Path, out_dir: Path):
@@ -624,6 +777,7 @@ def export_png(pptx_path: Path, out_dir: Path):
     ps_dir = str(out_dir.resolve()).replace("'", "''")
     command = f"""
 $ErrorActionPreference = 'Stop'
+if (Get-Process POWERPNT -ErrorAction SilentlyContinue) {{ exit 3 }}
 $pptApp = New-Object -ComObject PowerPoint.Application
 $presentation = $null
 try {{
@@ -635,7 +789,11 @@ try {{
     [void][Runtime.InteropServices.Marshal]::ReleaseComObject($pptApp)
 }}
 """
-    subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command], check=True)
+    result = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", command])
+    if result.returncode == 3:
+        return False
+    result.check_returncode()
+    return True
 
 
 def main():
@@ -649,8 +807,10 @@ def main():
     prs.save(args.output)
     result["산출물"] = str(args.output.resolve())
     if args.export_png:
-        export_png(args.output, args.export_png)
-        result["PNG검수폴더"] = str(args.export_png.resolve())
+        if export_png(args.output, args.export_png):
+            result["PNG검수폴더"] = str(args.export_png.resolve())
+        else:
+            result["PNG검수"] = "POWERPNT 실행 중: COM 미사용. PNG는 오케스트레이터가 확인"
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
