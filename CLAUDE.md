@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-MLsoft 사내 연차·복리후생 관리 시스템. Spring Boot 4(Java 21) + React 19 모노레포이며, 이전 버전(`참고자료/MLsoft`)을 분석해 재설계한 V2다. **코드 주석·문서·커밋 메시지는 전부 한국어로 작성한다.**
+MLsoft 사내 연차·복리후생 관리 시스템. Spring Boot 4(Java 21) + React 19 모노레포이며, 이전 버전(`참고자료/MLsoft` — 로컬 사본은 2026-09-11에 저장소 밖 `../_archive/참고자료`로 옮겼고 원본은 github.com/yejun9052/MLsoft)을 분석해 재설계한 V2다. **코드 주석·문서·커밋 메시지는 전부 한국어로 작성한다.**
 
 ## 명령어
 

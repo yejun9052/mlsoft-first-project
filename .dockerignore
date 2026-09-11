@@ -32,7 +32,6 @@ backend/src/main/resources/application-local.properties
 # 아래 backend/build/ 제외가 이것까지 함께 막는다 — 그 줄을 지우지 말 것.
 
 .git/
-참고자료/
 연차 관리 프로그램 디자인/
 docs/
 *.md

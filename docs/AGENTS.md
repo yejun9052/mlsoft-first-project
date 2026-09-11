@@ -44,7 +44,7 @@ Windows에서 **Codex의 쓰기 샌드박스가 동작하지 않는다.** 그래
 ## 기본 제공 에이전트 (Claude Code 내장 — 설치 불필요)
 
 프로젝트 에이전트 외에 자주 쓸 내장 에이전트:
-- `Explore` — 코드베이스 탐색 (참고자료/MLsoft 분석 등 읽기 전용 조사)
+- `Explore` — 코드베이스 탐색 (읽기 전용 조사)
 - `debugger` — 버그 원인 추적
 - `test-verifier` — 구현 후 실제 동작 검증·테스트 작성
 - `git-engineer` — 커밋/브랜치/PR 정리

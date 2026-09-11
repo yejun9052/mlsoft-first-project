@@ -10,7 +10,7 @@ description: MLsoft 연차 관리 시스템의 Spring Boot 백엔드 작업 전�
 - `docs/02-DB-설계.md` — 테이블/ENUM 설계
 - `docs/03-API-설계.md` — API 컨벤션 (kebab-case URL, CommonResponse)
 - `docs/01-요구사항-기획.md` — 비즈니스 규칙
-- 비즈니스 로직 참고: `참고자료/MLsoft-분석보고서.md` (이전 프로젝트 분석)
+- 비즈니스 로직 참고: `../_archive/참고자료/MLsoft-분석보고서.md` (이전 프로젝트 분석, 저장소 밖으로 이동)
 
 ## 핵심 스타일 규칙
 1. 엔티티: `@NoArgsConstructor(access=PROTECTED)` + `@Getter` + `@Builder`, Setter 금지, 상태 변경은 도메인 메서드로, 정적 팩토리 `create()` 사용

@@ -10,7 +10,7 @@ description: MLsoft 연차 관리 시스템의 React + Tailwind 프론트엔드 
 - `docs/04-코드-스타일-가이드.md` — 프론트 코드 스타일
 - `docs/03-API-설계.md` — API 규격 (CommonResponse: `res.data.data` 형태)
 - 원본 디자인: `연차 관리 프로그램 디자인/design_handoff_annual_leave/*.dc.html`
-- UX 패턴 참고: `참고자료/MLsoft/frontend/` (드래그 모달, useConfirm, 디바운스 검색 등)
+- UX 패턴 참고: `../_archive/참고자료/MLsoft/frontend/` (저장소 밖, 2026-09-11 이동) (드래그 모달, useConfirm, 디바운스 검색 등)
 
 ## 핵심 스타일 규칙
 1. `export default function ComponentName({ props })` — 화살표 함수 컴포넌트 금지
