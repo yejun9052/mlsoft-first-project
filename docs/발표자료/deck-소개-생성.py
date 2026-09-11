@@ -48,7 +48,7 @@ WIDTH, HEIGHT = 13.333333, 7.5
 prs = Presentation()
 prs.slide_width, prs.slide_height = Inches(WIDTH), Inches(HEIGHT)
 prs.core_properties.title = "연차ON · MLsoft 사내 연차·복리후생 관리 시스템 V2"
-prs.core_properties.subject = "소개·보고용 미완성본 · 2026-09-11 기준"
+prs.core_properties.subject = "프로젝트 소개 · 미완성본 · 2026-09-11 기준"
 prs.core_properties.author = "MLsoft"
 prs.core_properties.language = "ko-KR"
 
@@ -243,12 +243,11 @@ USER = "backend/src/main/java/com/mlsoft/backend/domain/user/service/UserService
 
 # 01. 표지 — 발송 목적과 기준일을 한눈에 보이게 한다.
 s = new_slide("", source="docs/발표자료/브리프-소개-ppt-2026-09-11.md", dark=True)
-text(s, 0.90, 1.00, 11.5, 0.45, "프로젝트 소개 · 사전 공유 자료", 20, "A6BFE6")
+text(s, 0.90, 1.00, 11.5, 0.45, "프로젝트 소개", 20, "A6BFE6")
 text(s, 0.86, 2.00, 11.7, 1.25, "연차ON", 68, WHITE, True)
 text(s, 0.92, 3.40, 11.5, 1.05, "MLsoft 사내 연차·복리후생\n관리 시스템 V2", 29, WHITE)
 rule(s, 0.92, 5.08, 11.4, "365276")
 text(s, 0.92, 5.47, 11.5, 0.45, "미완성본 · 2026-09-11 기준", 22, "84DCEA", True)
-text(s, 0.92, 6.10, 11.5, 0.45, "다음 주 방문 시 실제 화면으로 시연하겠습니다", 18, "B8CBE5")
 
 # 02. 개요.
 s = new_slide("연차와 복리후생 업무를 한곳에", "신청부터 결재, 잔액 계산과 안내까지 연결한 사내 관리 시스템입니다.", FLOW)
@@ -257,24 +256,8 @@ for x, title, body in [
     (4.75, "팀장", "결재함에서 승인·반려하고\n팀의 휴가와 일정을 확인한다"),
     (8.75, "총관리자", "조직·정책·이메일을 관리하고\n입사부터 퇴직까지 처리한다"),
 ]:
-    text(s, x, 2.25, 3.7, 0.55, title, 27, BLUE, True)
-    text(s, x, 3.04, 3.75, 1.00, body, 19)
-rule(s, 0.75, 4.50, 11.8, "CCD6E5")
-text(s, 0.75, 4.89, 3.3, 0.5, "V2를 만든 이유", 23, INK, True)
-text(s, 4.35, 4.88, 8.0, 1.28,
-     "이전 버전에서 어긋나던 연차 계산을 통일하고,\n담당자가 반복하던 부여·적립·안내 작업을 자동화했습니다.", 20)
-
-# 03. 시연 안내.
-s = new_slide("다음 주에 보여 드릴 업무 흐름", "이 자료로 기능과 처리 기준을 먼저 확인하실 수 있습니다.", "브리프 §0·§3 A")
-for x, title, body in [(0.75, "신청과 잔액", "날짜 선택 → 연차 신청\n신청 전후 잔액 확인"),
-                       (4.80, "결재와 알림", "팀장 승인·반려\n취소 처리와 메일 이력"),
-                       (8.85, "관리자 업무", "정책·조직 설정\n입사·퇴직·재입사 관리")]:
-    text(s, x, 2.60, 3.65, 0.50, title, 26, BLUE, True)
-    text(s, x, 3.43, 3.70, 1.15, body, 20)
-arrow(s, [(4.0, 2.91), (4.50, 2.91)], BLUE)
-arrow(s, [(8.05, 2.91), (8.55, 2.91)], BLUE)
-rule(s, 0.75, 5.25, 11.75, "CCD6E5")
-text(s, 0.75, 5.65, 11.5, 0.55, "주말에도 개발을 이어가며, 방문 시에는 갱신된 화면으로 설명하겠습니다.", 20)
+    text(s, x, 2.85, 3.7, 0.55, title, 27, BLUE, True)
+    text(s, x, 3.64, 3.75, 1.00, body, 19)
 
 # 04~05. 큰 기능.
 s = new_slide("직원이 쓰는 기능", "날짜를 고르고, 신청하고, 처리 결과를 확인합니다.", FLOW + "\nfrontend/src/pages/")
@@ -577,23 +560,20 @@ text(s, .78, 2.94, 5.39, 2.68,
 text(s, 7.08, 2.10, 5.49, .55, "남은 작업", 25, GOLD, True)
 text(s, 7.08, 2.94, 5.43, 2.78,
      "실제 메일 수신과 외부 연동 확인\n사용자 시나리오별 화면 검증\n관리자 문의 기능 개발\n운영 DB 반영과 배포 검증\n일부 조직 변경의 동시 처리 보완", 20)
-rule(s, .78, 6.06, 11.80, "CCD6E5")
-text(s, .78, 6.33, 11.7, .55, "주말에 개발을 계속하며, 방문 시 변경된 내용과 남은 항목을 함께 설명하겠습니다.", 17.5, MUTED)
 
 # 22. 마지막.
 s = new_slide("", source="브리프 §0·§3 F", dark=True)
-text(s, .92, 1.10, 11.6, .55, "연차ON · 다음 주 방문 시연", 24, "A6BFE6")
-text(s, .87, 2.25, 11.65, 1.70, "실제 화면으로\n업무 흐름을 보여 드리겠습니다", 39, WHITE, True)
-text(s, .94, 4.47, 11.50, .65, "신청과 결재 · 잔액 계산 · 관리자 운영", 23, "B8CBE5")
+text(s, .92, 1.10, 11.6, .55, "연차ON · 프로젝트 소개", 24, "A6BFE6")
+text(s, .87, 2.25, 11.65, 1.70, "감사합니다", 39, WHITE, True)
+text(s, .94, 4.47, 11.50, .65, "신청과 결재 · 잔액 계산 · 자동 처리 · 관리자 운영", 23, "B8CBE5")
 rule(s, .94, 5.52, 11.41, "365276")
 text(s, .94, 5.89, 11.42, .50, "미완성본 · 2026-09-11 기준", 23, "84DCEA", True)
-text(s, .94, 6.56, 11.40, .37, "주말 개발 후 갱신된 내용으로 찾아뵙겠습니다", 17, "B8CBE5")
 
 
 def validate_deck():
     """기본 구조 검사. 시각 검수는 PowerPoint PNG를 별도로 확인한다."""
     assert 18 <= len(prs.slides) <= 25
-    assert len(prs.slides) == 22
+    assert len(prs.slides) == 21
     minimum_font = 100.0
     for index, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
@@ -611,9 +591,9 @@ def validate_deck():
                         if r.text and r.font.size:
                             minimum_font = min(minimum_font, r.font.size.pt)
                             assert r.font.size.pt >= 11, (index, r.text)
-    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (16,18,19))
+    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (15,17,18))
     return {"장수": len(prs.slides), "최소글꼴pt": minimum_font,
-            "네이티브표장": [16,18,19], "흐름도장": list(range(6,15))}
+            "네이티브표장": [15,17,18], "흐름도장": list(range(5,14))}
 
 
 def export_png(pptx_path: Path, out_dir: Path):
