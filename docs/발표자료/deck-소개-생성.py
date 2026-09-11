@@ -454,6 +454,25 @@ node(s, 4.04, 5.38, 4.10, .89, "내부 스케줄러", "매일 00:10 KST · 5개 
 arrow(s, [(6.09, 4.57), (6.09, 5.38)], BLUE, both=True)
 footnote(s, "테스트 데이터베이스는 H2를 사용합니다. SMTP는 Gmail 앱 비밀번호 방식의 계정을 연동합니다.")
 
+# 15b. 외부 연동 API — 셋 다 우리 장애로 번지지 않게 설계한 점을 같이 보여 준다.
+s = new_slide("외부 연동 API", "세 가지 외부 서비스에 의존하며, 어느 하나가 멈춰도 업무 처리는 계속됩니다.",
+              "backend/.../holiday/client/HolidayApiClient.java\nsecurity/CustomOAuth2UserService.java\nemail/service/MailSenderResolver.java\nLeaveScheduler.syncHolidaysForNewYear (0 5 0 1 1 *)")
+table(s, ["외부 서비스", "용도 · 호출 시점", "실패하면", "인증 정보 보관"], [
+    ["공공데이터포털\n특일정보 API",
+     "공휴일 목록 조회 (연 단위)\n매년 1월 1일 00:05 자동 · 관리자 수동 동기화\n캐시가 비어 있을 때 최초 1회",
+     "기존 공휴일 캐시 유지, 빈 결과로 계속\n연차 신청은 막히지 않음\n관리자 수동 동기화만 원인별 오류 표시",
+     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
+    ["Google OAuth2",
+     "로그인 (프로필·이메일만 요청)\n회사 도메인 계정만 허용",
+     "로그인 불가 · 안내 메시지\n허용 도메인이 아니면 거부",
+     "서버 환경변수\n(클라이언트 ID · 시크릿)"],
+    ["Gmail SMTP",
+     "이메일 발송 (587 · STARTTLS)\n업무 사건 즉시 + 15분마다 재시도",
+     "실패 이력 기록 · 총 3회 재시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
+     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
+], [2.3, 3.75, 3.6, 2.3], row_h=1.0, sizes=[15, 13.5, 13.5, 13.5])
+footnote(s, "자격 증명은 저장만 되고 화면에는 마스킹된 값만 보입니다. 공휴일은 요청마다 외부를 부르지 않고 DB 캐시를 씁니다.")
+
 # 16. 백엔드 내부.
 s = new_slide("서버 내부의 업무 구조", "12개 업무 영역을 나누고, 요청 처리와 업무 규칙·데이터 저장의 역할을 분리했습니다.", "CLAUDE.md, 계층 구조\nbackend/src/main/java/com/mlsoft/backend/domain/")
 for x, title, body in [(0.73, "요청 접수", "입력과 역할 확인"), (3.87, "업무 규칙 처리", "잔액·승인자·상태 변경"),
@@ -537,7 +556,7 @@ text(s, 7.08, 2.94, 5.43, 2.78,
 def validate_deck():
     """기본 구조 검사. 시각 검수는 PowerPoint PNG를 별도로 확인한다."""
     assert 15 <= len(prs.slides) <= 25
-    assert len(prs.slides) == 17
+    assert len(prs.slides) == 18
     minimum_font = 100.0
     for index, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
@@ -555,9 +574,9 @@ def validate_deck():
                         if r.text and r.font.size:
                             minimum_font = min(minimum_font, r.font.size.pt)
                             assert r.font.size.pt >= 11, (index, r.text)
-    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (12,14,15))
+    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (12,13,15,16))
     return {"장수": len(prs.slides), "최소글꼴pt": minimum_font,
-            "네이티브표장": [12,14,15], "흐름도장": list(range(2,11))}
+            "네이티브표장": [12,13,15,16], "흐름도장": list(range(2,11))}
 
 
 def export_png(pptx_path: Path, out_dir: Path):
