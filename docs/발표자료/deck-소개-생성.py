@@ -248,6 +248,110 @@ text(s, 0.92, 3.40, 11.5, 1.05, "MLsoft 사내 연차·복리후생\n관리 시�
 rule(s, 0.92, 5.08, 11.4, "365276")
 text(s, 0.92, 5.47, 11.5, 0.45, "미완성본 · 2026-09-11 기준", 22, "84DCEA", True)
 
+# 15. 전체 아키텍처.
+s = new_slide("시스템 전체 구성", "브라우저 화면과 업무 서버를 하나의 애플리케이션 컨테이너로 배포합니다.", "CLAUDE.md, 아키텍처·배포\nDockerfile\ndocker-compose.prod.yml")
+node(s, .72, 3.03, 2.22, 1.38, "브라우저", "React 화면", "normal", 24, 19)
+node(s, 4.04, 2.72, 4.10, 1.85, "Spring Boot 서버", "화면 파일 제공 + 업무 API\n단일 앱 컨테이너 · 포트 8080", "navy", 24, 16)
+arrow(s, [(2.94, 3.72), (4.04, 3.72)], BLUE, both=True)
+label(s, 2.92, 3.15, 1.15, "요청·응답", BLUE)
+for y, title, body in [(1.90, "Google OAuth2", "회사 계정 로그인"),
+                       (3.10, "MySQL 8", "운영 데이터 저장"),
+                       (4.30, "SMTP", "이메일 발송"),
+                       (5.50, "공공데이터포털", "공휴일 정보 동기화")]:
+    node(s, 9.52, y, 3.07, .88, title, body, size=18, body_size=14)
+    center = y + .44
+    arrow(s, [(8.14, 3.64), (8.76, 3.64), (8.76, center), (9.52, center)], LINE)
+node(s, 4.04, 5.38, 4.10, .89, "내부 스케줄러", "매일 00:10 KST · 5개 작업", "blue", 19, 15)
+arrow(s, [(6.09, 4.57), (6.09, 5.38)], BLUE, both=True)
+footnote(s, "테스트 데이터베이스는 H2를 사용합니다. SMTP는 Gmail 앱 비밀번호 방식의 계정을 연동합니다.")
+
+# 15b. 외부 연동 API — 셋 다 우리 장애로 번지지 않게 설계한 점을 같이 보여 준다.
+s = new_slide("외부 연동 API", "세 가지 외부 서비스에 의존하며, 어느 하나가 멈춰도 업무 처리는 계속됩니다.",
+              "backend/.../holiday/client/HolidayApiClient.java\nsecurity/CustomOAuth2UserService.java\nemail/service/MailSenderResolver.java\nLeaveScheduler.syncHolidaysForNewYear (0 5 0 1 1 *)")
+table(s, ["외부 서비스", "용도 · 호출 시점", "실패하면", "인증 정보 보관"], [
+    ["공공데이터포털\n특일정보 API",
+     "공휴일 목록 조회 (연 단위)\n매년 1월 1일 00:05 자동 · 관리자 수동 동기화\n캐시가 비어 있을 때 최초 1회",
+     "기존 공휴일 캐시 유지, 빈 결과로 계속\n연차 신청은 막히지 않음\n관리자 수동 동기화만 원인별 오류 표시",
+     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
+    ["Google OAuth2",
+     "로그인 (프로필·이메일만 요청)\n회사 도메인 계정만 허용",
+     "로그인 불가 · 안내 메시지\n허용 도메인이 아니면 거부",
+     "서버 환경변수\n(클라이언트 ID · 시크릿)"],
+    ["Gmail SMTP",
+     "이메일 발송 (587 · STARTTLS)\n업무 사건 즉시 + 15분마다 재시도",
+     "실패 이력 기록 · 총 3회 재시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
+     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
+], [2.3, 3.75, 3.6, 2.3], row_h=1.0, sizes=[15, 13.5, 13.5, 13.5])
+footnote(s, "자격 증명은 저장만 되고 화면에는 마스킹된 값만 보입니다. 공휴일은 요청마다 외부를 부르지 않고 DB 캐시를 씁니다.")
+
+# 16. 백엔드 내부.
+s = new_slide("서버 내부의 업무 구조", "12개 업무 영역을 나누고, 요청 처리와 업무 규칙·데이터 저장의 역할을 분리했습니다.", "CLAUDE.md, 계층 구조\nbackend/src/main/java/com/mlsoft/backend/domain/")
+for x, title, body in [(0.73, "요청 접수", "입력과 역할 확인"), (3.87, "업무 규칙 처리", "잔액·승인자·상태 변경"),
+                       (7.01, "저장소 접근", "조회와 저장"), (10.15, "업무 데이터", "상태와 이력 보관")]:
+    node(s, x, 2.08, 2.47, 1.13, title, body, "blue" if x == 3.87 else "normal", 20, 14.5)
+for a, b in [(3.20, 3.87), (6.34, 7.01), (9.48, 10.15)]:
+    arrow(s, [(a, 2.64), (b, 2.64)])
+text(s, .77, 3.73, 11.8, .45, "12개 업무 영역", 23, BLUE, True)
+table(s, ["사람과 조직", "연차와 일정", "운영 지원"], [
+    ["인증", "연차", "이메일"], ["구성원", "복리후생", "공휴일"],
+    ["부서", "개인 일정", "외부 연동 자격 증명"], ["감사 기록", "정책", "공통 상태"],
+], [3.94, 3.94, 3.94], y=4.29, row_h=.40, sizes=[16,16,16])
+footnote(s, "인증 정보는 JWT가 담긴 HttpOnly 쿠키로 전달하고, 서버는 최신 계정 상태를 다시 확인합니다.")
+
+# 17. 프론트 구조.
+s = new_slide("화면과 데이터의 연결", "17개 화면이 서버 데이터를 공통 방식으로 요청하고 갱신합니다.", "CLAUDE.md, 프론트엔드 데이터 흐름\nfrontend/src/pages/\nfrontend/src/api/index.js")
+node(s, .75, 2.13, 3.28, 1.16, "서버 API 연결", "Axios로 요청·응답 처리", "normal", 22, 16)
+node(s, 5.03, 2.13, 3.28, 1.16, "데이터 조회·캐시", "React Query로 공통 관리", "blue", 22, 16)
+node(s, 9.31, 2.13, 3.28, 1.16, "업무 화면", "페이지가 데이터를 표시", "normal", 22, 16)
+arrow(s, [(4.03, 2.71), (5.03, 2.71)], BLUE)
+arrow(s, [(8.31, 2.71), (9.31, 2.71)], BLUE)
+text(s, .77, 3.95, 5.75, .55, "공통 화면", 23, INK, True)
+text(s, .77, 4.71, 5.53, 1.22,
+     "대시보드 · 캘린더 · 내역 · 복리후생\n내 정보 · 결재 관리 · 팀 현황\n로그인 · 로그인 연결 · 온보딩", 17, MUTED)
+text(s, 7.01, 3.95, 5.53, .55, "관리자 화면", 23, INK, True)
+text(s, 7.01, 4.71, 5.53, 1.22,
+     "구성원 · 부서 · 연차 정책 · 복리후생 정책\n처리 이력 · 이메일 · 외부 연동", 17, MUTED)
+footnote(s, "권한에 맞춰 화면을 열고, 오류 알림을 공통 처리합니다. 디자인 값은 Tailwind v4의 CSS에서 관리합니다.")
+
+# 15c. 데이터베이스 구조 — 사원(users)을 중심으로 21개 테이블을 영역별로 묶어 보여 준다.
+s = new_slide("데이터베이스 구조", "사원(users)을 중심으로 21개 테이블이 7개 영역으로 나뉩니다.", "db/schema.sql — CREATE TABLE 21개, FOREIGN KEY 27개")
+# 1행
+node(s, .68, 1.85, 3.60, 1.35, "조직", "department 부서 (parent_id 계층 · leader_id 팀장)\nemployment_periods 과거 근속 구간", "normal", 17, 12.5)
+node(s, 4.75, 1.85, 3.80, 1.35, "연차", "leave_requests 신청 · leave_dates 날짜별 행\nleave_action_history 처리 이력\nleave_reset_history 기산일 스냅샷", "blue", 17, 12.5)
+node(s, 8.95, 1.85, 3.68, 1.35, "복리후생", "welfare_policies 정책\nwelfare_requests 신청 (policy_id)\nwelfare_action_history 처리 이력", "normal", 17, 12.5)
+# 2행 — 가운데가 users
+node(s, .68, 3.42, 3.60, 1.20, "일정 · 공휴일", "schedule_entries 개인 일정 · schedule_dates 날짜\nholidays 공휴일 캐시 (독립)", "normal", 17, 12.5)
+node(s, 5.45, 3.50, 2.45, 1.05, "users 사원", "잔액 3필드 · 기산일 · 역할\n온보딩 · 퇴직/파기 상태", "navy", 18, 12.5)
+node(s, 8.95, 3.42, 3.68, 1.20, "이메일", "email_history 발송 큐·이력\nleave_reminder_dispatch 소진 안내 기록\nemail_templates 양식", "normal", 17, 12.5)
+# 3행
+node(s, .68, 4.85, 3.60, 1.35, "정책 · 자격 증명", "leave_policy 근속별 부여 · leave_policy_config 설정 12키\nmail_credentials · holiday_api_credentials (암호화 저장)", "gold", 17, 12.5)
+node(s, 4.75, 4.85, 3.80, 1.35, "감사", "admin_audit_log 관리자 조작 기록\nactor_id 누가 · target_user_id 누구에게 · action 13종", "normal", 17, 12.5)
+text(s, 9.05, 4.95, 3.5, 1.2, "화살표는 users를 참조하는 외래 키입니다.\n정책·자격 증명은 사원과 무관한 설정입니다.\n파기 시 행을 지우지 않고 값만 익명화합니다.", 13, MUTED)
+# 외래 키 화살표 — users에서 각 영역으로
+arrow(s, [(6.675, 3.50), (6.675, 3.20)], BLUE)
+arrow(s, [(6.675, 4.55), (6.675, 4.85)], LINE)
+arrow(s, [(5.45, 4.02), (4.28, 4.02)], LINE)
+arrow(s, [(7.90, 4.02), (8.95, 4.02)], LINE)
+arrow(s, [(5.45, 3.72), (4.52, 3.72), (4.52, 3.00), (4.28, 3.00)], LINE)
+arrow(s, [(7.90, 3.72), (8.72, 3.72), (8.72, 3.00), (8.95, 3.00)], LINE)
+text(s, 6.80, 3.21, 1.9, 0.26, "user_id · 승인자 2명", 11, BLUE)
+text(s, 6.80, 4.58, 2.1, 0.26, "actor_id · target_user_id", 11, MUTED)
+text(s, 4.40, 3.74, 0.95, 0.26, "user_id", 11, MUTED)
+text(s, 8.00, 3.74, 0.90, 0.26, "user_id", 11, MUTED)
+footnote(s, "연차 일수는 소수 첫째 자리까지 저장합니다. 상태 값은 DB ENUM으로 제한해 잘못된 값이 들어가지 않습니다.")
+
+# 15d. 핵심 테이블 — 자주 보게 될 여섯 테이블의 주요 컬럼.
+s = new_slide("핵심 테이블의 주요 항목", "자주 보게 될 여섯 테이블입니다. 컬럼 이름은 실제 스키마 그대로입니다.", "db/schema.sql")
+table(s, ["테이블", "무엇을 담나", "주요 컬럼"], [
+    ["users\n사원", "계정·역할·소속과 연차 잔액,\n퇴직·파기 상태까지 한 행", "base_days · bonus_days · use_days 잔액 3필드 (advance_days는 파생) · hire_date · last_reset_date 기산일\nrole · onboarding_status · is_active · retired_at · purged_at · purge_hold_reason · version 낙관적 락"],
+    ["leave_requests\n+ leave_dates", "연차 신청 1건과\n날짜별 행", "status (PENDING · APPROVED · REJECTED · CANCELLED · CANCEL_PENDING) · leave_type (종일 · 오전 · 오후) · days\nprimary_approver_id · sub_approver_id · request_reason · cancel_reason · advance_used_days · leave_dates.day"],
+    ["welfare_requests", "복리후생 신청", "policy_id · category · target · add_days (승인 시 bonus_days에 가산) · status · 승인자 2명 · reason"],
+    ["department", "부서 계층과 팀장", "name · parent_id (상위 부서) · leader_id (팀장) · system_default (미배정 부서) · active"],
+    ["email_history", "발송 큐이자 이력", "email_type · status (PENDING · SENDING · SENT · FAILED) · retry_count · sending_at · sent_at · error_message\ntitle · content (보낸 HTML 원문 보관)"],
+    ["admin_audit_log", "관리자 조작 기록", "actor_id 누가 · action 13종 · target_user_id · target_label 누구에게 · before_value · after_value"],
+], [2.05, 2.75, 7.15], row_h=.62, sizes=[13.5, 12.5, 12])
+footnote(s, "승인자 2명(기본·서브)은 연차와 복리후생이 같은 방식으로 갖습니다. 처리 이력은 별도 *_action_history 테이블에 쌓입니다.")
+
 # 06. 신청과 결재.
 s = new_slide("연차 신청과 결재", "현재 회차의 연차는 신청 즉시 차감됩니다. 승인 시 추가 차감은 없습니다.", LEAVE + "\n" + EMAIL)
 node(s, .70, 2.02, 2.30, .85, "사원: 날짜 선택", "종일·오전·오후반차", body_size=14.5)
@@ -437,71 +541,6 @@ text(s, .78, 5.57, 5.44, .99, "결재 권한\n본인 결재는 제한하되 총�
 text(s, 6.96, 5.57, 5.58, .99, "관리자 계정 보호\n본인 퇴직 처리 금지\n마지막 총관리자의 강등·퇴직 금지", 17)
 footnote(s, "역할 변경은 다음 요청부터 반영하며, 결재는 배정된 기본·서브 승인자만 처리합니다.")
 
-# 15. 전체 아키텍처.
-s = new_slide("시스템 전체 구성", "브라우저 화면과 업무 서버를 하나의 애플리케이션 컨테이너로 배포합니다.", "CLAUDE.md, 아키텍처·배포\nDockerfile\ndocker-compose.prod.yml")
-node(s, .72, 3.03, 2.22, 1.38, "브라우저", "React 화면", "normal", 24, 19)
-node(s, 4.04, 2.72, 4.10, 1.85, "Spring Boot 서버", "화면 파일 제공 + 업무 API\n단일 앱 컨테이너 · 포트 8080", "navy", 24, 16)
-arrow(s, [(2.94, 3.72), (4.04, 3.72)], BLUE, both=True)
-label(s, 2.92, 3.15, 1.15, "요청·응답", BLUE)
-for y, title, body in [(1.90, "Google OAuth2", "회사 계정 로그인"),
-                       (3.10, "MySQL 8", "운영 데이터 저장"),
-                       (4.30, "SMTP", "이메일 발송"),
-                       (5.50, "공공데이터포털", "공휴일 정보 동기화")]:
-    node(s, 9.52, y, 3.07, .88, title, body, size=18, body_size=14)
-    center = y + .44
-    arrow(s, [(8.14, 3.64), (8.76, 3.64), (8.76, center), (9.52, center)], LINE)
-node(s, 4.04, 5.38, 4.10, .89, "내부 스케줄러", "매일 00:10 KST · 5개 작업", "blue", 19, 15)
-arrow(s, [(6.09, 4.57), (6.09, 5.38)], BLUE, both=True)
-footnote(s, "테스트 데이터베이스는 H2를 사용합니다. SMTP는 Gmail 앱 비밀번호 방식의 계정을 연동합니다.")
-
-# 15b. 외부 연동 API — 셋 다 우리 장애로 번지지 않게 설계한 점을 같이 보여 준다.
-s = new_slide("외부 연동 API", "세 가지 외부 서비스에 의존하며, 어느 하나가 멈춰도 업무 처리는 계속됩니다.",
-              "backend/.../holiday/client/HolidayApiClient.java\nsecurity/CustomOAuth2UserService.java\nemail/service/MailSenderResolver.java\nLeaveScheduler.syncHolidaysForNewYear (0 5 0 1 1 *)")
-table(s, ["외부 서비스", "용도 · 호출 시점", "실패하면", "인증 정보 보관"], [
-    ["공공데이터포털\n특일정보 API",
-     "공휴일 목록 조회 (연 단위)\n매년 1월 1일 00:05 자동 · 관리자 수동 동기화\n캐시가 비어 있을 때 최초 1회",
-     "기존 공휴일 캐시 유지, 빈 결과로 계속\n연차 신청은 막히지 않음\n관리자 수동 동기화만 원인별 오류 표시",
-     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
-    ["Google OAuth2",
-     "로그인 (프로필·이메일만 요청)\n회사 도메인 계정만 허용",
-     "로그인 불가 · 안내 메시지\n허용 도메인이 아니면 거부",
-     "서버 환경변수\n(클라이언트 ID · 시크릿)"],
-    ["Gmail SMTP",
-     "이메일 발송 (587 · STARTTLS)\n업무 사건 즉시 + 15분마다 재시도",
-     "실패 이력 기록 · 총 3회 재시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
-     "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
-], [2.3, 3.75, 3.6, 2.3], row_h=1.0, sizes=[15, 13.5, 13.5, 13.5])
-footnote(s, "자격 증명은 저장만 되고 화면에는 마스킹된 값만 보입니다. 공휴일은 요청마다 외부를 부르지 않고 DB 캐시를 씁니다.")
-
-# 16. 백엔드 내부.
-s = new_slide("서버 내부의 업무 구조", "12개 업무 영역을 나누고, 요청 처리와 업무 규칙·데이터 저장의 역할을 분리했습니다.", "CLAUDE.md, 계층 구조\nbackend/src/main/java/com/mlsoft/backend/domain/")
-for x, title, body in [(0.73, "요청 접수", "입력과 역할 확인"), (3.87, "업무 규칙 처리", "잔액·승인자·상태 변경"),
-                       (7.01, "저장소 접근", "조회와 저장"), (10.15, "업무 데이터", "상태와 이력 보관")]:
-    node(s, x, 2.08, 2.47, 1.13, title, body, "blue" if x == 3.87 else "normal", 20, 14.5)
-for a, b in [(3.20, 3.87), (6.34, 7.01), (9.48, 10.15)]:
-    arrow(s, [(a, 2.64), (b, 2.64)])
-text(s, .77, 3.73, 11.8, .45, "12개 업무 영역", 23, BLUE, True)
-table(s, ["사람과 조직", "연차와 일정", "운영 지원"], [
-    ["인증", "연차", "이메일"], ["구성원", "복리후생", "공휴일"],
-    ["부서", "개인 일정", "외부 연동 자격 증명"], ["감사 기록", "정책", "공통 상태"],
-], [3.94, 3.94, 3.94], y=4.29, row_h=.40, sizes=[16,16,16])
-footnote(s, "인증 정보는 JWT가 담긴 HttpOnly 쿠키로 전달하고, 서버는 최신 계정 상태를 다시 확인합니다.")
-
-# 17. 프론트 구조.
-s = new_slide("화면과 데이터의 연결", "17개 화면이 서버 데이터를 공통 방식으로 요청하고 갱신합니다.", "CLAUDE.md, 프론트엔드 데이터 흐름\nfrontend/src/pages/\nfrontend/src/api/index.js")
-node(s, .75, 2.13, 3.28, 1.16, "서버 API 연결", "Axios로 요청·응답 처리", "normal", 22, 16)
-node(s, 5.03, 2.13, 3.28, 1.16, "데이터 조회·캐시", "React Query로 공통 관리", "blue", 22, 16)
-node(s, 9.31, 2.13, 3.28, 1.16, "업무 화면", "페이지가 데이터를 표시", "normal", 22, 16)
-arrow(s, [(4.03, 2.71), (5.03, 2.71)], BLUE)
-arrow(s, [(8.31, 2.71), (9.31, 2.71)], BLUE)
-text(s, .77, 3.95, 5.75, .55, "공통 화면", 23, INK, True)
-text(s, .77, 4.71, 5.53, 1.22,
-     "대시보드 · 캘린더 · 내역 · 복리후생\n내 정보 · 결재 관리 · 팀 현황\n로그인 · 로그인 연결 · 온보딩", 17, MUTED)
-text(s, 7.01, 3.95, 5.53, .55, "관리자 화면", 23, INK, True)
-text(s, 7.01, 4.71, 5.53, 1.22,
-     "구성원 · 부서 · 연차 정책 · 복리후생 정책\n처리 이력 · 이메일 · 외부 연동", 17, MUTED)
-footnote(s, "권한에 맞춰 화면을 열고, 오류 알림을 공통 처리합니다. 디자인 값은 Tailwind v4의 CSS에서 관리합니다.")
-
 # 18. 라이브러리 — 사용 목적까지 포함한 편집 가능한 표.
 s = new_slide("백엔드 기술과 라이브러리", "Java 21 · Spring Boot 4.1.0 · Gradle", "backend/build.gradle\n" + STATUS)
 table(s, ["기술·라이브러리", "쓰는 이유"], [
@@ -556,7 +595,7 @@ text(s, 7.08, 2.94, 5.43, 2.78,
 def validate_deck():
     """기본 구조 검사. 시각 검수는 PowerPoint PNG를 별도로 확인한다."""
     assert 15 <= len(prs.slides) <= 25
-    assert len(prs.slides) == 18
+    assert len(prs.slides) == 20
     minimum_font = 100.0
     for index, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
@@ -574,9 +613,9 @@ def validate_deck():
                         if r.text and r.font.size:
                             minimum_font = min(minimum_font, r.font.size.pt)
                             assert r.font.size.pt >= 11, (index, r.text)
-    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (12,13,15,16))
+    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (3,4,7,17,18))
     return {"장수": len(prs.slides), "최소글꼴pt": minimum_font,
-            "네이티브표장": [12,13,15,16], "흐름도장": list(range(2,11))}
+            "네이티브표장": [3,4,7,17,18], "흐름도장": list(range(8,17))}
 
 
 def export_png(pptx_path: Path, out_dir: Path):
