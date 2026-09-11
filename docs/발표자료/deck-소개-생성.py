@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""연차ON 소개·보고용 PPT 생성. 원본은 이 스크립트이며 슬라이드는 직접 수정하지 않는다.
+"""MLsoft 연차·복리후생 관리 시스템 V2 소개·보고용 PPT 생성. 원본은 이 스크립트이며 슬라이드는 직접 수정하지 않는다.
 
 사용법:
     python -X utf8 docs/발표자료/deck-소개-생성.py
@@ -47,7 +47,7 @@ NAVY = "0D203D"
 WIDTH, HEIGHT = 13.333333, 7.5
 prs = Presentation()
 prs.slide_width, prs.slide_height = Inches(WIDTH), Inches(HEIGHT)
-prs.core_properties.title = "연차ON · MLsoft 사내 연차·복리후생 관리 시스템 V2"
+prs.core_properties.title = "MLsoft 사내 연차·복리후생 관리 시스템 V2"
 prs.core_properties.subject = "미완성본 · 2026-09-11 기준"
 prs.core_properties.author = "MLsoft"
 prs.core_properties.language = "ko-KR"
@@ -243,8 +243,8 @@ USER = "backend/src/main/java/com/mlsoft/backend/domain/user/service/UserService
 
 # 01. 표지 — 발송 목적과 기준일을 한눈에 보이게 한다.
 s = new_slide("", source="docs/발표자료/브리프-소개-ppt-2026-09-11.md", dark=True)
-text(s, 0.86, 2.00, 11.7, 1.25, "연차ON", 68, WHITE, True)
-text(s, 0.92, 3.40, 11.5, 1.05, "MLsoft 사내 연차·복리후생\n관리 시스템 V2", 29, WHITE)
+text(s, 0.86, 1.95, 11.7, 2.10, "MLsoft 사내 연차·복리후생\n관리 시스템 V2", 46, WHITE, True)
+text(s, 0.92, 4.20, 11.5, 0.60, "시스템 구성 · 데이터베이스 · 기능 흐름", 24, "B8CBE5")
 rule(s, 0.92, 5.08, 11.4, "365276")
 text(s, 0.92, 5.47, 11.5, 0.45, "미완성본 · 2026-09-11 기준", 22, "84DCEA", True)
 
