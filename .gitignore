@@ -45,3 +45,6 @@ SESSION.md
 # ── OS ──
 Thumbs.db
 .DS_Store
+
+# Office가 파일을 열어 두는 동안 만드는 잠금 파일
+~$*
