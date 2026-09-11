@@ -48,7 +48,7 @@ WIDTH, HEIGHT = 13.333333, 7.5
 prs = Presentation()
 prs.slide_width, prs.slide_height = Inches(WIDTH), Inches(HEIGHT)
 prs.core_properties.title = "연차ON · MLsoft 사내 연차·복리후생 관리 시스템 V2"
-prs.core_properties.subject = "프로젝트 소개 · 미완성본 · 2026-09-11 기준"
+prs.core_properties.subject = "미완성본 · 2026-09-11 기준"
 prs.core_properties.author = "MLsoft"
 prs.core_properties.language = "ko-KR"
 
@@ -243,39 +243,10 @@ USER = "backend/src/main/java/com/mlsoft/backend/domain/user/service/UserService
 
 # 01. 표지 — 발송 목적과 기준일을 한눈에 보이게 한다.
 s = new_slide("", source="docs/발표자료/브리프-소개-ppt-2026-09-11.md", dark=True)
-text(s, 0.90, 1.00, 11.5, 0.45, "프로젝트 소개", 20, "A6BFE6")
 text(s, 0.86, 2.00, 11.7, 1.25, "연차ON", 68, WHITE, True)
 text(s, 0.92, 3.40, 11.5, 1.05, "MLsoft 사내 연차·복리후생\n관리 시스템 V2", 29, WHITE)
 rule(s, 0.92, 5.08, 11.4, "365276")
 text(s, 0.92, 5.47, 11.5, 0.45, "미완성본 · 2026-09-11 기준", 22, "84DCEA", True)
-
-# 02. 개요.
-s = new_slide("연차와 복리후생 업무를 한곳에", "신청부터 결재, 잔액 계산과 안내까지 연결한 사내 관리 시스템입니다.", FLOW)
-for x, title, body in [
-    (0.75, "사원", "캘린더에서 신청하고\n내 잔액과 처리 결과를 확인한다"),
-    (4.75, "팀장", "결재함에서 승인·반려하고\n팀의 휴가와 일정을 확인한다"),
-    (8.75, "총관리자", "조직·정책·이메일을 관리하고\n입사부터 퇴직까지 처리한다"),
-]:
-    text(s, x, 2.85, 3.7, 0.55, title, 27, BLUE, True)
-    text(s, x, 3.64, 3.75, 1.00, body, 19)
-
-# 04~05. 큰 기능.
-s = new_slide("직원이 쓰는 기능", "날짜를 고르고, 신청하고, 처리 결과를 확인합니다.", FLOW + "\nfrontend/src/pages/")
-rows(s, [
-    ("캘린더에서 연차와 반차를 신청한다", "종일·오전반차·오후반차를 선택하고 승인자를 확인합니다."),
-    ("팀장이 결재함에서 승인·반려한다", "대기 중인 신청과 처리 결과를 한곳에서 확인합니다."),
-    ("복리후생을 신청해 보너스 연차를 받는다", "경조·포상 등 정책별 신청은 승인될 때 연차에 더해집니다."),
-    ("외근·출장·재택·교육을 일정으로 기록한다", "결재 없이 등록하며 연차 잔액은 차감하지 않습니다."),
-], step=1.04)
-
-s = new_slide("관리자가 운영하는 기능", "조직·정책과 반복 업무를 화면에서 관리합니다.", STATUS + "\n" + EMAIL)
-rows(s, [
-    ("조직·구성원·연차 정책을 관리한다", "부서와 역할, 근속별 부여 기준, 관리자 설정 12개를 관리합니다."),
-    ("연차 부여·적립·안내·파기를 자동으로 처리한다", "매일 새벽 5개 작업을 정해진 순서로 실행합니다."),
-    ("관련자에게 이메일로 신청·결재 결과를 알린다", "첫 로그인 승인, 생일 반차, 소진 안내, 파기 예고도 연결됩니다."),
-    ("메일 양식을 고치고 대상을 골라 일괄 발송한다", "제목·본문·변수를 편집하고 발송 이력과 실패 건을 확인합니다."),
-    ("퇴직·개인정보 파기·재입사를 처리한다", "보존 기간과 파기 보류를 관리하고, 이전 근속 구간을 보존합니다."),
-], y=1.90, step=0.92)
 
 # 06. 신청과 결재.
 s = new_slide("연차 신청과 결재", "현재 회차의 연차는 신청 즉시 차감됩니다. 승인 시 추가 차감은 없습니다.", LEAVE + "\n" + EMAIL)
@@ -561,19 +532,12 @@ text(s, 7.08, 2.10, 5.49, .55, "남은 작업", 25, GOLD, True)
 text(s, 7.08, 2.94, 5.43, 2.78,
      "실제 메일 수신과 외부 연동 확인\n사용자 시나리오별 화면 검증\n관리자 문의 기능 개발\n운영 DB 반영과 배포 검증\n일부 조직 변경의 동시 처리 보완", 20)
 
-# 22. 마지막.
-s = new_slide("", source="브리프 §0·§3 F", dark=True)
-text(s, .92, 1.10, 11.6, .55, "연차ON · 프로젝트 소개", 24, "A6BFE6")
-text(s, .87, 2.25, 11.65, 1.70, "감사합니다", 39, WHITE, True)
-text(s, .94, 4.47, 11.50, .65, "신청과 결재 · 잔액 계산 · 자동 처리 · 관리자 운영", 23, "B8CBE5")
-rule(s, .94, 5.52, 11.41, "365276")
-text(s, .94, 5.89, 11.42, .50, "미완성본 · 2026-09-11 기준", 23, "84DCEA", True)
 
 
 def validate_deck():
     """기본 구조 검사. 시각 검수는 PowerPoint PNG를 별도로 확인한다."""
-    assert 18 <= len(prs.slides) <= 25
-    assert len(prs.slides) == 21
+    assert 15 <= len(prs.slides) <= 25
+    assert len(prs.slides) == 17
     minimum_font = 100.0
     for index, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
@@ -591,9 +555,9 @@ def validate_deck():
                         if r.text and r.font.size:
                             minimum_font = min(minimum_font, r.font.size.pt)
                             assert r.font.size.pt >= 11, (index, r.text)
-    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (15,17,18))
+    assert all(any(sh.has_table for sh in prs.slides[n - 1].shapes) for n in (12,14,15))
     return {"장수": len(prs.slides), "최소글꼴pt": minimum_font,
-            "네이티브표장": [15,17,18], "흐름도장": list(range(5,14))}
+            "네이티브표장": [12,14,15], "흐름도장": list(range(2,11))}
 
 
 def export_png(pptx_path: Path, out_dir: Path):
