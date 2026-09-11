@@ -9,7 +9,7 @@ import {
 import MyInfoPage from './MyInfoPage.jsx';
 import { useCurrentUser } from '../hooks/useAuth.js';
 import { useHolidays } from '../hooks/useHolidays.js';
-import { useLeaveSummary, useMyAnnualUsage } from '../hooks/useLeaves.js';
+import { useLeaveSummary } from '../hooks/useLeaves.js';
 import { useUpdateMyProfile } from '../hooks/useUsers.js';
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -17,7 +17,6 @@ vi.mock('../hooks/useAuth.js', () => ({ useCurrentUser: vi.fn() }));
 vi.mock('../hooks/useHolidays.js', () => ({ useHolidays: vi.fn() }));
 vi.mock('../hooks/useLeaves.js', () => ({
   useLeaveSummary: vi.fn(),
-  useMyAnnualUsage: vi.fn(),
 }));
 vi.mock('../hooks/useUsers.js', () => ({ useUpdateMyProfile: vi.fn() }));
 
@@ -130,12 +129,6 @@ describe('MyInfoPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useLeaveSummary.mockReturnValue({ data: SUMMARY, isError: false, refetch: vi.fn() });
-    useMyAnnualUsage.mockReturnValue({
-      data: [{ date: '2026-01-05', days: '0.5' }],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    });
     useHolidays.mockReturnValue({ data: [], isError: false });
     useUpdateMyProfile.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
@@ -267,15 +260,6 @@ describe('MyInfoPage', () => {
     renderPage();
     expect(screen.getByPlaceholderText('예: 파트장')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('예: 선임 연구원')).toBeInTheDocument();
-  });
-
-  it('연도 선택을 바꾸면 개인 기록과 공휴일을 같은 연도로 조회한다', () => {
-    renderPage();
-
-    fireEvent.change(screen.getByLabelText('히트맵 연도'), { target: { value: '2025' } });
-
-    expect(useMyAnnualUsage).toHaveBeenLastCalledWith(2025);
-    expect(useHolidays).toHaveBeenLastCalledWith(2025);
   });
 
   it('취소하면 화면에 남고 고치던 값도 그대로다', () => {

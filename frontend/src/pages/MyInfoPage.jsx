@@ -15,9 +15,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog.jsx';
 import { useUnsavedGuard } from '../hooks/useUnsavedGuard.js';
 import { ROLE_LABEL } from '../constants/roles.js';
 import { useCurrentUser } from '../hooks/useAuth.js';
-import LeaveHeatmap from '../components/LeaveHeatmap.jsx';
-import { useHolidays } from '../hooks/useHolidays.js';
-import { useLeaveSummary, useMyAnnualUsage } from '../hooks/useLeaves.js';
+import { useLeaveSummary } from '../hooks/useLeaves.js';
 import { useUpdateMyProfile } from '../hooks/useUsers.js';
 import {
   NEXT_CYCLE_RESERVATION_LABEL,
@@ -71,9 +69,6 @@ export default function MyInfoPage() {
   const [birthDay, setBirthDay] = useState(me?.birthDay ?? '');
   const [position, setPosition] = useState(me?.position ?? '');
   const [jobGrade, setJobGrade] = useState(me?.jobGrade ?? '');
-  const [heatmapYear, setHeatmapYear] = useState(dayjs().year());
-  const annualUsageQuery = useMyAnnualUsage(heatmapYear);
-  const holidaysQuery = useHolidays(heatmapYear);
 
   // 서버가 준 현재 값. 폼의 기준선이자 "바뀌었는가"의 비교 대상이다
   const savedName = me?.name ?? '';
@@ -235,32 +230,6 @@ export default function MyInfoPage() {
           </Card>
         </div>
       </div>
-
-      <Card
-        className="mt-5"
-        title="연차 사용 기록"
-        right={
-          <select
-            aria-label="히트맵 연도"
-            value={heatmapYear}
-            onChange={(event) => setHeatmapYear(Number(event.target.value))}
-            className="rounded-btn border border-white/[0.14] bg-navy-btn2 px-3 py-2 text-[12px] text-ink-body outline-none focus:border-accent"
-          >
-            {Array.from({ length: 6 }, (_, index) => dayjs().year() - index).map((year) => (
-              <option key={year} value={year}>{year}년</option>
-            ))}
-          </select>
-        }
-      >
-        <LeaveHeatmap
-          year={heatmapYear}
-          entries={annualUsageQuery.data ?? []}
-          holidays={holidaysQuery.data ?? []}
-          loading={annualUsageQuery.isLoading}
-          error={annualUsageQuery.isError}
-          onRetry={annualUsageQuery.refetch}
-        />
-      </Card>
 
       <ConfirmDialog
         open={unsavedGuard.blocked}
