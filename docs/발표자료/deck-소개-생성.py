@@ -340,17 +340,16 @@ text(s, 4.40, 3.74, 0.95, 0.26, "user_id", 11, MUTED)
 text(s, 8.00, 3.74, 0.90, 0.26, "user_id", 11, MUTED)
 footnote(s, "연차 일수는 소수 첫째 자리까지 저장합니다. 상태 값은 DB ENUM으로 제한해 잘못된 값이 들어가지 않습니다.")
 
-# 15d. 핵심 테이블 — 자주 보게 될 여섯 테이블의 주요 컬럼.
+# 15d. 핵심 테이블 — 자주 보게 될 여섯 테이블의 주요 컬럼. 셀이 자동으로 늘어나므로 문구를 짧게 유지한다.
 s = new_slide("핵심 테이블의 주요 항목", "자주 보게 될 여섯 테이블입니다. 컬럼 이름은 실제 스키마 그대로입니다.", "db/schema.sql")
 table(s, ["테이블", "무엇을 담나", "주요 컬럼"], [
-    ["users\n사원", "계정·역할·소속과 연차 잔액,\n퇴직·파기 상태까지 한 행", "base_days · bonus_days · use_days 잔액 3필드 (advance_days는 파생) · hire_date · last_reset_date 기산일\nrole · onboarding_status · is_active · retired_at · purged_at · purge_hold_reason · version 낙관적 락"],
-    ["leave_requests\n+ leave_dates", "연차 신청 1건과\n날짜별 행", "status (PENDING · APPROVED · REJECTED · CANCELLED · CANCEL_PENDING) · leave_type (종일 · 오전 · 오후) · days\nprimary_approver_id · sub_approver_id · request_reason · cancel_reason · advance_used_days · leave_dates.day"],
+    ["users (사원)", "계정·역할·소속과 연차 잔액, 퇴직·파기 상태", "base_days · bonus_days · use_days (잔액) · advance_days (파생) · hire_date · last_reset_date (기산일) · role · onboarding_status · is_active · retired_at · purged_at · purge_hold_reason · version (낙관적 락)"],
+    ["leave_requests + leave_dates", "연차 신청 1건과 날짜별 행", "status (PENDING · APPROVED · REJECTED · CANCELLED · CANCEL_PENDING) · leave_type (종일·오전·오후) · days · primary_approver_id · sub_approver_id · request_reason · cancel_reason · advance_used_days · leave_dates.day"],
     ["welfare_requests", "복리후생 신청", "policy_id · category · target · add_days (승인 시 bonus_days에 가산) · status · 승인자 2명 · reason"],
     ["department", "부서 계층과 팀장", "name · parent_id (상위 부서) · leader_id (팀장) · system_default (미배정 부서) · active"],
-    ["email_history", "발송 큐이자 이력", "email_type · status (PENDING · SENDING · SENT · FAILED) · retry_count · sending_at · sent_at · error_message\ntitle · content (보낸 HTML 원문 보관)"],
+    ["email_history", "발송 큐이자 이력", "email_type · status (PENDING · SENDING · SENT · FAILED) · retry_count · sending_at · sent_at · error_message · title · content (보낸 HTML 원문)"],
     ["admin_audit_log", "관리자 조작 기록", "actor_id 누가 · action 13종 · target_user_id · target_label 누구에게 · before_value · after_value"],
-], [2.05, 2.75, 7.15], row_h=.62, sizes=[13.5, 12.5, 12])
-footnote(s, "승인자 2명(기본·서브)은 연차와 복리후생이 같은 방식으로 갖습니다. 처리 이력은 별도 *_action_history 테이블에 쌓입니다.")
+], [1.95, 2.25, 7.75], row_h=.5, sizes=[13, 12, 11.5])
 
 # 06. 신청과 결재.
 s = new_slide("연차 신청과 결재", "현재 회차의 연차는 신청 즉시 차감됩니다. 승인 시 추가 차감은 없습니다.", LEAVE + "\n" + EMAIL)
