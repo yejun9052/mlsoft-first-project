@@ -66,7 +66,8 @@ public enum ErrorCode {
 
     // 403 Forbidden
     ACCESS_DENIED(403, "접근 권한이 없습니다."),
-    // 총관리자라도 예외가 아니다 — 스스로 승인하면 결재라는 절차가 없는 것과 같다
+    // 스스로 승인하면 결재라는 절차가 없는 것과 같다. **총관리자만 예외** — 위에 결재선이 없어
+    // 막으면 자기 연차를 처리할 사람이 없어진다 (LeaveService·ApproverResolver, 2026-08-19)
     CANNOT_APPROVE_OWN_REQUEST(403, "본인이 신청한 건은 본인이 결재할 수 없습니다."),
     ONBOARDING_NOT_COMPLETED(403, "온보딩(생일·입사일 입력)을 먼저 완료해야 합니다."),
     // 승인 대기와 미시작을 구분한다 — 같은 메시지를 주면 사원이 온보딩을 다시 내려다 ALREADY_ONBOARDED를 맞는다 (S-1)
