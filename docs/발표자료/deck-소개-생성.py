@@ -308,13 +308,20 @@ def rows(s, items, y=2.00, step=1.00):
             rule(s, 1.5, top + step - 0.13, 10.8, "D5DDE9")
 
 
-def table(s, headers, data, widths, x=0.68, y=1.95, row_h=0.46, sizes=None):
-    total_h = row_h * (len(data) + 1)
+def table(s, headers, data, widths, x=0.68, y=1.95, row_h=0.46, sizes=None, header_h=None):
+    # 머리글 행은 본문 행보다 낮게, 모든 셀은 세로 가운데 정렬. 표 셀은 tcPr의 anchor·여백을 따르므로
+    # text_frame이 아니라 cell 속성으로 지정해야 실제로 적용된다.
+    header_h = header_h if header_h is not None else min(0.5, max(0.42, row_h))
+    total_h = header_h + row_h * len(data)
     shape = s.shapes.add_table(len(data) + 1, len(headers), Inches(x), Inches(y),
                                Inches(sum(widths)), Inches(total_h))
     t = shape.table
     for col, width in zip(t.columns, widths):
         col.width = Inches(width)
+    rows = list(t.rows)
+    rows[0].height = Inches(header_h)
+    for row in rows[1:]:
+        row.height = Inches(row_h)
     for i, values in enumerate([headers] + data):
         for j, value in enumerate(values):
             cell = t.cell(i, j)
@@ -323,7 +330,10 @@ def table(s, headers, data, widths, x=0.68, y=1.95, row_h=0.46, sizes=None):
             size = 14.5 if sizes is None else sizes[j]
             format_frame(cell.text_frame, value, size,
                          WHITE if i == 0 else INK, i == 0,
-                         PP_ALIGN.LEFT, MSO_ANCHOR.MIDDLE, 0.09)
+                         PP_ALIGN.LEFT, MSO_ANCHOR.MIDDLE, 0)
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            cell.margin_left = cell.margin_right = Inches(0.12)
+            cell.margin_top = cell.margin_bottom = Inches(0.05)
             # 테이블의 테마 글꼴 및 기본 테두리를 명시적으로 대체한다.
             tcpr = cell._tc.get_or_add_tcPr()
             for side in ("lnL", "lnR", "lnT", "lnB"):
@@ -385,7 +395,7 @@ table(s, ["외부 서비스", "용도 · 호출 시점", "실패하면", "인증
      "이메일 발송 (587 · STARTTLS)\n업무 사건 즉시 + 15분마다 재시도",
      "실패 이력 기록 · 최초 포함 총 3회 시도\n이후 관리자 수동 재발송\n업무 처리에는 영향 없음",
      "관리자 화면에서 암호화 저장\n없으면 서버 환경변수"],
-], [2.3, 3.75, 3.6, 2.3], row_h=1.0, sizes=[15, 13.5, 13.5, 13.5])
+], [2.2, 3.9, 3.55, 2.3], row_h=.92, sizes=[14, 13, 13, 13], header_h=.46)
 text(s, .68, 6.26, 11.95, .29, "자격 증명은 마스킹해 표시합니다. 공휴일은 DB 캐시를 사용합니다.", 11, MUTED)
 text(s, .68, 6.69, 11.95, .27, "메일은 업무 저장과 함께 큐에 적재 → 15분마다 재시도(최초 포함 총 3회) → 실패 건은 관리자 수동 재발송", 11, MUTED)
 
@@ -400,7 +410,7 @@ text(s, .77, 3.73, 11.8, .45, "12개 업무 영역", 23, BLUE, True)
 table(s, ["사람과 조직", "연차와 일정", "운영 지원"], [
     ["인증", "연차", "이메일"], ["구성원", "복리후생", "공휴일"],
     ["부서", "개인 일정", "외부 연동 자격 증명"], ["감사 기록", "정책", "공통 상태"],
-], [3.94, 3.94, 3.94], y=4.29, row_h=.40, sizes=[16,16,16])
+], [3.94, 3.94, 3.94], y=4.29, row_h=.40, sizes=[16,16,16], header_h=.44)
 text(s, .68, 6.56, 11.95, .40, "매 요청 서버가 재직·역할·온보딩 상태를 재확인 · 본인 결재 금지(총관리자 예외)\n마지막 총관리자 강등·퇴직 금지 · 본인 퇴직 처리 금지", 11, MUTED)
 
 # 17. 프론트 구조.
@@ -634,7 +644,7 @@ table(s, ["기술·라이브러리", "용도"], [
     ["Lombok", "반복되는 Java 코드 축소"],
     ["mysql-connector-j / H2", "운영 DB 연결 / 테스트 DB"],
     ["JUnit 5 / Mockito", "업무 규칙·권한 자동 검증"],
-], [3.06, 2.78], x=.68, y=2.52, row_h=.365, sizes=[11,12])
+], [3.06, 2.78], x=.68, y=2.52, row_h=.365, sizes=[11,12], header_h=.40)
 table(s, ["기술·라이브러리", "용도"], [
     ["React 19.2 / react-dom", "화면·입력 상태 구성"],
     ["react-router-dom 7", "화면 이동·접근 제한"],
@@ -645,7 +655,7 @@ table(s, ["기술·라이브러리", "용도"], [
     ["lucide-react / react-hot-toast", "아이콘·처리 결과 알림"],
     ["Vitest / Testing Library / jsdom", "화면·사용자 조작 자동 검증"],
     ["Oxlint", "기본 오류·규칙 위반 검사"],
-], [3.15, 2.63], x=6.86, y=2.52, row_h=.365, sizes=[11,12])
+], [3.15, 2.63], x=6.86, y=2.52, row_h=.365, sizes=[11,12], header_h=.40)
 footnote(s, "Docker 단계별 빌드로 화면·서버를 통합하고, Docker Compose로 앱과 MySQL 8을 구성합니다.")
 
 # 20+21. 구현 규모와 남은 운영 확인을 한 장에서 확인한다.
