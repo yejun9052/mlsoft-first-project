@@ -207,7 +207,19 @@ option:disabled {
 }
 
 .calendar-span-bar {
-  margin-top: var(--calendar-span-top, 40px);
+  margin-top: var(--calendar-span-top, 38px);
+  /* 셀 테두리 1px + padding 8px — 셀 안의 pill과 같은 위치에서 시작한다 */
+  margin-left: 9px;
+  margin-right: 9px;
+}
+
+/* 주가 바뀌며 이어지는 쪽은 벽에 붙여 다음 주로 계속됨을 보인다 */
+.calendar-span-bar-continues-before {
+  margin-left: 0;
+}
+
+.calendar-span-bar-continues-after {
+  margin-right: 0;
 }
 
 .mobile-calendar-adjacent-day {
@@ -339,6 +351,8 @@ option:disabled {
 
   .calendar-span-bar {
     margin-top: calc(20px + var(--calendar-span-lane, 0) * 8px) !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     height: 5px !important;
     padding: 0 !important;
     border-radius: 999px !important;

@@ -194,6 +194,66 @@ describe('CalendarPage multi-day event bars', () => {
     expect(screen.getByText('2026년 7월')).toBeInTheDocument();
   });
 
+  it('draws consecutive holidays with the same name as one bar', () => {
+    useHolidays.mockReturnValue({
+      data: [
+        { date: '2026-08-24', name: 'Chuseok' },
+        { date: '2026-08-25', name: 'Chuseok' },
+        { date: '2026-08-26', name: 'Chuseok' },
+        { date: '2026-08-28', name: 'Single holiday' },
+      ],
+    });
+    const router = createMemoryRouter(
+      [{ path: '/calendar', element: <CalendarPage /> }],
+      { initialEntries: ['/calendar'] },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    // 이름이 같은 연속 3일은 막대 하나, 그 날짜 셀에는 pill을 따로 그리지 않는다
+    expect(screen.getByRole('img', { name: /Chuseok 2026-08-24 ~ 2026-08-26/ })).toBeInTheDocument();
+    expect(screen.getAllByText('Chuseok')).toHaveLength(1);
+    // 하루짜리 공휴일은 그대로 셀 안 pill
+    expect(screen.queryByRole('img', { name: /Single holiday/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Single holiday').closest('.calendar-entry-pill')).not.toBeNull();
+  });
+
+  it('keeps the pill inset on free ends and touches the wall only where a bar continues', () => {
+    useScheduleCalendar.mockReturnValue({
+      data: [
+        {
+          id: 21,
+          userId: 1,
+          userName: 'Alice',
+          scheduleType: 'BUSINESS_TRIP',
+          typeLabel: 'Trip',
+          // 2026-08-29(토) → 08-30(일)로 주가 바뀐다
+          dates: ['2026-08-28', '2026-08-29', '2026-08-30'],
+          memo: null,
+        },
+      ],
+    });
+    const router = createMemoryRouter(
+      [{ path: '/calendar', element: <CalendarPage /> }],
+      { initialEntries: ['/calendar'] },
+    );
+
+    render(<RouterProvider router={router} />);
+
+    const bars = screen.getAllByRole('img', { name: /Alice · Trip 2026-08-28 ~ 2026-08-30/ });
+    expect(bars).toHaveLength(2);
+    const [first, second] = bars;
+    // 첫 주 조각: 시작은 pill처럼 둥글고 안쪽 여백, 끝은 다음 주로 이어지므로 벽에 붙는다
+    expect(first.className).toContain('rounded-l');
+    expect(first.className).toContain('calendar-span-bar-continues-after');
+    expect(first.className).not.toContain('calendar-span-bar-continues-before');
+    // 둘째 주 조각: 시작이 벽에 붙고 끝은 둥글다
+    expect(second.className).toContain('calendar-span-bar-continues-before');
+    expect(second.className).toContain('rounded-r');
+    // 막대 높이는 단일 pill과 같은 26px
+    expect(first.style.height).toBe('26px');
+  });
+
   it('renders a holiday as the same calendar entry type in the mobile day summary', () => {
     window.matchMedia = vi.fn().mockImplementation(() => ({
       matches: true,

@@ -23,6 +23,11 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const MAX_VISIBLE = 2;
 // 여러 다일 일정이 같은 주에 겹칠 때 화면에 유지할 막대 레인 수.
 const MAX_BAR_LANES = 3;
+// 연속 막대는 셀 안의 단일 pill과 같은 크기로 그린다 — 실측 pill: 26px 높이, 셀 위에서 36px.
+// 레인 사이는 pill gap 4px.
+const SPAN_BAR_HEIGHT = 26;
+const SPAN_LANE_PITCH = SPAN_BAR_HEIGHT + 4;
+const SPAN_TOP_OFFSET = 36;
 // 검색어 디바운스 — 한 글자마다 요청을 날리지 않게
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -68,6 +73,26 @@ function entryKindLabel(entry) {
   return '연차';
 }
 
+// 같은 이름이 이어지는 공휴일(추석 3일 등)을 한 묶음으로 만든다. 묶음의 eventId는
+// 첫날 기준이라 셀 pill과 연속 막대가 같은 키로 만나고, 하루짜리는 그대로 pill로 남는다.
+function groupHolidayRuns(holidays) {
+  const sorted = [...holidays].sort((left, right) => left.date.localeCompare(right.date));
+  const runs = [];
+  sorted.forEach((holiday) => {
+    const last = runs[runs.length - 1];
+    const consecutive =
+      last &&
+      last.name === holiday.name &&
+      dayjs(holiday.date).diff(dayjs(last.dates[last.dates.length - 1]), 'day') === 1;
+    if (consecutive) {
+      last.dates.push(holiday.date);
+    } else {
+      runs.push({ name: holiday.name, dates: [holiday.date] });
+    }
+  });
+  return runs;
+}
+
 // 연·월별 캘린더 셀 데이터(연차 + 개인 일정 + 공휴일)를 날짜별로 묶는다.
 // entries는 이미 날짜 단위로 펼쳐진 목록: { date, personName, label, kind, mine, typeKey }
 function buildCalendarData(entries, holidays, year, month) {
@@ -79,23 +104,26 @@ function buildCalendarData(entries, holidays, year, month) {
     const day = Number(entry.date.slice(8, 10));
     (map[day] ??= { entries: [] }).entries.push(entry);
   }
-  for (const holiday of holidays) {
-    if (!holiday.date.startsWith(prefix)) continue;
-    const day = Number(holiday.date.slice(8, 10));
-    const cell = (map[day] ??= { entries: [] });
-    if (!cell.entries.some((entry) => entry.kind === 'HOLIDAY')) {
-      cell.entries.push({
-        date: holiday.date,
-        eventId: `H${holiday.date}`,
-        eventDateKey: `H${holiday.date}:${holiday.date}`,
-        key: `H${holiday.date}`,
-        personName: '',
-        label: holiday.name,
-        kind: 'HOLIDAY',
-        typeKey: 'HOLIDAY',
-        mine: false,
-        detail: null,
-      });
+  for (const run of groupHolidayRuns(holidays)) {
+    const eventId = `H${run.dates[0]}`;
+    for (const date of run.dates) {
+      if (!date.startsWith(prefix)) continue;
+      const day = Number(date.slice(8, 10));
+      const cell = (map[day] ??= { entries: [] });
+      if (!cell.entries.some((entry) => entry.kind === 'HOLIDAY')) {
+        cell.entries.push({
+          date,
+          eventId,
+          eventDateKey: `${eventId}:${date}`,
+          key: `H${date}`,
+          personName: '',
+          label: run.name,
+          kind: 'HOLIDAY',
+          typeKey: 'HOLIDAY',
+          mine: false,
+          detail: null,
+        });
+      }
     }
   }
   return map;
@@ -424,6 +452,19 @@ export default function CalendarPage() {
           typeKey: schedule.scheduleType,
           mine: schedule.userId === me?.id,
           detail: schedule.memo,
+        },
+      })),
+      // 연속 공휴일(추석 등)도 하나의 막대로 — 하루짜리는 buildCalendarSpanData가 걸러 pill로 남긴다.
+      ...groupHolidayRuns(holidays).map((run) => ({
+        id: `H${run.dates[0]}`,
+        dates: run.dates,
+        entry: {
+          personName: '',
+          label: run.name,
+          kind: 'HOLIDAY',
+          typeKey: 'HOLIDAY',
+          mine: false,
+          detail: null,
         },
       })),
     ];
@@ -919,7 +960,7 @@ export default function CalendarPage() {
                   className="flex min-h-0 flex-col gap-1 overflow-hidden"
                   style={
                     spanLaneCount > 0
-                      ? { paddingTop: String(spanLaneCount * 24 + 4) + 'px' }
+                      ? { paddingTop: String(spanLaneCount * SPAN_LANE_PITCH) + 'px' }
                       : undefined
                   }
                 >
@@ -981,14 +1022,15 @@ export default function CalendarPage() {
             {calendarSpans.flatMap((spans, weekIndex) =>
               spans.map((segment) => {
                 const entry = segment.entry;
-                const label = entry.personName + ' · ' + entry.label;
+                const label = entry.personName
+                  ? entry.personName + ' · ' + entry.label
+                  : entry.label;
                 const range = segment.rangeStart + ' ~ ' + segment.rangeEnd;
-                const rounding = [
-                  !segment.continuesBefore && 'rounded-l-md',
-                  !segment.continuesAfter && 'rounded-r-md',
-                ]
-                  .filter(Boolean)
-                  .join(' ');
+                // 막대는 셀 안 pill과 같은 안쪽 여백을 두되, 주가 바뀌며 이어지는 끝은 벽에 붙여 계속됨을 보인다.
+                const edges = [
+                  segment.continuesBefore ? 'calendar-span-bar-continues-before' : 'rounded-l',
+                  segment.continuesAfter ? 'calendar-span-bar-continues-after' : 'rounded-r',
+                ].join(' ');
 
                 return (
                   <span
@@ -1002,14 +1044,14 @@ export default function CalendarPage() {
                         ' / ' +
                         String(segment.endColumn + 2),
                       gridRow: weekIndex + 1,
-                      '--calendar-span-top': String(40 + segment.lane * 24) + 'px',
+                      '--calendar-span-top': String(SPAN_TOP_OFFSET + segment.lane * SPAN_LANE_PITCH) + 'px',
                       '--calendar-span-lane': String(segment.lane),
-                      height: '22px',
+                      height: String(SPAN_BAR_HEIGHT) + 'px',
                     }}
                     className={[
-                      'calendar-span-bar flex min-w-0 items-center overflow-hidden px-2 text-[11px] font-semibold shadow-sm',
+                      'calendar-span-bar flex min-w-0 items-center gap-1 overflow-hidden px-1.5 text-[12px] font-medium',
                       entryTone(entry),
-                      rounding,
+                      edges,
                       entry.mine ? 'ring-1 ring-inset ring-white/25' : '',
                     ]
                       .filter(Boolean)
